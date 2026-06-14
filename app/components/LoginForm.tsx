@@ -52,10 +52,28 @@ export default function LoginForm() {
       }
 
       localStorage.setItem("token", data.token);
-
       localStorage.setItem("user", JSON.stringify(data.user));
 
-      window.location.href = "/recruiter-dashboard";
+      const role = data.user?.role;
+
+      // 🔥 điều hướng theo role
+      switch (role) {
+        case "CANDIDATE":
+          window.location.href = "/candidate/dashboard";
+          break;
+
+        case "RECRUITER":
+          window.location.href = "/recruiter/dashboard";
+          break;
+
+        case "ADMIN":
+          window.location.href = "/admin/dashboard";
+          break;
+
+        default:
+          window.location.href = "/";
+          break;
+      }
     } catch {
       setError("Không thể kết nối tới máy chủ");
     } finally {

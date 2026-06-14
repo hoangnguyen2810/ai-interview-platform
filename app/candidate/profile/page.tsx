@@ -17,13 +17,16 @@ export default function CandidateProfilePage() {
   const [openEdit, setOpenEdit] = useState(false);
 
   return (
-    <div className="flex h-screen bg-surface text-on-surface overflow-hidden">
+    <div className="flex min-h-screen bg-surface text-on-surface">
+      {/* SIDEBAR */}
       <CandidateSideNavBar />
 
-      <div className="flex-1 flex flex-col ml-sidebar-width">
+      {/* MAIN WRAPPER */}
+      <div className="flex flex-col flex-1 min-h-screen">
         <TopNavBar />
 
-        <main className="flex-1 overflow-y-auto mt-16 p-8">
+        {/* MAIN CONTENT */}
+        <main className="pt-16 ml-sidebar-width h-screen overflow-y-auto p-8">
           <div className="max-w-6xl mx-auto space-y-8">
             <CandidateHeader onEdit={() => setOpenEdit(true)} />
 
@@ -36,7 +39,6 @@ export default function CandidateProfilePage() {
             </div>
 
             <CandidateStatsCards />
-
             <CVCard />
           </div>
         </main>
