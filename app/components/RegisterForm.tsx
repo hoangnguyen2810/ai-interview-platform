@@ -4,7 +4,71 @@ import { useState } from "react";
 
 export default function RegisterForm() {
   const [showPass, setShowPass] = useState(false);
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [formData, setFormData] = useState({
+    fullName: "",
+    email: "",
+    password: "",
+    role: "CANDIDATE",
+  });
 
+  const getPasswordStrength = (password: string) => {
+    let score = 0;
+
+    if (password.length >= 8) score++;
+    if (/[A-Z]/.test(password)) score++;
+    if (/[a-z]/.test(password)) score++;
+    if (/\d/.test(password)) score++;
+    if (/[^A-Za-z0-9]/.test(password)) score++;
+
+    return score;
+  };
+
+  const strength = getPasswordStrength(formData.password);
+  const strengthLabels = [
+    "Rất yếu",
+    "Yếu",
+    "Trung bình",
+    "Khá",
+    "Mạnh",
+    "Rất mạnh",
+  ];
+  const [loading, setLoading] = useState(false);
+
+  const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!acceptTerms) {
+      alert("Vui lòng đồng ý với Điều khoản và Chính sách trước khi đăng ký.");
+      return;
+    }
+    try {
+      setLoading(true);
+
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.message);
+        return;
+      }
+
+      alert("Đăng ký thành công");
+
+      window.location.href = "/login";
+    } catch (error) {
+      console.error(error);
+      alert("Có lỗi xảy ra");
+    } finally {
+      setLoading(false);
+    }
+  };
   return (
     <div className="min-h-screen flex items-stretch bg-[#051424] text-[#d4e4fa] overflow-x-hidden">
       {/* LEFT PANEL */}
@@ -80,7 +144,7 @@ export default function RegisterForm() {
             </p>
           </header>
 
-          <form className="space-y-6">
+          <form onSubmit={handleRegister} className="space-y-6">
             {/* ROLE SELECT (FIXED peer system) */}
             <div className="grid grid-cols-2 gap-4">
               {/* Candidate */}
@@ -88,7 +152,13 @@ export default function RegisterForm() {
                 <input
                   type="radio"
                   name="role"
-                  defaultChecked
+                  checked={formData.role === "CANDIDATE"}
+                  onChange={() =>
+                    setFormData({
+                      ...formData,
+                      role: "CANDIDATE",
+                    })
+                  }
                   className="peer hidden"
                 />
 
@@ -108,7 +178,18 @@ export default function RegisterForm() {
 
               {/* Interviewer */}
               <label className="cursor-pointer group">
-                <input type="radio" name="role" className="peer hidden" />
+                <input
+                  type="radio"
+                  name="role"
+                  checked={formData.role === "RECRUITER"}
+                  onChange={() =>
+                    setFormData({
+                      ...formData,
+                      role: "RECRUITER",
+                    })
+                  }
+                  className="peer hidden"
+                />
 
                 <div
                   className="flex flex-col items-center p-4 rounded-xl border border-[#3b494b]
@@ -127,8 +208,15 @@ export default function RegisterForm() {
             <div>
               <label className="text-[12px] text-[#b9cacb]">Họ và tên</label>
               <input
+                value={formData.fullName}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    fullName: e.target.value,
+                  })
+                }
                 className="w-full mt-2 p-3 rounded-lg bg-[#122131]
-                border border-[#3b494b] focus:border-[#00f0ff] outline-none"
+  border border-[#3b494b] focus:border-[#00f0ff] outline-none"
                 placeholder="Nguyễn Văn A"
               />
             </div>
@@ -136,8 +224,16 @@ export default function RegisterForm() {
             <div>
               <label className="text-[12px] text-[#b9cacb]">Email</label>
               <input
+                type="email"
+                value={formData.email}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    email: e.target.value,
+                  })
+                }
                 className="w-full mt-2 p-3 rounded-lg bg-[#122131]
-                border border-[#3b494b] focus:border-[#00f0ff] outline-none"
+  border border-[#3b494b] focus:border-[#00f0ff] outline-none"
                 placeholder="example@neuralcode.ai"
               />
             </div>
@@ -149,8 +245,15 @@ export default function RegisterForm() {
               <div className="relative mt-2">
                 <input
                   type={showPass ? "text" : "password"}
+                  value={formData.password}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      password: e.target.value,
+                    })
+                  }
                   className="w-full p-3 rounded-lg bg-[#122131]
-                  border border-[#3b494b] focus:border-[#00f0ff] outline-none"
+  border border-[#3b494b] focus:border-[#00f0ff] outline-none"
                   placeholder="••••••••"
                 />
 
@@ -165,40 +268,62 @@ export default function RegisterForm() {
 
               {/* STRENGTH BAR */}
               <div className="flex gap-1 mt-2 h-1">
-                <div className="flex-1 bg-[#571bc1]" />
-                <div className="flex-1 bg-[#571bc1]" />
-                <div className="flex-1 bg-[#571bc1]" />
-                <div className="flex-1 bg-[#273647]" />
+                {[1, 2, 3, 4, 5].map((item) => (
+                  <div
+                    key={item}
+                    className={`flex-1 rounded ${
+                      strength >= item ? "bg-[#00f0ff]" : "bg-[#273647]"
+                    }`}
+                  />
+                ))}
               </div>
 
-              <p className="text-[10px] text-right text-[#b9cacb] mt-1">
-                Độ mạnh: Khá
-              </p>
+              <div className="flex items-center justify-between mt-2 gap-4">
+                <span className="text-[11px] text-[#b9cacb]">
+                  Độ mạnh mật khẩu
+                </span>
+
+                <span className="shrink-0 text-[11px] font-semibold text-[#00f0ff]">
+                  {strengthLabels[strength]}
+                </span>
+              </div>
             </div>
 
             {/* TERMS */}
-            <label className="flex w-full items-start gap-3 text-[12px] text-[#b9cacb] mt-2">
-              <input type="checkbox" className="mt-1.5 shrink-0" />
+            <label className="flex w-full items-start gap-3 text-[12px] text-[#b9cacb] mt-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={acceptTerms}
+                onChange={(e) => setAcceptTerms(e.target.checked)}
+                className="mt-1.5 h-4 w-4 shrink-0 accent-[#00f0ff]"
+              />
 
               <span className="leading-5 w-full">
                 Tôi đồng ý với{" "}
                 <a href="/terms" className="text-[#00dbe9] hover:underline">
-                  Điều khoản
+                  Điều khoản sử dụng
                 </a>{" "}
                 và{" "}
                 <a href="/privacy" className="text-[#00dbe9] hover:underline">
-                  Chính sách
+                  Chính sách bảo mật
                 </a>
               </span>
             </label>
 
             {/* BUTTON */}
             <button
+              type="submit"
+              disabled={loading || !acceptTerms}
               className="w-full py-4 rounded-xl bg-[#00f0ff]
-              text-[#00363a] font-bold shadow-[0_0_15px_rgba(0,219,233,0.3)]
-              hover:brightness-110 active:scale-95 transition"
+  text-[#00363a] font-bold
+  shadow-[0_0_15px_rgba(0,219,233,0.3)]
+  hover:brightness-110
+  active:scale-95
+  transition
+  disabled:opacity-50
+  disabled:cursor-not-allowed"
             >
-              Đăng ký tài khoản
+              {loading ? "Đang đăng ký..." : "Đăng ký tài khoản"}
             </button>
           </form>
 

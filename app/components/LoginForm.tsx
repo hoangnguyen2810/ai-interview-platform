@@ -4,6 +4,14 @@ import { useEffect, useState } from "react";
 
 export default function LoginForm() {
   const [showPass, setShowPass] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const [error, setError] = useState("");
+
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+  });
   useEffect(() => {
     const inputs = document.querySelectorAll("input");
 
@@ -21,6 +29,39 @@ export default function LoginForm() {
 
     return () => {};
   }, []);
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    setError("");
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.message || "Đăng nhập thất bại");
+        return;
+      }
+
+      localStorage.setItem("token", data.token);
+
+      localStorage.setItem("user", JSON.stringify(data.user));
+
+      window.location.href = "/recruiter-dashboard";
+    } catch {
+      setError("Không thể kết nối tới máy chủ");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#051424] text-[#d4e4fa] overflow-hidden relative">
@@ -55,7 +96,7 @@ export default function LoginForm() {
             </p>
           </div>
 
-          <form className="space-y-6">
+          <form onSubmit={handleLogin} className="space-y-6">
             {/* EMAIL */}
             <div className="space-y-2 input-wrapper transition-transform">
               <label className="text-[12px] text-[#b9cacb]">Email</label>
@@ -68,9 +109,16 @@ export default function LoginForm() {
                 <input
                   type="email"
                   placeholder="name@company.com"
+                  value={formData.email}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      email: e.target.value,
+                    })
+                  }
                   className="w-full bg-[#051424] border border-[#3b494b]
-                  rounded-xl py-3 pl-12 pr-4 outline-none
-                  focus:border-[#00f0ff]"
+  rounded-xl py-3 pl-12 pr-4 outline-none
+  focus:border-[#00f0ff]"
                 />
               </div>
             </div>
@@ -91,6 +139,13 @@ export default function LoginForm() {
 
                 <input
                   type={showPass ? "text" : "password"}
+                  value={formData.password}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      password: e.target.value,
+                    })
+                  }
                   placeholder="••••••••"
                   className="w-full bg-[#051424] border border-[#3b494b]
   rounded-xl py-3 pl-12 pr-12 outline-none
@@ -118,14 +173,38 @@ export default function LoginForm() {
               <input type="checkbox" className="w-4 h-4" />
               Duy trì đăng nhập
             </label>
-
+            {error && (
+              <div
+                className="
+      rounded-xl
+      border border-red-500/30
+      bg-red-500/10
+      px-4 py-3
+      text-sm
+      text-red-300
+    "
+              >
+                {error}
+              </div>
+            )}
             {/* BUTTON */}
             <button
-              className="w-full py-4 rounded-xl bg-[#00f0ff]
-              text-[#00363a] font-bold shadow-[0_0_20px_rgba(0,240,255,0.3)]
-              hover:brightness-110 active:scale-95 transition"
+              type="submit"
+              disabled={loading}
+              className="
+    w-full py-4 rounded-xl
+    bg-[#00f0ff]
+    text-[#00363a]
+    font-bold
+    shadow-[0_0_20px_rgba(0,240,255,0.3)]
+    hover:brightness-110
+    active:scale-95
+    transition
+    disabled:opacity-50
+    disabled:cursor-not-allowed
+  "
             >
-              Đăng nhập
+              {loading ? "Đang đăng nhập..." : "Đăng nhập"}
             </button>
 
             {/* DIVIDER */}
