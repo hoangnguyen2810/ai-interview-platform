@@ -15,24 +15,13 @@ type NavGroup = {
 const NAV_GROUPS: NavGroup[] = [
   {
     title: "Tổng quan",
-    items: [
-      { label: "Dashboard", icon: "dashboard", href: "#", active: true },
-    ],
+    items: [{ label: "Dashboard", icon: "dashboard", href: "#", active: true }],
   },
   {
     title: "Phỏng vấn",
     items: [
       { label: "Lịch phỏng vấn", icon: "calendar_today", href: "#" },
       { label: "Phòng phỏng vấn", icon: "video_chat", href: "#" },
-      { label: "Live Coding", icon: "code", href: "#" },
-    ],
-  },
-  {
-    title: "Ứng viên",
-    items: [
-      { label: "Ứng viên", icon: "group", href: "#" },
-      { label: "Hồ sơ & CV", icon: "description", href: "#" },
-      { label: "Đánh giá ứng viên", icon: "star", href: "#" },
     ],
   },
   {
