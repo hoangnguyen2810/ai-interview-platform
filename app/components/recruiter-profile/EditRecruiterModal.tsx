@@ -2,39 +2,47 @@
 
 import { useEffect, useState } from "react";
 
-import type { CandidateProfile } from "@/lib/profile-types";
-import { updateCandidateProfile } from "@/lib/profile-api";
+import { updateRecruiterProfile } from "@/lib/profile-api";
+import type { RecruiterProfile } from "@/lib/profile-types";
 
-type Props = {
+interface Props {
   open: boolean;
   onClose: () => void;
-  profile: CandidateProfile;
-  onSaved?: (next: CandidateProfile) => void;
-};
+  profile: RecruiterProfile;
+  onSaved?: (next: RecruiterProfile) => void;
+}
 
 interface FormState {
   fullName: string;
+  position: string;
   phone: string;
-  avatarUrl: string;
-  cvUrl: string;
-  githubUrl: string;
+  bio: string;
   linkedinUrl: string;
-  experienceYears: number | "";
+  avatarUrl: string;
+  coverImageUrl: string;
+  companyName: string;
+  companyWebsite: string;
+  companyDescription: string;
+  companyLogoUrl: string;
 }
 
-function toForm(p: CandidateProfile): FormState {
+function toForm(p: RecruiterProfile): FormState {
   return {
     fullName: p.fullName,
+    position: p.position,
     phone: p.phone,
-    avatarUrl: p.avatarUrl,
-    cvUrl: p.cvUrl,
-    githubUrl: p.githubUrl,
+    bio: p.bio,
     linkedinUrl: p.linkedinUrl,
-    experienceYears: p.experienceYears ?? "",
+    avatarUrl: p.avatarUrl,
+    coverImageUrl: p.coverImageUrl,
+    companyName: p.company.name,
+    companyWebsite: p.company.website,
+    companyDescription: p.company.description,
+    companyLogoUrl: p.company.logoUrl,
   };
 }
 
-export default function EditProfileModal({
+export default function EditRecruiterModal({
   open,
   onClose,
   profile,
@@ -54,13 +62,12 @@ export default function EditProfileModal({
   if (!open) return null;
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >,
   ) => {
-    const { name, value, type } = e.target;
-    setForm((prev) => ({
-      ...prev,
-      [name]: type === "number" ? (value === "" ? "" : Number(value)) : value,
-    }));
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSave = async () => {
@@ -70,26 +77,34 @@ export default function EditProfileModal({
     try {
       const payload: Record<string, unknown> = {
         fullName: form.fullName,
+        position: form.position,
         phone: form.phone,
-        avatarUrl: form.avatarUrl,
-        cvUrl: form.cvUrl,
-        githubUrl: form.githubUrl,
+        bio: form.bio,
         linkedinUrl: form.linkedinUrl,
-        experienceYears:
-          form.experienceYears === "" ? null : Number(form.experienceYears),
+        avatarUrl: form.avatarUrl,
+        coverImageUrl: form.coverImageUrl,
+        companyName: form.companyName,
+        companyWebsite: form.companyWebsite,
+        companyDescription: form.companyDescription,
+        companyLogoUrl: form.companyLogoUrl,
       };
 
-      await updateCandidateProfile(payload);
+      await updateRecruiterProfile(payload);
       onSaved?.({
         ...profile,
         fullName: form.fullName,
+        position: form.position,
         phone: form.phone,
-        avatarUrl: form.avatarUrl,
-        cvUrl: form.cvUrl,
-        githubUrl: form.githubUrl,
+        bio: form.bio,
         linkedinUrl: form.linkedinUrl,
-        experienceYears:
-          form.experienceYears === "" ? 0 : Number(form.experienceYears),
+        avatarUrl: form.avatarUrl,
+        coverImageUrl: form.coverImageUrl,
+        company: {
+          name: form.companyName,
+          website: form.companyWebsite,
+          description: form.companyDescription,
+          logoUrl: form.companyLogoUrl,
+        },
       });
       onClose();
     } catch (e) {
@@ -103,19 +118,62 @@ export default function EditProfileModal({
     <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-surface-container p-6 border border-outline-variant">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold">Chỉnh sửa hồ sơ</h2>
+          <h2 className="text-xl font-bold">Chỉnh sửa hồ sơ Recruiter</h2>
           <button onClick={onClose} disabled={saving}>
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
 
         <div className="grid md:grid-cols-2 gap-4">
+          <h3 className="md:col-span-2 font-semibold text-sm opacity-70">
+            Công ty
+          </h3>
+          <input
+            name="companyName"
+            value={form.companyName}
+            onChange={handleChange}
+            className="p-3 rounded-xl bg-surface-container-high"
+            placeholder="Tên công ty"
+          />
+          <input
+            name="companyWebsite"
+            value={form.companyWebsite}
+            onChange={handleChange}
+            className="p-3 rounded-xl bg-surface-container-high"
+            placeholder="Website"
+          />
+          <input
+            name="companyLogoUrl"
+            value={form.companyLogoUrl}
+            onChange={handleChange}
+            className="p-3 rounded-xl bg-surface-container-high md:col-span-2"
+            placeholder="Logo URL"
+          />
+          <textarea
+            name="companyDescription"
+            value={form.companyDescription}
+            onChange={handleChange}
+            className="p-3 rounded-xl bg-surface-container-high md:col-span-2"
+            placeholder="Mô tả công ty"
+            rows={3}
+          />
+
+          <h3 className="md:col-span-2 font-semibold text-sm opacity-70 mt-2">
+            Cá nhân
+          </h3>
           <input
             name="fullName"
             value={form.fullName}
             onChange={handleChange}
             className="p-3 rounded-xl bg-surface-container-high"
             placeholder="Họ tên"
+          />
+          <input
+            name="position"
+            value={form.position}
+            onChange={handleChange}
+            className="p-3 rounded-xl bg-surface-container-high"
+            placeholder="Chức danh"
           />
           <input
             name="phone"
@@ -125,20 +183,6 @@ export default function EditProfileModal({
             placeholder="Số điện thoại"
           />
           <input
-            name="avatarUrl"
-            value={form.avatarUrl}
-            onChange={handleChange}
-            className="p-3 rounded-xl bg-surface-container-high md:col-span-2"
-            placeholder="Avatar URL"
-          />
-          <input
-            name="githubUrl"
-            value={form.githubUrl}
-            onChange={handleChange}
-            className="p-3 rounded-xl bg-surface-container-high"
-            placeholder="GitHub URL"
-          />
-          <input
             name="linkedinUrl"
             value={form.linkedinUrl}
             onChange={handleChange}
@@ -146,21 +190,26 @@ export default function EditProfileModal({
             placeholder="LinkedIn URL"
           />
           <input
-            type="number"
-            name="experienceYears"
-            value={form.experienceYears}
+            name="avatarUrl"
+            value={form.avatarUrl}
             onChange={handleChange}
             className="p-3 rounded-xl bg-surface-container-high"
-            placeholder="Số năm kinh nghiệm"
-            min={0}
-            max={70}
+            placeholder="Avatar URL"
           />
           <input
-            name="cvUrl"
-            value={form.cvUrl}
+            name="coverImageUrl"
+            value={form.coverImageUrl}
             onChange={handleChange}
             className="p-3 rounded-xl bg-surface-container-high"
-            placeholder="CV URL"
+            placeholder="Cover image URL"
+          />
+          <textarea
+            name="bio"
+            value={form.bio}
+            onChange={handleChange}
+            className="p-3 rounded-xl bg-surface-container-high md:col-span-2"
+            placeholder="Giới thiệu"
+            rows={3}
           />
         </div>
 

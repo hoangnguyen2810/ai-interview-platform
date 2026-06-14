@@ -73,6 +73,12 @@ export async function POST(req: Request) {
       );
     }
 
+    // Cập nhật thời điểm đăng nhập gần nhất
+    await pool.query(
+      `UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = $1`,
+      [user.id],
+    );
+
     const token = jwt.sign(
       {
         id: user.id,

@@ -1,4 +1,24 @@
-export default function AccountInfo() {
+import type { RecruiterProfile } from "@/lib/profile-types";
+
+interface AccountInfoProps {
+  profile: RecruiterProfile;
+}
+
+function formatDate(value: string | null | undefined) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("vi-VN");
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("vi-VN");
+}
+
+export default function AccountInfo({ profile }: AccountInfoProps) {
   return (
     <div className="p-6 rounded-xl border border-outline-variant bg-surface-container space-y-4">
       <h3 className="text-lg font-bold">Tài khoản</h3>
@@ -11,12 +31,12 @@ export default function AccountInfo() {
 
         <div>
           <p className="text-xs opacity-60">Joined</p>
-          <p>15/03/2023</p>
+          <p>{formatDate(profile.joinedAt)}</p>
         </div>
 
         <div>
           <p className="text-xs opacity-60">Last login</p>
-          <p>Today 09:42</p>
+          <p>{formatDateTime(profile.lastLoginAt)}</p>
         </div>
       </div>
     </div>

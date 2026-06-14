@@ -1,20 +1,29 @@
-const stats = [
-  { label: "Open Jobs", value: 14 },
-  { label: "Applications", value: 342 },
-  { label: "AI Interviews", value: 1284 },
-  { label: "Hired", value: 86 },
-];
+import type { RecruiterStats } from "@/lib/profile-types";
 
-export default function StatsCard() {
+interface StatsCardProps {
+  stats: RecruiterStats;
+}
+
+const formatNumber = (n: number) =>
+  new Intl.NumberFormat("vi-VN").format(n ?? 0);
+
+export default function StatsCard({ stats }: StatsCardProps) {
+  const items = [
+    { label: "Open Jobs", value: stats.openJobs },
+    { label: "Applications", value: stats.applications },
+    { label: "AI Interviews", value: stats.aiInterviews },
+    { label: "Hired", value: stats.hired },
+  ];
+
   return (
     <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-      {stats.map((s) => (
+      {items.map((s) => (
         <div
           key={s.label}
           className="p-4 rounded-xl border border-outline-variant bg-surface-container"
         >
           <p className="text-xs opacity-60">{s.label}</p>
-          <p className="text-2xl font-bold">{s.value}</p>
+          <p className="text-2xl font-bold">{formatNumber(s.value)}</p>
         </div>
       ))}
     </section>
