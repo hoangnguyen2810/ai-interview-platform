@@ -14,9 +14,21 @@ export default function AuthSuccess() {
     // save auth
     localStorage.setItem("token", token);
 
-    // decode role (optional)
+    // decode payload từ JWT
     const payload = JSON.parse(atob(token.split(".")[1]));
     const role = payload.role;
+
+    // TopNavBar và các chỗ khác đọc role từ localStorage "user",
+    // nên phải lưu lại để đồng bộ với flow login thường.
+    localStorage.setItem(
+      "user",
+      JSON.stringify({
+        id: payload.id,
+        email: payload.email,
+        fullName: payload.fullName ?? "",
+        role,
+      }),
+    );
 
     if (role === "CANDIDATE") {
       window.location.href = "/candidate/dashboard";
