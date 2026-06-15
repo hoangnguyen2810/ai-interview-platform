@@ -18,14 +18,6 @@ const NAV_GROUPS: NavGroup[] = [
     items: [{ label: "Dashboard", icon: "dashboard", href: "#", active: true }],
   },
   {
-    title: "Phỏng vấn",
-    items: [
-      { label: "Lịch phỏng vấn", icon: "calendar_today", href: "#" },
-      { label: "Phòng luyện tập", icon: "video_chat", href: "#" },
-      { label: "Kết quả phỏng vấn", icon: "assignment_turned_in", href: "#" },
-    ],
-  },
-  {
     title: "Tài nguyên",
     items: [
       { label: "Câu hỏi luyện tập", icon: "quiz", href: "#" },
@@ -35,7 +27,6 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: "Cá nhân",
     items: [
-      { label: "CV của tôi", icon: "description", href: "#" },
       { label: "Hồ sơ cá nhân", icon: "person", href: "#" },
       { label: "Cài đặt", icon: "settings", href: "#" },
     ],

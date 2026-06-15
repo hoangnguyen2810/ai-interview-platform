@@ -1,11 +1,11 @@
 import { TopNavBar } from "../../components/TopNavBar";
 import { SideNavBar } from "../../components/SideNavBar";
-import { MobileBottomNav } from "../../components/MobileBottomNav";
-import { HeroSection } from "../../components/HeroSection";
-import { QuickStats } from "../../components/QuickStats";
-import { UpcomingInterviews } from "../../components/UpcomingInterviews";
-import { RecentEvaluations } from "../../components/RecentEvaluations";
-import { AIAssistantPanel } from "../../components/AIAssistantPanel";
+import { MobileBottomNav } from "../../components/recruiter-dashboard/MobileBottomNav";
+import { HeroSection } from "../../components/recruiter-dashboard/HeroSection";
+import { QuickStats } from "../../components/recruiter-dashboard/QuickStats";
+import { UpcomingInterviews } from "../../components/recruiter-dashboard/UpcomingInterviews";
+import { RecentEvaluations } from "../../components/recruiter-dashboard/RecentEvaluations";
+import { AIAssistantPanel } from "@/app/components/recruiter-dashboard/AIAssistantPanel";
 
 export default function DashboardPage() {
   return (

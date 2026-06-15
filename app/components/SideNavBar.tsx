@@ -19,25 +19,18 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     title: "Phỏng vấn",
-    items: [
-      { label: "Lịch phỏng vấn", icon: "calendar_today", href: "#" },
-      { label: "Phòng phỏng vấn", icon: "video_chat", href: "#" },
-    ],
+    items: [{ label: "Lịch phỏng vấn", icon: "calendar_today", href: "#" }],
   },
   {
     title: "AI & Phân tích",
     items: [
-      { label: "AI Assistant", icon: "smart_toy", href: "#" },
       { label: "Phân tích & Báo cáo", icon: "analytics", href: "#" },
       { label: "Thống kê", icon: "pie_chart", href: "#" },
     ],
   },
   {
     title: "Lưu trữ",
-    items: [
-      { label: "Kho lưu trữ", icon: "folder", href: "#" },
-      { label: "Video & Recordings", icon: "video_library", href: "#" },
-    ],
+    items: [{ label: "Video & Recordings", icon: "video_library", href: "#" }],
   },
   {
     title: "Hệ thống",
