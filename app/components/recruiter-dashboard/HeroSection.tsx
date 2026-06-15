@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import { CreateInterviewModal } from "./CreateInterviewModal";
+import { useRecruiterDashboard } from "./DashboardContext";
 
 export function HeroSection() {
   const [open, setOpen] = useState(false);
+  const { notifyInterviewCreated } = useRecruiterDashboard();
 
   return (
     <>
@@ -37,9 +39,7 @@ export function HeroSection() {
       <CreateInterviewModal
         open={open}
         onClose={() => setOpen(false)}
-        onCreated={(interview) => {
-          console.log("Created interview:", interview);
-        }}
+        onCreated={notifyInterviewCreated}
       />
     </>
   );

@@ -129,7 +129,8 @@ export function CreateInterviewModal({ open, onClose, onCreated }: Props) {
 
     const payload = {
       title: form.title.trim(),
-      description: form.description.trim() === "" ? null : form.description.trim(),
+      description:
+        form.description.trim() === "" ? null : form.description.trim(),
       roomPassword:
         form.roomPassword.trim() === "" ? null : form.roomPassword.trim(),
       allowGuest: form.allowGuest,

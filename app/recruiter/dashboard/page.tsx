@@ -6,10 +6,11 @@ import { QuickStats } from "../../components/recruiter-dashboard/QuickStats";
 import { UpcomingInterviews } from "../../components/recruiter-dashboard/UpcomingInterviews";
 import { RecentEvaluations } from "../../components/recruiter-dashboard/RecentEvaluations";
 import { AIAssistantPanel } from "@/app/components/recruiter-dashboard/AIAssistantPanel";
+import { DashboardShell } from "@/app/components/recruiter-dashboard/DashboardShell";
 
 export default function DashboardPage() {
   return (
-    <>
+    <DashboardShell>
       <TopNavBar />
       <div className="flex pt-16 h-screen overflow-hidden">
         <SideNavBar />
@@ -26,6 +27,6 @@ export default function DashboardPage() {
         </main>
       </div>
       <MobileBottomNav />
-    </>
+    </DashboardShell>
   );
 }

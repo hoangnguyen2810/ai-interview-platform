@@ -1,45 +1,178 @@
-import Image from "next/image";
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import { useRecruiterDashboard } from "./DashboardContext";
+import { useCountdown } from "@/hooks/useCountdown";
 
 type Interview = {
-  name: string;
-  role: string;
-  stack: string;
-  time: string;
-  status: "Đang chờ" | "Sắp tới";
+  id: string;
+  title: string;
+  meetingCode: string;
+  scheduledAt: string;
+  scheduledTime: string;
+  maxInterviewers: string;
+  status: "SCHEDULED" | "ONGOING";
   avatar: string;
-  borderClass: string;
-  ctaPrimary: boolean;
-  ctaLabel: string;
 };
 
-const INTERVIEWS: Interview[] = [
-  {
-    name: "Nguyễn Minh Tuấn",
-    role: "Senior React Developer",
-    stack: "React, Node.js",
-    time: "14:00 - 15:30",
-    status: "Đang chờ",
-    avatar:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuCe9hqlJMbpq36Sa6erMcNO7LkYfAi0Gb_BWD5XpqEG1aCkklxospWsO-tb4UAdrj2DH36iUqQVLlCFY8ii7JJ5BreUe8zhLTBXitXLQINRXFS8AnyvcFs04AS7m_agbyzLo3krXD2jVXsVKaSRa-L9ebK5AlMTqnbZEAq-VAkodpUzbsvnxcewKCaWzqBmO4ud-JuJLSN3M-iO6uS39PCIEXjd58R60VOkctMY_Zurqu5m2BhGB8VJ3HbCphjBIiCuKmjh-1u4Lko",
-    borderClass: "border-primary-fixed",
-    ctaPrimary: true,
-    ctaLabel: "Vào phòng",
-  },
-  {
-    name: "Lê Thị Thanh Huyền",
-    role: "UI/UX Designer",
-    stack: "Figma, Framer",
-    time: "16:30 - 17:30",
-    status: "Sắp tới",
-    avatar:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuA8WBt9dsvtcwHu5x72EAo9ZeoTca5b8sHtSeCdmj-qehGWZPcjx25jbmN2jYDBUim5D0mKy9VmI87gxwPKfeMja8ny1TEmfy1iC-Vum3Z5Nd7OkrQVqgYH3nTYnakduQz42aD44MVt4lhd0c1u6ZFkCOEHec9CN91y2oP1let9zfh-kFdMCKBTn-YbaWTqv2t-cA97UeJL_mwOO1gRHHS1yo6o7pcLWESSumtQV7OlcbXapaJoSk4Bg3ldLnfvo7gB1wm2Syntwqo",
-    borderClass: "border-outline-variant",
-    ctaPrimary: false,
-    ctaLabel: "Chi tiết",
-  },
-];
+const DEFAULT_AVATAR = "https://i.pravatar.cc/150";
 
+function toCard(i: {
+  id: string;
+  title: string;
+  meetingCode: string;
+  scheduledAt: string;
+  maxInterviewers: number;
+  status: "SCHEDULED" | "ONGOING" | "FINISHED" | "CANCELLED";
+}): Interview {
+  const date = new Date(i.scheduledAt);
+  return {
+    id: i.id,
+    title: i.title,
+    meetingCode: i.meetingCode,
+    scheduledAt: i.scheduledAt,
+    scheduledTime: date.toLocaleTimeString("vi-VN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    maxInterviewers: String(i.maxInterviewers),
+    status: i.status === "ONGOING" ? "ONGOING" : "SCHEDULED",
+    avatar: DEFAULT_AVATAR,
+  };
+}
+
+function isToday(iso: string): boolean {
+  const d = new Date(iso);
+  const now = new Date();
+
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+}
+
+/* ================= CARD ================= */
+function InterviewCard({ interview }: { interview: Interview }) {
+  const countdown = useCountdown(interview.scheduledAt);
+
+  const isStarted = new Date(interview.scheduledAt).getTime() <= Date.now();
+
+  const status = isStarted ? "ONGOING" : "SCHEDULED";
+
+  return (
+    <div className="glass-card p-5 rounded-2xl grid grid-cols-[1fr_140px_140px] items-center gap-6 hover:bg-surface-container-high transition-all">
+      {/* LEFT */}
+      <div className="flex items-center gap-4 min-w-0">
+        <div className="w-12 h-12 rounded-full overflow-hidden border border-outline-variant flex-shrink-0">
+          <img
+            src={interview.avatar}
+            alt="avatar"
+            className="w-full h-full object-cover"
+          />
+        </div>
+
+        <div className="min-w-0">
+          <h4 className="font-bold text-on-surface truncate">
+            {interview.title}
+          </h4>
+
+          <p className="text-sm text-on-surface-variant truncate">
+            Room: {interview.meetingCode}
+          </p>
+
+          <p className="text-xs text-on-surface-variant">
+            {interview.maxInterviewers} HR
+          </p>
+        </div>
+      </div>
+
+      {/* CENTER */}
+      <div className="flex flex-col items-center">
+        <span className="font-code-md text-code-md">
+          {interview.scheduledTime}
+        </span>
+
+        <span
+          className={`text-[10px] uppercase tracking-widest mt-1 ${
+            status === "ONGOING" ? "text-green-400" : "text-yellow-400"
+          }`}
+        >
+          {status === "ONGOING" ? "Đang diễn ra" : `Còn ${countdown}`}
+        </span>
+      </div>
+
+      {/* RIGHT */}
+      <div className="flex justify-end">
+        <button
+          type="button"
+          className={
+            status === "ONGOING"
+              ? "w-[120px] bg-primary-fixed cursor-pointer text-on-primary-fixed py-3 rounded-lg font-bold text-sm"
+              : "w-[120px] border border-outline-variant cursor-pointer text-on-surface py-3 rounded-lg font-bold text-sm"
+          }
+        >
+          {status === "ONGOING" ? "Vào phòng" : "Chi tiết"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ================= MAIN ================= */
 export function UpcomingInterviews() {
+  const [interviews, setInterviews] = useState<Interview[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { subscribeInterviewCreated } = useRecruiterDashboard();
+
+  const fetchData = useCallback(async () => {
+    try {
+      const res = await fetch("/api/interviews/upcoming");
+      if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
+
+      const data = await res.json();
+      setInterviews(data);
+    } catch (err) {
+      console.error("fetch error:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeInterviewCreated((interview) => {
+      if (isToday(interview.scheduledAt)) {
+        const card = toCard(interview);
+
+        setInterviews((prev) => {
+          if (prev.some((p) => p.id === card.id)) return prev;
+          return [card, ...prev];
+        });
+      }
+
+      fetchData();
+    });
+
+    return unsubscribe;
+  }, [subscribeInterviewCreated, fetchData]);
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <h2 className="font-headline-lg text-headline-lg">
+          Lịch phỏng vấn hôm nay
+        </h2>
+        <div className="text-sm text-on-surface-variant">
+          Đang tải dữ liệu...
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -50,60 +183,18 @@ export function UpcomingInterviews() {
           Xem tất cả
         </span>
       </div>
-      <div className="space-y-4">
-        {INTERVIEWS.map((interview) => (
-          <div
-            key={interview.name}
-            className="glass-card p-5 rounded-2xl flex items-center justify-between group hover:bg-surface-container-high transition-all"
-          >
-            <div className="flex items-center gap-4">
-              <div
-                className={`w-12 h-12 rounded-full border-2 ${interview.borderClass} p-0.5`}
-              >
-                <Image
-                  alt={`Ảnh đại diện của ${interview.name}`}
-                  className="w-full h-full rounded-full object-cover"
-                  src={interview.avatar}
-                  width={48}
-                  height={48}
-                />
-              </div>
-              <div>
-                <h4 className="font-bold text-on-surface">{interview.name}</h4>
-                <p className="text-sm text-on-surface-variant">
-                  {interview.role} • {interview.stack}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-8">
-              <div className="text-right">
-                <div
-                  className={
-                    interview.status === "Đang chờ"
-                      ? "font-code-md text-code-md text-primary-fixed"
-                      : "font-code-md text-code-md text-on-surface-variant"
-                  }
-                >
-                  {interview.time}
-                </div>
-                <div className="text-[10px] text-on-surface-variant uppercase tracking-widest">
-                  {interview.status}
-                </div>
-              </div>
-              <button
-                type="button"
-                className={
-                  interview.ctaPrimary
-                    ? "bg-primary-fixed text-on-primary-fixed px-6 py-2 rounded-lg font-bold text-sm hover:scale-105 transition-transform active:scale-95"
-                    : "border border-outline-variant text-on-surface px-6 py-2 rounded-lg font-bold text-sm hover:bg-surface-container-highest transition-all"
-                }
-              >
-                {interview.ctaLabel}
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+
+      {interviews.length === 0 ? (
+        <div className="glass-card p-6 rounded-2xl text-sm text-on-surface-variant text-center">
+          Hôm nay chưa có buổi phỏng vấn nào.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {interviews.map((interview) => (
+            <InterviewCard key={interview.id} interview={interview} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
