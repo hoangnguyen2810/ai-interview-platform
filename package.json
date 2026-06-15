@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "google-auth-library": "^10.7.0",
+    "google-one-tap": "^1.0.6",
     "jsonwebtoken": "^9.0.3",
     "next": "16.2.9",
     "pg": "^8.21.0",

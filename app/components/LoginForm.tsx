@@ -5,8 +5,26 @@ import { useEffect, useState } from "react";
 export default function LoginForm() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
-
   const [error, setError] = useState("");
+
+  const handleGoogleLogin = () => {
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+
+    const redirectUri = "http://localhost:3000/api/auth/google/callback";
+
+    const scope = ["openid", "email", "profile"].join(" ");
+
+    const url =
+      "https://accounts.google.com/o/oauth2/v2/auth" +
+      `?client_id=${clientId}` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+      `&response_type=code` +
+      `&scope=${encodeURIComponent(scope)}` +
+      `&access_type=offline` +
+      `&prompt=consent`;
+
+    window.location.href = url;
+  };
 
   const [formData, setFormData] = useState({
     email: "",
@@ -235,6 +253,7 @@ export default function LoginForm() {
             {/* GOOGLE */}
             <button
               type="button"
+              onClick={handleGoogleLogin}
               className="w-full flex items-center justify-center gap-3
   py-3 rounded-xl bg-[#122131] border border-[#3b494b]
   hover:bg-[#273647]/50 transition"
