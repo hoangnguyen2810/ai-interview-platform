@@ -1,21 +1,9 @@
 "use client";
 
 import { createContext, useCallback, useContext, useRef } from "react";
+import type { CreatedInterview } from "./CreateInterviewModal";
 
-export interface CreatedInterview {
-  id: string;
-  title: string;
-  description: string | null;
-  meetingCode: string;
-  roomPassword: string | null;
-  allowGuest: boolean;
-  maxParticipants: number;
-  maxInterviewers: 2 | 3;
-  durationMinutes: 30 | 60 | 90 | 120;
-  status: "SCHEDULED" | "ONGOING" | "FINISHED" | "CANCELLED";
-  scheduledAt: string; // ISO
-  createdAt: string;
-}
+export type { CreatedInterview };
 
 type Listener = (interview: CreatedInterview) => void;
 

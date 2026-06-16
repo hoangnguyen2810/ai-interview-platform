@@ -21,6 +21,7 @@ export interface CreatedInterview {
   status: "SCHEDULED" | "ONGOING" | "FINISHED" | "CANCELLED";
   scheduledAt: string;
   createdAt: string;
+  avatarUrl: string | null;
 }
 
 interface FormState {
@@ -46,6 +47,20 @@ const EMPTY_FORM: FormState = {
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
   return window.localStorage.getItem("token");
+}
+
+async function fetchRecruiterAvatar(): Promise<string | null> {
+  try {
+    const token = getToken();
+    const headers: HeadersInit = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const res = await fetch("/api/recruiter/profile", { headers });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.profile?.avatarUrl ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function localToIso(local: string): string | null {
@@ -164,8 +179,9 @@ export function CreateInterviewModal({ open, onClose, onCreated }: Props) {
       }
 
       const interview = json.interview as CreatedInterview;
-      setCreated(interview);
-      onCreated?.(interview);
+      const avatarUrl = await fetchRecruiterAvatar();
+      setCreated({ ...interview, avatarUrl });
+      onCreated?.({ ...interview, avatarUrl });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không thể tạo phòng");
     } finally {

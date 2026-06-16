@@ -24,6 +24,7 @@ function toCard(i: {
   scheduledAt: string;
   maxInterviewers: number;
   status: "SCHEDULED" | "ONGOING" | "FINISHED" | "CANCELLED";
+  avatar: string | null;
 }): Interview {
   const date = new Date(i.scheduledAt);
   return {
@@ -37,7 +38,7 @@ function toCard(i: {
     }),
     maxInterviewers: String(i.maxInterviewers),
     status: i.status === "ONGOING" ? "ONGOING" : "SCHEDULED",
-    avatar: DEFAULT_AVATAR,
+    avatar: i.avatar && i.avatar.trim() !== "" ? i.avatar : DEFAULT_AVATAR,
   };
 }
 
@@ -127,10 +128,19 @@ export function UpcomingInterviews() {
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch("/api/interviews/upcoming");
+      const token = window.localStorage.getItem("token");
+      const headers: HeadersInit = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch("/api/interviews/upcoming", { headers });
       if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
 
-      const data = await res.json();
+      const contentType = res.headers.get("content-type") ?? "";
+      if (!contentType.includes("application/json")) {
+        throw new Error("Response không phải JSON");
+      }
+
+      const data: Interview[] = await res.json();
       setInterviews(data);
     } catch (err) {
       console.error("fetch error:", err);
