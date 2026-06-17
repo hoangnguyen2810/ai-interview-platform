@@ -1,6 +1,6 @@
 export default function CodeEditor() {
   return (
-    <div className="w-full lg:w-[70%] flex flex-col rounded-lg overflow-hidden border border-white/10 bg-[#0d1c2d]/80 backdrop-blur-md">
+    <div className="w-full h-full flex flex-col rounded-lg overflow-hidden border border-white/10 bg-[#0d1c2d]/80 backdrop-blur-md">
       {/* HEADER */}
       <div className="flex items-center justify-between bg-white/5 px-4 py-3 border-b border-white/10">
         <div className="flex items-center space-x-4">
