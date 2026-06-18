@@ -158,6 +158,11 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #00dbe9 #0d1c2d;
+  }
+
   .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
   }

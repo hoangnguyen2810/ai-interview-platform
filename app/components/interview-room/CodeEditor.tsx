@@ -1,77 +1,113 @@
-export default function CodeEditor() {
+export default function CandidateCodingView() {
   return (
-    <div className="w-full h-full flex flex-col rounded-lg overflow-hidden border border-white/10 bg-[#0d1c2d]/80 backdrop-blur-md">
-      {/* HEADER */}
-      <div className="flex items-center justify-between bg-white/5 px-4 py-3 border-b border-white/10">
-        <div className="flex items-center space-x-4">
-          <div className="px-4 py-2">
-            <div className="flex items-center gap-4 text-[10px] text-white/30 uppercase tracking-widest">
-              <span>Python 3.10</span>
-              <span>UTF-8</span>
+    <div className="w-full h-full flex bg-[#071524] rounded-xl overflow-hidden border border-cyan-500/20">
+      {/* LEFT SIDE */}
+      <div className="w-1/2 flex flex-col border-r border-cyan-500/10">
+        {/* QUESTION */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+          <h3 className="text-lg font-semibold text-white mb-4">
+            Problem Description
+          </h3>
 
-              <span className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
-                Connected
-              </span>
+          <p className="text-white/80 leading-7">
+            Given an array of integers nums and an integer target, return
+            indices of the two numbers such that they add up to target.
+          </p>
+
+          <div className="mt-8">
+            <h4 className="text-cyan-400 font-medium mb-2">Example 1</h4>
+
+            <div className="bg-[#122131] border border-cyan-500/10 rounded-lg p-4 text-sm text-white/80">
+              <p>Input: nums = [2,7,11,15], target = 9</p>
+              <p>Output: [0,1]</p>
             </div>
           </div>
+
+          <div className="mt-8">
+            <h4 className="text-cyan-400 font-medium mb-2">Constraints</h4>
+
+            <ul className="space-y-2 text-sm text-white/80">
+              <li>• 2 ≤ nums.length ≤ 10⁴</li>
+              <li>• -10⁹ ≤ nums[i] ≤ 10⁹</li>
+              <li>• Exactly one valid answer exists.</li>
+            </ul>
+          </div>
+        </div>
+
+        {/* OUTPUT */}
+        <div className="h-56 border-t border-cyan-500/10 bg-[#0d1c2d]">
+          <div className="flex items-center justify-between px-4 border-b border-cyan-500/10">
+            {/* LEFT */}
+            <div className="flex items-center">
+              <button className="px-4 py-3 text-cyan-400 border-b-2 border-cyan-400">
+                Testcase
+              </button>
+
+              <button className="px-4 py-3 text-white/50 hover:text-cyan-300 transition-colors">
+                Test Result
+              </button>
+            </div>
+
+            {/* RIGHT */}
+            <div className="flex items-center gap-3">
+              <select className="bg-[#122131] border border-cyan-500/10 text-white px-3 py-1.5 rounded-lg text-sm outline-none focus:border-cyan-400">
+                <option>Python3</option>
+                <option>Java</option>
+                <option>C++</option>
+                <option>JavaScript</option>
+              </select>
+
+              <button className="px-4 py-1.5 rounded-lg bg-[#16304b] hover:bg-[#1f4368] text-white text-sm transition-colors">
+                Run
+              </button>
+
+              <button className="px-4 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-[#051424] font-semibold text-sm transition-colors">
+                Submit
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4">
+            <textarea
+              className="w-full h-32 bg-[#122131] border border-cyan-500/10 focus:border-cyan-400 rounded-lg p-3 text-white resize-none outline-none"
+              defaultValue={`[2,7,11,15]
+9`}
+            />
+          </div>
         </div>
       </div>
 
-      {/* CONTENT */}
-      <div className="flex-grow flex font-mono text-sm p-6 overflow-auto bg-[#051424]/50">
-        <div className="text-white/20 text-right pr-6 select-none border-r border-white/5">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i}>{i + 1}</div>
-          ))}
+      {/* RIGHT SIDE */}
+      <div className="w-1/2 flex flex-col">
+        {/* EDITOR HEADER */}
+        <div className="h-11 flex items-center justify-between px-4 border-b border-cyan-500/10 bg-[#122131]">
+          <span className="text-sm text-white/70">solution.py</span>
+
+          <div className="flex items-center gap-3 text-white/50">
+            <button className="hover:text-cyan-400 transition-colors">⚙</button>
+
+            <button className="hover:text-cyan-400 transition-colors">⛶</button>
+          </div>
         </div>
 
-        <div className="pl-6 w-full">
-          <div className="text-cyan-400">def</div>
+        {/* EDITOR */}
+        <div className="flex-1 overflow-auto custom-scrollbar bg-[#0d1c2d] p-6 font-mono text-sm">
+          <pre className="text-white/90 leading-7 whitespace-pre-wrap">
+            {`from typing import List
 
-          <div>find_optimal_path(grid):</div>
+class Solution:
+    def twoSum(self, nums: List[int], target: int):
+        seen = {}
 
-          <div className="pl-4 text-white/40">
-            """Neural Syntax Optimization Engine"""
-          </div>
+        for i, num in enumerate(nums):
+            diff = target - num
 
-          <div className="pl-4">
-            <span className="text-cyan-400">if not</span> grid:
-          </div>
+            if diff in seen:
+                return [seen[diff], i]
 
-          <div className="pl-8 text-cyan-400">return</div>
-
-          <div>[]</div>
-
-          <div className="pl-4">rows, cols = len(grid), len(grid[0])</div>
-
-          <div className="pl-4">
-            dp = [[0] * cols <span className="text-cyan-400">for</span> _{" "}
-            <span className="text-cyan-400">in</span> range(rows)]
-          </div>
-
-          <div className="pl-4 text-white/40">
-            # TODO: Implement Dijkstra's with AI weights
-          </div>
-
-          <div className="pl-4">dp[0][0] = grid[0][0]</div>
-
-          <div className="pl-4">
-            <span className="text-cyan-400">for</span> i{" "}
-            <span className="text-cyan-400">in</span> range(1, rows):
-          </div>
-
-          <div className="pl-8">dp[i][0] = dp[i-1][0] + grid[i][0]</div>
-
-          <div className="pl-4">...</div>
-
-          <div className="animate-pulse w-2 h-5 bg-cyan-400 inline-block ml-1" />
+            seen[num] = i`}
+          </pre>
         </div>
-      </div>
-
-      {/* STATUS BAR */}
-      <div className="px-4 py-2 bg-white/5 border-t border-white/5 text-[10px] text-white/30">
-        Ln 12, Col 4
       </div>
     </div>
   );
