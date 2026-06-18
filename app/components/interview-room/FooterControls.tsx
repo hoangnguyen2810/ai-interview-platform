@@ -7,6 +7,7 @@ import ParticipantsDrawer from "./ParticipantsDrawer";
 import AIDrawer from "./AIDrawer";
 
 interface FooterControlsProps {
+  role: "candidate" | "recruiter";
   onOpenQuestions: () => void;
   onOpenLiveCoding?: () => void;
   onStreamReady?: (stream: MediaStream | null) => void;
@@ -15,6 +16,7 @@ interface FooterControlsProps {
 }
 
 export default function FooterControls({
+  role,
   onOpenQuestions,
   onOpenLiveCoding,
   onStreamReady,
@@ -35,6 +37,7 @@ export default function FooterControls({
   const [showChat, setShowChat] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false);
   const [showAI, setShowAI] = useState(false);
+  const isRecruiter = role === "recruiter";
 
   useEffect(() => {
     let mounted = true;
@@ -230,18 +233,20 @@ export default function FooterControls({
               <span className="material-symbols-outlined">screen_share</span>
             </button>
 
-            <button
-              onClick={isRecording ? stopRecording : startRecording}
-              className={`${iconBtn} ${
-                isRecording
-                  ? "bg-red-600 text-white border-red-400"
-                  : "bg-[#122131] border-[#3b494b] text-gray-300 hover:border-red-400"
-              }`}
-            >
-              <span className="material-symbols-outlined">
-                {isRecording ? "stop" : "radio_button_checked"}
-              </span>
-            </button>
+            {isRecruiter && (
+              <button
+                onClick={isRecording ? stopRecording : startRecording}
+                className={`${iconBtn} ${
+                  isRecording
+                    ? "bg-red-600 text-white border-red-400"
+                    : "bg-[#122131] border-[#3b494b] text-gray-300 hover:border-red-400"
+                }`}
+              >
+                <span className="material-symbols-outlined">
+                  {isRecording ? "stop" : "radio_button_checked"}
+                </span>
+              </button>
+            )}
 
             <button
               onClick={endCall}
@@ -308,38 +313,41 @@ export default function FooterControls({
 
           <div className="mx-4 h-7 w-px bg-[#3b494b] hidden lg:block" />
 
-          {/* AI */}
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowQuestions(true)}
-              className={`${pillBtn} bg-[#122131] border-[#3b494b] text-white`}
-            >
-              <span className="material-symbols-outlined text-[18px]">
-                quiz
-              </span>
-              Questions
-            </button>
+            {isRecruiter && (
+              <button
+                onClick={() => setShowQuestions(true)}
+                className={`${pillBtn} bg-[#122131] border-[#3b494b] text-white`}
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  quiz
+                </span>
+                Questions
+              </button>
+            )}
 
-            <button
-              onClick={() => setShowAI(true)}
-              className="
-    flex items-center gap-2
-    h-11 px-4
-    rounded-full
-    bg-cyan-500
-    text-[#051424]
-    text-sm font-bold
-    shadow-[0_0_20px_rgba(0,240,255,0.6)]
-    transition-all duration-300
-    hover:scale-105
-    hover:shadow-[0_0_30px_rgba(0,240,255,0.9)]
-  "
-            >
-              <span className="material-symbols-outlined text-[18px]">
-                smart_toy
-              </span>
-              AI Assistant
-            </button>
+            {isRecruiter && (
+              <button
+                onClick={() => setShowAI(true)}
+                className="
+      flex items-center gap-2
+      h-11 px-4
+      rounded-full
+      bg-cyan-500
+      text-[#051424]
+      text-sm font-bold
+      shadow-[0_0_20px_rgba(0,240,255,0.6)]
+      transition-all duration-300
+      hover:scale-105
+      hover:shadow-[0_0_30px_rgba(0,240,255,0.9)]
+    "
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  smart_toy
+                </span>
+                AI Assistant
+              </button>
+            )}
           </div>
         </div>
       </footer>
@@ -348,12 +356,16 @@ export default function FooterControls({
         open={showParticipants}
         onClose={() => setShowParticipants(false)}
       />
-      <AIDrawer open={showAI} onClose={() => setShowAI(false)} />
+      {isRecruiter && (
+        <>
+          <AIDrawer open={showAI} onClose={() => setShowAI(false)} />
 
-      <QuestionsDrawer
-        open={showQuestions}
-        onClose={() => setShowQuestions(false)}
-      />
+          <QuestionsDrawer
+            open={showQuestions}
+            onClose={() => setShowQuestions(false)}
+          />
+        </>
+      )}
     </>
   );
 }

@@ -1,6 +1,8 @@
 "use client";
 
 import CodeEditor from "@/app/components/interview-room/CodeEditor";
+import CandidateCodingView from "@/app/components/interview-room/coding/CandidateCodingView";
+import RecruiterCodingView from "@/app/components/interview-room/coding/RecruiterCodingView";
 import FooterControls from "@/app/components/interview-room/FooterControls";
 import Header from "@/app/components/interview-room/Header";
 import QuestionsDrawer from "@/app/components/interview-room/QuestionsDrawer";
@@ -10,6 +12,8 @@ import { useState } from "react";
 export default function InterviewRoomPage() {
   const [questionOpen, setQuestionOpen] = useState(false);
   const [showLiveCoding, setShowLiveCoding] = useState(false);
+
+  const [role] = useState<"candidate" | "recruiter">("recruiter");
 
   return (
     <div className="h-screen w-screen bg-[#051424] text-white overflow-hidden flex flex-col items-center justify-between p-4 md:p-8 font-sans">
@@ -26,12 +30,17 @@ export default function InterviewRoomPage() {
 
         {showLiveCoding && (
           <div className="w-[70%] animate-in slide-in-from-right duration-500">
-            <CodeEditor />
+            {role === "candidate" ? (
+              <CandidateCodingView />
+            ) : (
+              <RecruiterCodingView />
+            )}
           </div>
         )}
       </main>
 
       <FooterControls
+        role="recruiter"
         onOpenQuestions={() => setQuestionOpen(true)}
         onOpenLiveCoding={() => setShowLiveCoding((prev) => !prev)}
       />
