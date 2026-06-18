@@ -6,7 +6,6 @@ import Header from "@/app/components/interview-room/Header";
 import QuestionsDrawer from "@/app/components/interview-room/QuestionsDrawer";
 import Sidebar from "@/app/components/interview-room/Sidebar";
 import { useState } from "react";
-import { motion } from "framer-motion";
 
 export default function InterviewRoomPage() {
   const [questionOpen, setQuestionOpen] = useState(false);
