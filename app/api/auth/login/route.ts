@@ -90,7 +90,7 @@ export async function POST(req: Request) {
       },
     );
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       token,
       user: {
@@ -100,6 +100,16 @@ export async function POST(req: Request) {
         role: user.role,
       },
     });
+
+    response.cookies.set("token", token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 60 * 60 * 24 * 7,
+      path: "/",
+    });
+
+    return response;
   } catch (error) {
     console.error("LOGIN ERROR:", error);
 

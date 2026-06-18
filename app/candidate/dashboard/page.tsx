@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { CandidateSideNavBar } from "@/app/components/CandidateSideNavBar";
+import { JoinInterviewForm } from "@/app/components/candidate-dashboard/JoinInterviewForm";
 import { TopNavBar } from "@/app/components/TopNavBar";
 
 export default function CandidateDashboard() {
@@ -22,6 +23,9 @@ export default function CandidateDashboard() {
         {/* MAIN CONTENT AREA */}
         <main className="pt-16 ml-[280px] h-screen overflow-y-auto p-8">
           <div className="max-w-6xl mx-auto space-y-8">
+            {/* JOIN INTERVIEW */}
+            <JoinInterviewForm />
+
             {/* HEADER */}
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold text-white">

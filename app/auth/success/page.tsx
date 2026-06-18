@@ -30,6 +30,12 @@ export default function AuthSuccess() {
       }),
     );
 
+    // Best-effort: cũng set cookie để server page (vd. /interview/*) đọc được.
+    // Cookie này KHÔNG httpOnly, không dùng cho bảo mật; chỉ là fallback.
+    document.cookie = `token=${encodeURIComponent(
+      token,
+    )}; path=/; max-age=${60 * 60 * 24 * 7}; samesite=lax`;
+
     if (role === "CANDIDATE") {
       window.location.href = "/candidate/dashboard";
     } else if (role === "RECRUITER") {

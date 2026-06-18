@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useRecruiterDashboard } from "./DashboardContext";
 import { useCountdown } from "@/hooks/useCountdown";
@@ -24,7 +25,7 @@ function toCard(i: {
   scheduledAt: string;
   maxInterviewers: number;
   status: "SCHEDULED" | "ONGOING" | "FINISHED" | "CANCELLED";
-  avatar: string | null;
+  avatar?: string | null;
 }): Interview {
   const date = new Date(i.scheduledAt);
   return {
@@ -55,11 +56,16 @@ function isToday(iso: string): boolean {
 
 /* ================= CARD ================= */
 function InterviewCard({ interview }: { interview: Interview }) {
+  const router = useRouter();
   const countdown = useCountdown(interview.scheduledAt);
 
   const isStarted = new Date(interview.scheduledAt).getTime() <= Date.now();
 
   const status = isStarted ? "ONGOING" : "SCHEDULED";
+
+  const handleEnter = () => {
+    router.push(`/interview/waiting/${encodeURIComponent(interview.meetingCode)}`);
+  };
 
   return (
     <div className="glass-card p-5 rounded-2xl grid grid-cols-[1fr_140px_140px] items-center gap-6 hover:bg-surface-container-high transition-all">
@@ -107,6 +113,7 @@ function InterviewCard({ interview }: { interview: Interview }) {
       <div className="flex justify-end">
         <button
           type="button"
+          onClick={handleEnter}
           className={
             status === "ONGOING"
               ? "w-[120px] bg-primary-fixed cursor-pointer text-on-primary-fixed py-3 rounded-lg font-bold text-sm"

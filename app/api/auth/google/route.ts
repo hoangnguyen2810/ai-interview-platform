@@ -91,7 +91,15 @@ export async function GET(req: Request) {
     const redirectUrl =
       `http://localhost:3000/auth/success` + `?token=${token}`;
 
-    return NextResponse.redirect(redirectUrl);
+    const response = NextResponse.redirect(redirectUrl);
+    response.cookies.set("token", token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 60 * 60 * 24 * 7,
+      path: "/",
+    });
+    return response;
   } catch (err) {
     await db.query("ROLLBACK");
     console.error(err);

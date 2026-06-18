@@ -1,4 +1,10 @@
-export default function Header() {
+interface HeaderProps {
+  title?: string;
+  meetingCode?: string;
+  role?: "candidate" | "recruiter";
+}
+
+export default function Header({ title, meetingCode, role }: HeaderProps) {
   return (
     <header className="w-full flex justify-between items-center z-10">
       <div className="flex items-center space-x-3">
@@ -25,7 +31,9 @@ export default function Header() {
       </div>
 
       <div className="bg-[#2c3a4c]/30 px-3 py-1 rounded-full text-xs font-medium text-gray-400 border border-white/5">
-        00:42:15 • INTERVIEW_ID: NS-992
+        {meetingCode ?? "INTERVIEW_ID: NS-992"}
+        {title ? ` • ${title}` : ""}
+        {role ? ` • ${role.toUpperCase()}` : ""}
       </div>
     </header>
   );

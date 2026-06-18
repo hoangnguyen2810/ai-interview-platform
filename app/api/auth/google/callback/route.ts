@@ -107,9 +107,17 @@ export async function GET(req: Request) {
     );
 
     // 5. redirect to frontend success page
-    return NextResponse.redirect(
+    const response = NextResponse.redirect(
       `http://localhost:3000/auth/success?token=${token}`,
     );
+    response.cookies.set("token", token, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 60 * 60 * 24 * 7,
+      path: "/",
+    });
+    return response;
   } catch (err) {
     await db.query("ROLLBACK");
     console.error("GOOGLE CALLBACK ERROR:", err);
