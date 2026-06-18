@@ -1,6 +1,5 @@
 "use client";
 
-import CodeEditor from "@/app/components/interview-room/CodeEditor";
 import CandidateCodingView from "@/app/components/interview-room/coding/CandidateCodingView";
 import RecruiterCodingView from "@/app/components/interview-room/coding/RecruiterCodingView";
 import FooterControls from "@/app/components/interview-room/FooterControls";
