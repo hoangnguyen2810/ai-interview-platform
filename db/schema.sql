@@ -59,7 +59,7 @@ CREATE TABLE interviews (
 
     meeting_code VARCHAR(50) UNIQUE NOT NULL,
 
-    room_password VARCHAR(100),
+    room_password_hash VARCHAR(255),
 
     allow_guest BOOLEAN NOT NULL DEFAULT TRUE,
 

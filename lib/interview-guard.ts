@@ -1,13 +1,26 @@
 // Server-side helpers dùng cho routing /interview/* và /join/*
-// - Xác thực user từ cookie
-// - Xác thực user có quyền truy cập interview
-//   + Recruiter: là HOST hoặc INTERVIEWER trong interview_participants
-//   + Candidate: có row trong interview_candidates (auto-create khi /join)
+//
+// - Xác thực user từ cookie JWT
+// - Xác thực user có quyền truy cập interview:
+//   + Recruiter/Admin: nằm trong interview_participants (HOST hoặc INTERVIEWER).
+//     Nếu CHƯA có → tự INSERT với INTERVIEWER (auto-attach qua meetingCode).
+//   + Candidate: có row trong interview_candidates (auto-create khi /join).
+//
+// - Password gate:
+//   + HOST: bypass hoàn toàn.
+//   + INTERVIEWER / CANDIDATE: nếu interview có room_password_hash → phải có
+//     cookie gate `interview_pwd_<interviewId>=1` mới được vào Waiting/Room.
+//     Nếu chưa có gate → trả về `passwordRequired: true` (page render form).
+//   + Interview không có password → bypass gate.
+//
+// - KHÔNG redirect khi thiếu password (UI tự render form). Chỉ redirect
+//   /login khi chưa auth hoặc interview không tồn tại hoặc không phải participant.
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import jwt from "jsonwebtoken";
 import { pool } from "@/lib/db";
+import { isPasswordGatePassed } from "@/lib/interview-password-gate";
 
 export type InterviewRole = "HOST" | "INTERVIEWER" | "CANDIDATE";
 
@@ -24,6 +37,8 @@ export interface InterviewAccess {
   status: "SCHEDULED" | "ONGOING" | "FINISHED" | "CANCELLED";
   scheduledAt: string;
   participantRole: InterviewRole;
+  /** Bằng true khi interview có password và user chưa verify */
+  passwordRequired: boolean;
 }
 
 export async function getAuthedUser(): Promise<AuthedUser | null> {
@@ -60,6 +75,7 @@ interface InterviewRow {
   status: InterviewAccess["status"];
   scheduled_at: string;
   allow_guest: boolean;
+  room_password_hash: string | null;
 }
 
 interface ParticipantRow {
@@ -75,7 +91,7 @@ export async function findInterviewByMeetingCode(
   meetingCode: string,
 ): Promise<InterviewRow | null> {
   const res = await pool.query<InterviewRow>(
-    `SELECT id, meeting_code, title, status, scheduled_at, allow_guest
+    `SELECT id, meeting_code, title, status, scheduled_at, allow_guest, room_password_hash
      FROM interviews
      WHERE meeting_code = $1
      LIMIT 1`,
@@ -99,6 +115,28 @@ export async function findParticipantRole(
   return row?.participant_role ?? null;
 }
 
+/**
+ * Tự động attach recruiter vào interview nếu chưa có.
+ * - Đã có row → trả về role hiện tại
+ * - Chưa có → INSERT với INTERVIEWER (ON CONFLICT DO NOTHING)
+ */
+async function attachRecruiter(
+  interviewId: string,
+  userId: string,
+): Promise<InterviewRole> {
+  const existing = await findParticipantRole(interviewId, userId);
+  if (existing) return existing;
+
+  await pool.query(
+    `INSERT INTO interview_participants (interview_id, user_id, participant_role)
+     VALUES ($1, $2, 'INTERVIEWER')
+     ON CONFLICT (interview_id, user_id) DO NOTHING`,
+    [interviewId, userId],
+  );
+
+  return "INTERVIEWER";
+}
+
 export async function findCandidateRow(
   interviewId: string,
 ): Promise<CandidateRow | null> {
@@ -112,13 +150,6 @@ export async function findCandidateRow(
   return res.rows[0] ?? null;
 }
 
-/**
- * Auto-attach candidate vào interview khi /join:
- * - Nếu chưa có row candidate → insert mới (user_id = current user, name lấy từ users.full_name)
- * - Nếu đã có và user_id = null → gán vào current user
- * - Nếu đã có và user_id = current user → ok
- * - Nếu đã có và user_id khác → không cho join
- */
 async function attachCandidate(
   interviewId: string,
   userId: string,
@@ -128,11 +159,9 @@ async function attachCandidate(
   if (existing && existing.user_id && existing.user_id !== userId) {
     return false;
   }
-
   if (existing && existing.user_id === userId) {
     return true;
   }
-
   if (existing && existing.user_id === null) {
     await pool.query(
       `UPDATE interview_candidates
@@ -159,29 +188,76 @@ async function attachCandidate(
 }
 
 /**
- * Đảm bảo user đã đăng nhập VÀ có quyền truy cập interview.
- * - Không auth → redirect /login
- * - Không tìm thấy interview → redirect /login
- * - Recruiter không phải participant → redirect /login
- * - Candidate không attach được → redirect /login
+ * Trả về access info cho interview. KHÔNG redirect khi cần password —
+ * trả `passwordRequired: true` để page render form.
+ *
+ * Redirect chỉ xảy ra khi:
+ * - Chưa auth (no cookie)
+ * - Interview không tồn tại
+ * - User không thuộc participants (sau khi auto-attach cho recruiter vẫn fail)
  */
 export async function requireInterviewAccess(
   meetingCode: string,
 ): Promise<InterviewAccess> {
   const user = await requireAuth();
   const interview = await findInterviewByMeetingCode(meetingCode);
-  if (!interview) redirect("/login");
-
-  let participantRole: InterviewRole | null = null;
-
-  if (user.role === "RECRUITER" || user.role === "ADMIN") {
-    participantRole = await findParticipantRole(interview.id, user.id);
-  } else if (user.role === "CANDIDATE") {
-    const ok = await attachCandidate(interview.id, user.id);
-    if (ok) participantRole = "CANDIDATE";
+  if (!interview) {
+    console.log("[guard] redirect /login", {
+      reason: "interview_not_found",
+      meetingCode,
+      userId: user.id,
+      role: user.role,
+    });
+    redirect("/login");
   }
 
-  if (!participantRole) redirect("/login");
+  let participantRole: InterviewRole | null = null;
+  let isParticipant = false;
+
+  if (user.role === "RECRUITER" || user.role === "ADMIN") {
+    const existing = await findParticipantRole(interview.id, user.id);
+    if (existing) {
+      participantRole = existing;
+      isParticipant = true;
+    } else {
+      participantRole = await attachRecruiter(interview.id, user.id);
+      isParticipant = true;
+    }
+  } else if (user.role === "CANDIDATE") {
+    const ok = await attachCandidate(interview.id, user.id);
+    if (ok) {
+      participantRole = "CANDIDATE";
+      isParticipant = true;
+    }
+  }
+
+  if (!participantRole || !isParticipant) {
+    console.log("[guard] redirect /login", {
+      reason: "not_participant",
+      userId: user.id,
+      role: user.role,
+      meetingCode,
+    });
+    redirect("/login");
+  }
+
+  // Password gate
+  const hasPassword = !!interview.room_password_hash;
+  const isHost = participantRole === "HOST";
+  const gatePassed = await isPasswordGatePassed(interview.id);
+  const passwordRequired = hasPassword && !isHost && !gatePassed;
+
+  console.log("[guard] access check", {
+    userId: user.id,
+    role: user.role,
+    meetingCode,
+    isParticipant,
+    participantRole,
+    hasPassword,
+    isHost,
+    gatePassed,
+    passwordRequired,
+  });
 
   return {
     user,
@@ -191,5 +267,6 @@ export async function requireInterviewAccess(
     status: interview.status,
     scheduledAt: interview.scheduled_at,
     participantRole,
+    passwordRequired,
   };
 }

@@ -1,10 +1,16 @@
 // Service layer cho interviews.
 // Mọi thao tác ghi đều nằm trong transaction; meeting_code sinh tự động
 // theo format `NC-XXXXXXXX` (base36, 8 ký tự) và được kiểm tra trùng lặp.
+//
+// room_password (plain text từ client) được hash bằng bcrypt trước khi lưu
+// vào cột room_password_hash. Không bao giờ lưu plaintext.
 
 import type { PoolClient } from "pg";
+import bcrypt from "bcryptjs";
 import { pool } from "@/lib/db";
 import type { CreateInterviewInput, CreateInterviewRow } from "./dto";
+
+const BCRYPT_COST = 10;
 
 // Ký tự không nhầm lẫn: bỏ 0/O, 1/I/L
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -31,7 +37,6 @@ async function generateUniqueMeetingCode(
     );
     if (exists.rowCount === 0) return candidate;
   }
-  // Cực hiếm xảy ra, nhưng đảm bảo không loop vô tận
   throw new Error("Không thể sinh meeting_code duy nhất, vui lòng thử lại");
 }
 
@@ -46,14 +51,20 @@ export async function createInterviewForRecruiter(
     // 1. Sinh meeting_code unique
     const meetingCode = await generateUniqueMeetingCode(client);
 
-    // 2. Insert vào bảng interviews
+    // 2. Hash password (nếu có) bằng bcrypt trước khi lưu
+    let passwordHash: string | null = null;
+    if (input.roomPassword) {
+      passwordHash = await bcrypt.hash(input.roomPassword, BCRYPT_COST);
+    }
+
+    // 3. Insert vào bảng interviews
     const insertResult = await client.query(
       `
       INSERT INTO interviews (
         title,
         description,
         meeting_code,
-        room_password,
+        room_password_hash,
         allow_guest,
         max_participants,
         max_interviewers,
@@ -67,7 +78,7 @@ export async function createInterviewForRecruiter(
         title,
         description,
         meeting_code,
-        room_password,
+        room_password_hash,
         allow_guest,
         max_participants,
         max_interviewers,
@@ -80,7 +91,7 @@ export async function createInterviewForRecruiter(
         input.title,
         input.description,
         meetingCode,
-        input.roomPassword,
+        passwordHash,
         input.allowGuest,
         input.maxParticipants,
         input.maxInterviewers,
@@ -92,7 +103,7 @@ export async function createInterviewForRecruiter(
     const row = insertResult.rows[0];
     const interviewId: string = row.id;
 
-    // 3. Tự động thêm recruiter hiện tại vào interview_participants với HOST
+    // 4. Tự động thêm recruiter hiện tại vào interview_participants với HOST
     await client.query(
       `
       INSERT INTO interview_participants (
@@ -107,12 +118,13 @@ export async function createInterviewForRecruiter(
 
     await client.query("COMMIT");
 
+    // Không bao giờ trả password hash về client
     return {
       id: row.id,
       title: row.title,
       description: row.description,
       meetingCode: row.meeting_code,
-      roomPassword: row.room_password,
+      roomPassword: input.roomPassword,
       allowGuest: row.allow_guest,
       maxParticipants: row.max_participants,
       maxInterviewers: row.max_interviewers,
