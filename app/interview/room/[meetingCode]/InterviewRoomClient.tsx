@@ -8,7 +8,7 @@ import LocalMediaPreview from "@/app/components/interview-room/LocalMediaPreview
 import QuestionsDrawer from "@/app/components/interview-room/QuestionsDrawer";
 import Sidebar from "@/app/components/interview-room/Sidebar";
 import type { InterviewRole } from "@/lib/interview-guard";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface Props {
   meetingCode: string;
@@ -28,6 +28,23 @@ export default function InterviewRoomClient({
     participantRole === "CANDIDATE" ? "candidate" : "recruiter";
 
   const isCandidate = role === "candidate";
+  const isHost = participantRole === "HOST";
+
+  // Đánh dấu Host đã vào meeting room → waiting room của các user khác
+  // sẽ enable nút "Vào phòng phỏng vấn".
+  const hostEnterCalledRef = useRef(false);
+  useEffect(() => {
+    if (!isHost) return;
+    if (hostEnterCalledRef.current) return;
+    hostEnterCalledRef.current = true;
+
+    fetch(
+      `/api/interviews/${encodeURIComponent(meetingCode)}/host-enter`,
+      { method: "POST" },
+    ).catch((err) => {
+      console.error("[host-enter] failed:", err);
+    });
+  }, [isHost, meetingCode]);
 
   const currentUser = isCandidate
     ? {

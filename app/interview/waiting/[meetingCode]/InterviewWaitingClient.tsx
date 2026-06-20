@@ -3,7 +3,7 @@
 import { TopNavBar } from "@/app/components/TopNavBar";
 import { useMedia } from "@/app/components/interview-room/MediaContext";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { InterviewRole } from "@/lib/interview-guard";
 
 interface Props {
@@ -28,6 +28,50 @@ export default function InterviewWaitingClient({
 
   const [selectedMic, setSelectedMic] = useState<string>("");
   const [selectedSpeaker, setSelectedSpeaker] = useState<string>("");
+
+  // HOST có thể vào phòng trước — các participant khác phải đợi.
+  // - isHost: luôn enable nút (host tự quyết định)
+  // - hostJoined: được bật = true nếu host row đã joined_at IS NOT NULL
+  const isHost = participantRole === "HOST";
+  const [hostJoined, setHostJoined] = useState<boolean>(isHost);
+
+  const fetchHostStatus = useCallback(async () => {
+    if (isHost) {
+      // Host không cần poll — luôn "đã vào" (vì chính họ quyết định).
+      setHostJoined(true);
+      return;
+    }
+    try {
+      const res = await fetch(
+        `/api/interviews/${encodeURIComponent(meetingCode)}/status`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) return;
+      const data: unknown = await res.json().catch(() => ({}));
+      if (
+        typeof data === "object" &&
+        data !== null &&
+        "hostJoined" in data &&
+        typeof (data as { hostJoined: unknown }).hostJoined === "boolean"
+      ) {
+        setHostJoined((data as { hostJoined: boolean }).hostJoined);
+      }
+    } catch (err) {
+      console.error("[waiting] poll status failed:", err);
+    }
+  }, [meetingCode, isHost]);
+
+  // Poll trạng thái host mỗi 3s — chỉ áp dụng cho non-host.
+  useEffect(() => {
+    if (isHost) return;
+    fetchHostStatus();
+    const intervalId = window.setInterval(fetchHostStatus, 3000);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [fetchHostStatus, isHost]);
+
+  const canEnter = isHost || hostJoined;
 
   useEffect(() => {
     const video = videoRef.current;
@@ -164,13 +208,56 @@ export default function InterviewWaitingClient({
 
               <button
                 type="button"
-                onClick={() => router.push(`/interview/room/${meetingCode}`)}
-                className="relative w-full mt-2 bg-gradient-to-r from-cyan-400 to-blue-400 text-black font-bold py-3 rounded-lg hover:scale-[1.02] active:scale-[0.98] transition shadow-[0_0_20px_rgba(0,240,255,0.25)]"
+                onClick={() => {
+                  if (!canEnter) return;
+                  router.push(`/interview/room/${meetingCode}`);
+                }}
+                disabled={!canEnter}
+                aria-disabled={!canEnter}
+                className={`
+                  relative w-full mt-2
+                  font-bold py-3 rounded-lg
+                  transition shadow-[0_0_20px_rgba(0,240,255,0.25)]
+                  ${
+                    canEnter
+                      ? "bg-gradient-to-r from-cyan-400 to-blue-400 text-black hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                      : "bg-[#1c2b3c] text-gray-500 cursor-not-allowed shadow-none"
+                  }
+                `}
               >
-                {participantRole === "CANDIDATE"
-                  ? "Vào phòng phỏng vấn →"
-                  : "Bắt đầu phỏng vấn →"}
+                {canEnter
+                  ? participantRole === "CANDIDATE"
+                    ? "Vào phòng phỏng vấn →"
+                    : "Bắt đầu phỏng vấn →"
+                  : isHost
+                    ? "Đang chờ người tham gia..."
+                    : "Đang chờ Host vào phòng..."}
               </button>
+
+              {!canEnter && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="
+                    flex items-start gap-2
+                    px-3 py-2
+                    rounded-lg
+                    bg-amber-500/10
+                    border border-amber-500/30
+                    text-amber-200
+                    text-xs
+                  "
+                >
+                  <span className="material-symbols-outlined text-base shrink-0 mt-0.5">
+                    hourglass_top
+                  </span>
+                  <span>
+                    {isHost
+                      ? "Hệ thống đang chờ các thành viên khác sẵn sàng. Bạn có thể vào phòng bất kỳ lúc nào."
+                      : "Host chưa vào phòng phỏng vấn. Nút \"Vào phòng phỏng vấn\" sẽ được bật ngay khi Host tham gia."}
+                  </span>
+                </div>
+              )}
 
               <p className="text-xs text-gray-500 text-center">
                 Hệ thống đã sẵn sàng kết nối bạn với{" "}
