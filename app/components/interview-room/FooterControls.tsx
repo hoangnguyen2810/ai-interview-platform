@@ -1,16 +1,16 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import QuestionsDrawer from "./QuestionsDrawer";
 import ChatDrawer from "./ChatDrawer";
 import ParticipantsDrawer from "./ParticipantsDrawer";
 import AIDrawer from "./AIDrawer";
+import { useMedia } from "./MediaContext";
 
 interface FooterControlsProps {
   role: "candidate" | "recruiter";
   onOpenQuestions: () => void;
   onOpenLiveCoding?: () => void;
-  onStreamReady?: (stream: MediaStream | null) => void;
   onScreenShare?: (stream: MediaStream | null) => void;
   onEndCall?: () => void;
 }
@@ -19,18 +19,17 @@ export default function FooterControls({
   role,
   onOpenQuestions,
   onOpenLiveCoding,
-  onStreamReady,
   onScreenShare,
   onEndCall,
 }: FooterControlsProps) {
-  const streamRef = useRef<MediaStream | null>(null);
+  const { stream, micEnabled: micOn, cameraEnabled: camOn, toggleMicro, toggleCamera } =
+    useMedia();
+
   const screenRef = useRef<MediaStream | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
 
-  const [micEnabled, setMicEnabled] = useState(true);
-  const [cameraEnabled, setCameraEnabled] = useState(true);
   const [isSharingScreen, setIsSharingScreen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [showQuestions, setShowQuestions] = useState(false);
@@ -40,56 +39,10 @@ export default function FooterControls({
   const isRecruiter = role === "recruiter";
 
   useEffect(() => {
-    let mounted = true;
-
-    const init = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: true,
-        });
-
-        if (!mounted) return;
-
-        streamRef.current = stream;
-        onStreamReady?.(stream);
-      } catch (err) {
-        console.error("Device error:", err);
-      }
-    };
-
-    init();
-
     return () => {
-      mounted = false;
-      streamRef.current?.getTracks().forEach((t) => t.stop());
       screenRef.current?.getTracks().forEach((t) => t.stop());
     };
-  }, [onStreamReady]);
-
-  const toggleMic = () => {
-    const stream = streamRef.current;
-    if (!stream) return;
-
-    const audioTracks = stream.getAudioTracks();
-    if (!audioTracks.length) return;
-
-    const enabled = !audioTracks[0].enabled;
-    audioTracks.forEach((t) => (t.enabled = enabled));
-    setMicEnabled(enabled);
-  };
-
-  const toggleCamera = () => {
-    const stream = streamRef.current;
-    if (!stream) return;
-
-    const videoTracks = stream.getVideoTracks();
-    if (!videoTracks.length) return;
-
-    const enabled = !videoTracks[0].enabled;
-    videoTracks.forEach((t) => (t.enabled = enabled));
-    setCameraEnabled(enabled);
-  };
+  }, []);
 
   const shareScreen = async () => {
     try {
@@ -117,7 +70,6 @@ export default function FooterControls({
   };
 
   const startRecording = () => {
-    const stream = streamRef.current;
     if (!stream) return;
 
     recordedChunksRef.current = [];
@@ -155,18 +107,12 @@ export default function FooterControls({
   };
 
   const endCall = () => {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
     screenRef.current?.getTracks().forEach((t) => t.stop());
-
-    streamRef.current = null;
     screenRef.current = null;
 
-    setMicEnabled(false);
-    setCameraEnabled(false);
     setIsSharingScreen(false);
     setIsRecording(false);
 
-    onStreamReady?.(null);
     onScreenShare?.(null);
     onEndCall?.();
   };
@@ -184,28 +130,34 @@ export default function FooterControls({
           {/* MEDIA */}
           <div className="flex items-center gap-2">
             <button
-              onClick={toggleMic}
+              type="button"
+              onClick={toggleMicro}
+              aria-label={micOn ? "Tắt micro" : "Bật micro"}
+              aria-pressed={!micOn}
               className={`${iconBtn} ${
-                micEnabled
+                micOn
                   ? "bg-[#122131] border-[#3b494b] hover:border-cyan-400 hover:shadow-[0_0_12px_rgba(0,240,255,0.4)]"
                   : "bg-red-500 border-red-400"
               }`}
             >
               <span className="material-symbols-outlined text-white">
-                {micEnabled ? "mic" : "mic_off"}
+                {micOn ? "mic" : "mic_off"}
               </span>
             </button>
 
             <button
+              type="button"
               onClick={toggleCamera}
+              aria-label={camOn ? "Tắt camera" : "Bật camera"}
+              aria-pressed={!camOn}
               className={`${iconBtn} ${
-                cameraEnabled
+                camOn
                   ? "bg-[#122131] border-[#3b494b] hover:border-cyan-400 hover:shadow-[0_0_12px_rgba(0,240,255,0.4)]"
                   : "bg-red-500 border-red-400"
               }`}
             >
               <span className="material-symbols-outlined text-white">
-                {cameraEnabled ? "videocam" : "videocam_off"}
+                {camOn ? "videocam" : "videocam_off"}
               </span>
             </button>
 

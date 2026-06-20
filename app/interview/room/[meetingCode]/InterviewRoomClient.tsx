@@ -4,6 +4,7 @@ import CandidateCodingView from "@/app/components/interview-room/coding/Candidat
 import RecruiterCodingView from "@/app/components/interview-room/coding/RecruiterCodingView";
 import FooterControls from "@/app/components/interview-room/FooterControls";
 import Header from "@/app/components/interview-room/Header";
+import LocalMediaPreview from "@/app/components/interview-room/LocalMediaPreview";
 import QuestionsDrawer from "@/app/components/interview-room/QuestionsDrawer";
 import Sidebar from "@/app/components/interview-room/Sidebar";
 import type { InterviewRole } from "@/lib/interview-guard";
@@ -26,6 +27,26 @@ export default function InterviewRoomClient({
   const role: "candidate" | "recruiter" =
     participantRole === "CANDIDATE" ? "candidate" : "recruiter";
 
+  const isCandidate = role === "candidate";
+
+  const currentUser = isCandidate
+    ? {
+        name: "Candidate",
+        role: "Candidate",
+        avatar: "C",
+        roleKey: "candidate" as const,
+      }
+    : {
+        name: "Interviewer",
+        role: "Interviewer",
+        avatar: "I",
+        roleKey: "recruiter" as const,
+      };
+
+  const otherParticipant = isCandidate
+    ? { name: "Technical Interviewer", role: "Interviewer", avatar: "I" }
+    : { name: "Candidate", role: "Candidate", avatar: "C" };
+
   return (
     <div className="h-screen w-screen bg-[#051424] text-white overflow-hidden flex flex-col items-center justify-between p-4 md:p-8 font-sans">
       <Header title={title} meetingCode={meetingCode} role={role} />
@@ -36,7 +57,17 @@ export default function InterviewRoomClient({
             showLiveCoding ? "w-[30%]" : "w-full"
           }`}
         >
-          <Sidebar showLiveCoding={showLiveCoding} />
+          <Sidebar
+            showLiveCoding={showLiveCoding}
+            currentUser={currentUser}
+            otherParticipant={otherParticipant}
+            localPreviewSlot={
+              <LocalMediaPreview
+                label={currentUser.role}
+                displayName={`${currentUser.name} (You)`}
+              />
+            }
+          />
         </div>
 
         {showLiveCoding && (

@@ -1,6 +1,7 @@
 "use client";
 
 import { TopNavBar } from "@/app/components/TopNavBar";
+import { useMedia } from "@/app/components/interview-room/MediaContext";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { InterviewRole } from "@/lib/interview-guard";
@@ -17,11 +18,10 @@ export default function InterviewWaitingClient({
   participantRole,
 }: Props) {
   const router = useRouter();
-  const [micOn, setMicOn] = useState(true);
-  const [camOn, setCamOn] = useState(true);
-
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const { stream, cameraEnabled: camOn, micEnabled: micOn, toggleCamera, toggleMicro } =
+    useMedia();
+
   const [showSettings, setShowSettings] = useState(false);
   const [audioInputs, setAudioInputs] = useState<MediaDeviceInfo[]>([]);
   const [audioOutputs, setAudioOutputs] = useState<MediaDeviceInfo[]>([]);
@@ -30,51 +30,12 @@ export default function InterviewWaitingClient({
   const [selectedSpeaker, setSelectedSpeaker] = useState<string>("");
 
   useEffect(() => {
-    async function startMedia() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true,
-        });
-
-        streamRef.current = stream;
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
-      } catch (err) {
-        console.error("Cannot access camera/mic:", err);
-      }
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.srcObject !== stream) {
+      video.srcObject = stream;
     }
-
-    startMedia();
-
-    return () => {
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-    };
-  }, []);
-
-  const toggleMic = () => {
-    const stream = streamRef.current;
-    if (!stream) return;
-
-    stream.getAudioTracks().forEach((track) => {
-      track.enabled = !micOn;
-    });
-
-    setMicOn(!micOn);
-  };
-
-  const toggleCam = () => {
-    const stream = streamRef.current;
-    if (!stream) return;
-
-    stream.getVideoTracks().forEach((track) => {
-      track.enabled = !camOn;
-    });
-
-    setCamOn(!camOn);
-  };
+  }, [stream]);
 
   useEffect(() => {
     async function loadDevices() {
@@ -101,8 +62,45 @@ export default function InterviewWaitingClient({
                 autoPlay
                 playsInline
                 muted
-                className="w-full h-full object-cover"
+                className={`w-full h-full object-cover transition-opacity ${
+                  stream && camOn ? "opacity-100" : "opacity-0"
+                }`}
               />
+
+              {(!stream || !camOn) && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                  {stream ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <div
+                        className="
+                          w-28 h-28
+                          rounded-full
+                          bg-gradient-to-br
+                          from-cyan-500
+                          to-blue-600
+                          flex items-center justify-center
+                          shadow-[0_0_30px_rgba(0,240,255,0.3)]
+                        "
+                      >
+                        <span className="text-4xl font-bold text-white">
+                          {(participantRole === "CANDIDATE"
+                            ? "Candidate"
+                            : "Interviewer"
+                          ).charAt(0)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-400">Camera đang tắt</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="w-10 h-10 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin" />
+                      <p className="text-xs text-cyan-200">
+                        Đang truy cập camera...
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="absolute top-4 left-4 flex gap-2">
                 <div className="px-3 py-1.5 bg-black/60 rounded-full flex items-center gap-2">
@@ -185,7 +183,10 @@ export default function InterviewWaitingClient({
         {/* CONTROL */}
         <div className="max-w-7xl mx-auto mt-8 flex gap-4 ">
           <button
-            onClick={toggleMic}
+            type="button"
+            onClick={toggleMicro}
+            aria-label={micOn ? "Tắt micro" : "Bật micro"}
+            aria-pressed={!micOn}
             className={`w-14 h-14 rounded-full flex items-center justify-center border cursor-pointer transition-all duration-200
   ${
     micOn
@@ -199,7 +200,10 @@ export default function InterviewWaitingClient({
           </button>
 
           <button
-            onClick={toggleCam}
+            type="button"
+            onClick={toggleCamera}
+            aria-label={camOn ? "Tắt camera" : "Bật camera"}
+            aria-pressed={!camOn}
             className={`w-14 h-14 rounded-full flex items-center justify-center border cursor-pointer transition-all duration-200
   ${
     camOn
@@ -213,6 +217,7 @@ export default function InterviewWaitingClient({
           </button>
 
           <button
+            type="button"
             onClick={() => setShowSettings(true)}
             className="w-14 h-14 rounded-full flex items-center justify-center border cursor-pointer transition-all duration-200
   bg-[#122131] border-[#3b494b]
@@ -261,6 +266,7 @@ export default function InterviewWaitingClient({
 
                 <div className="flex justify-end gap-2 mt-2">
                   <button
+                    type="button"
                     onClick={() => setShowSettings(false)}
                     className="px-4 py-2 rounded border border-gray-500"
                   >
@@ -268,6 +274,7 @@ export default function InterviewWaitingClient({
                   </button>
 
                   <button
+                    type="button"
                     onClick={() => {
                       console.log("Mic:", selectedMic);
                       console.log("Speaker:", selectedSpeaker);
