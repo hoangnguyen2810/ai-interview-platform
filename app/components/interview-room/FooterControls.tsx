@@ -1,317 +1,169 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import QuestionsDrawer from "./QuestionsDrawer";
 import ChatDrawer from "./ChatDrawer";
 import ParticipantsDrawer from "./ParticipantsDrawer";
 import AIDrawer from "./AIDrawer";
-import { useMedia } from "./MediaContext";
+import { useCallStateHooks } from "@stream-io/video-react-sdk";
 
-interface FooterControlsProps {
-  role: "candidate" | "recruiter";
-  onOpenQuestions: () => void;
-  onOpenLiveCoding?: () => void;
-  onScreenShare?: (stream: MediaStream | null) => void;
-  onEndCall?: () => void;
-}
+export default function FooterControls({ role, onOpenLiveCoding }: any) {
+  const { useMicrophoneState, useCameraState, useScreenShareState } =
+    useCallStateHooks();
 
-export default function FooterControls({
-  role,
-  onOpenQuestions,
-  onOpenLiveCoding,
-  onScreenShare,
-  onEndCall,
-}: FooterControlsProps) {
-  const { stream, micEnabled: micOn, cameraEnabled: camOn, toggleMicro, toggleCamera } =
-    useMedia();
+  const micState = useMicrophoneState();
+  const camState = useCameraState();
+  const screenState = useScreenShareState();
 
-  const screenRef = useRef<MediaStream | null>(null);
+  const mic = micState.microphone;
+  const cam = camState.camera;
+  const screen = screenState.screenShare;
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const recordedChunksRef = useRef<Blob[]>([]);
+  const isMicOn = !micState.isMute;
+  const isCamOn = !camState.isMute;
+  const isScreenSharing = screenState.isMute;
 
-  const [isSharingScreen, setIsSharingScreen] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [showQuestions, setShowQuestions] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false);
   const [showAI, setShowAI] = useState(false);
-  const isRecruiter = role === "recruiter";
+  const [showQuestions, setShowQuestions] = useState(false);
+
+  const [showDeviceSettings, setShowDeviceSettings] = useState(false);
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
 
   useEffect(() => {
-    return () => {
-      screenRef.current?.getTracks().forEach((t) => t.stop());
-    };
+    navigator.mediaDevices.enumerateDevices().then(setDevices);
   }, []);
 
-  const shareScreen = async () => {
-    try {
-      const screenStream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: false,
-      });
-
-      screenRef.current = screenStream;
-      setIsSharingScreen(true);
-      onScreenShare?.(screenStream);
-
-      const track = screenStream.getVideoTracks()[0];
-      track.onended = () => stopScreenShare();
-    } catch (err) {
-      console.error("Screen share error:", err);
-    }
-  };
-
-  const stopScreenShare = () => {
-    screenRef.current?.getTracks().forEach((t) => t.stop());
-    screenRef.current = null;
-    setIsSharingScreen(false);
-    onScreenShare?.(null);
-  };
-
-  const startRecording = () => {
-    if (!stream) return;
-
-    recordedChunksRef.current = [];
-
-    const recorder = new MediaRecorder(stream, {
-      mimeType: "video/webm",
-    });
-
-    recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) recordedChunksRef.current.push(e.data);
-    };
-
-    recorder.onstop = () => {
-      const blob = new Blob(recordedChunksRef.current, {
-        type: "video/webm",
-      });
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "recording.webm";
-      a.click();
-      URL.revokeObjectURL(url);
-    };
-
-    recorder.start();
-    mediaRecorderRef.current = recorder;
-    setIsRecording(true);
-  };
-
-  const stopRecording = () => {
-    mediaRecorderRef.current?.stop();
-    mediaRecorderRef.current = null;
-    setIsRecording(false);
-  };
-
-  const endCall = () => {
-    screenRef.current?.getTracks().forEach((t) => t.stop());
-    screenRef.current = null;
-
-    setIsSharingScreen(false);
-    setIsRecording(false);
-
-    onScreenShare?.(null);
-    onEndCall?.();
-  };
-
-  const iconBtn =
-    "w-11 h-11 rounded-full flex items-center justify-center border transition-all";
-
-  const pillBtn =
-    "flex items-center gap-2 h-11 px-4 rounded-full border transition-all";
+  const isRecruiter = role === "recruiter";
 
   return (
     <>
-      <footer className="w-full max-w-6xl mb-4">
-        <div className="glass-panel rounded-full px-5 py-3 flex items-center shadow-2xl">
-          {/* MEDIA */}
-          <div className="flex items-center gap-2">
+      <footer className="w-full max-w-5xl mb-4 mx-auto">
+        <div className="glass-panel rounded-full px-6 py-3 flex items-center justify-center gap-3 shadow-2xl">
+          {/* MIC */}
+          <button
+            onClick={() => mic.toggle()}
+            className={`w-14 h-14 rounded-full flex items-center justify-center border transition-all duration-200 cursor-pointer ${
+              isMicOn
+                ? "bg-[#122131] border-[#3b494b] hover:border-cyan-400"
+                : "bg-red-500 border-red-400"
+            }`}
+          >
+            <span className="material-symbols-outlined">
+              {isMicOn ? "mic" : "mic_off"}
+            </span>
+          </button>
+
+          {/* CAMERA */}
+          <button
+            onClick={() => cam.toggle()}
+            className={`w-14 h-14 rounded-full flex items-center justify-center border transition-all duration-200 cursor-pointer ${
+              isCamOn
+                ? "bg-[#122131] border-[#3b494b] hover:border-cyan-400"
+                : "bg-red-500 border-red-400"
+            }`}
+          >
+            <span className="material-symbols-outlined">
+              {isCamOn ? "videocam" : "videocam_off"}
+            </span>
+          </button>
+
+          {/* DEVICE SETTINGS */}
+          <div className="relative">
             <button
-              type="button"
-              onClick={toggleMicro}
-              aria-label={micOn ? "Tắt micro" : "Bật micro"}
-              aria-pressed={!micOn}
-              className={`${iconBtn} ${
-                micOn
-                  ? "bg-[#122131] border-[#3b494b] hover:border-cyan-400 hover:shadow-[0_0_12px_rgba(0,240,255,0.4)]"
-                  : "bg-red-500 border-red-400"
-              }`}
+              onClick={() => setShowDeviceSettings((p) => !p)}
+              className="w-14 h-14 rounded-full flex items-center justify-center border bg-[#122131] border-[#3b494b] hover:border-cyan-400 cursor-pointer"
             >
-              <span className="material-symbols-outlined text-white">
-                {micOn ? "mic" : "mic_off"}
-              </span>
+              <span className="material-symbols-outlined">settings</span>
             </button>
 
-            <button
-              type="button"
-              onClick={toggleCamera}
-              aria-label={camOn ? "Tắt camera" : "Bật camera"}
-              aria-pressed={!camOn}
-              className={`${iconBtn} ${
-                camOn
-                  ? "bg-[#122131] border-[#3b494b] hover:border-cyan-400 hover:shadow-[0_0_12px_rgba(0,240,255,0.4)]"
-                  : "bg-red-500 border-red-400"
-              }`}
-            >
-              <span className="material-symbols-outlined text-white">
-                {camOn ? "videocam" : "videocam_off"}
-              </span>
-            </button>
+            {showDeviceSettings && (
+              <div className="absolute bottom-16 right-0 w-72 bg-[#0d1c2d]/95 backdrop-blur-xl border border-[#3b494b] rounded-xl p-3 shadow-2xl z-50 cursor-pointer">
+                {/* MIC */}
+                <div className="text-xs text-gray-400 mb-2">MIC INPUT</div>
+                <select className="w-full mb-3 bg-[#122131] text-white p-2 rounded-lg border border-[#3b494b]">
+                  {devices
+                    .filter((d) => d.kind === "audioinput")
+                    .map((d) => (
+                      <option key={d.deviceId} value={d.deviceId}>
+                        {d.label || "Microphone"}
+                      </option>
+                    ))}
+                </select>
 
-            <button
-              className={`${iconBtn} bg-[#122131] border-[#3b494b] hover:border-cyan-400 hover:shadow-[0_0_12px_rgba(0,240,255,0.4)]`}
-            >
-              <span className="material-symbols-outlined text-white group-hover:rotate-90 transition-transform">
-                settings
-              </span>
-            </button>
-          </div>
-
-          <div className="mx-4 h-7 w-px bg-[#3b494b]" />
-
-          {/* CALL ACTIONS */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={isSharingScreen ? stopScreenShare : shareScreen}
-              className={`${iconBtn} ${
-                isSharingScreen
-                  ? "bg-cyan-500 text-black border-cyan-300"
-                  : "bg-[#122131] border-[#3b494b] text-gray-300 hover:border-cyan-400"
-              }`}
-            >
-              <span className="material-symbols-outlined">screen_share</span>
-            </button>
-
-            {isRecruiter && (
-              <button
-                onClick={isRecording ? stopRecording : startRecording}
-                className={`${iconBtn} ${
-                  isRecording
-                    ? "bg-red-600 text-white border-red-400"
-                    : "bg-[#122131] border-[#3b494b] text-gray-300 hover:border-red-400"
-                }`}
-              >
-                <span className="material-symbols-outlined">
-                  {isRecording ? "stop" : "radio_button_checked"}
-                </span>
-              </button>
-            )}
-
-            <button
-              onClick={endCall}
-              className="w-11 h-11 rounded-full flex items-center justify-center bg-red-600 hover:bg-red-700 text-white transition-all"
-            >
-              <span className="material-symbols-outlined rotate-[135deg]">
-                call_end
-              </span>
-            </button>
-          </div>
-
-          <div className="flex-1" />
-
-          {/* UTILITIES */}
-          <div className="hidden lg:flex items-center gap-2">
-            <button
-              onClick={onOpenLiveCoding}
-              className={`${pillBtn} bg-cyan-500/15 border-cyan-400 text-cyan-300 hover:bg-cyan-500/25`}
-            >
-              <span className="material-symbols-outlined text-lg">
-                terminal
-              </span>
-              LIVE CODING
-            </button>
-
-            <button
-              onClick={() => setShowParticipants(true)}
-              className="
-    flex items-center gap-2
-    h-11 px-4
-    rounded-full
-    bg-[#122131]
-    border border-[#3b494b]
-    text-gray-300
-    hover:text-white
-    hover:border-cyan-400
-    hover:shadow-[0_0_12px_rgba(0,240,255,0.4)]
-    transition-all
-  "
-            >
-              <span className="material-symbols-outlined text-lg">groups</span>
-              <span>Participants</span>
-            </button>
-
-            <button
-              onClick={() => setShowChat(true)}
-              className="
-    flex items-center gap-2
-    h-11 px-4
-    rounded-full
-    bg-[#122131]
-    border border-[#3b494b]
-    text-gray-300
-    hover:text-white
-    hover:border-cyan-400
-    hover:shadow-[0_0_12px_rgba(0,240,255,0.4)]
-    transition-all
-  "
-            >
-              <span className="material-symbols-outlined text-lg">chat</span>
-              <span>Chat</span>
-            </button>
-          </div>
-
-          <div className="mx-4 h-7 w-px bg-[#3b494b] hidden lg:block" />
-
-          <div className="flex items-center gap-2">
-            {isRecruiter && (
-              <button
-                onClick={() => setShowQuestions(true)}
-                className={`${pillBtn} bg-[#122131] border-[#3b494b] text-white`}
-              >
-                <span className="material-symbols-outlined text-[18px]">
-                  quiz
-                </span>
-                Questions
-              </button>
-            )}
-
-            {isRecruiter && (
-              <button
-                onClick={() => setShowAI(true)}
-                className="
-      flex items-center gap-2
-      h-11 px-4
-      rounded-full
-      bg-cyan-500
-      text-[#051424]
-      text-sm font-bold
-      shadow-[0_0_20px_rgba(0,240,255,0.6)]
-      transition-all duration-300
-      hover:scale-105
-      hover:shadow-[0_0_30px_rgba(0,240,255,0.9)]
-    "
-              >
-                <span className="material-symbols-outlined text-[18px]">
-                  smart_toy
-                </span>
-                AI Assistant
-              </button>
+                {/* CAMERA */}
+                <div className="text-xs text-gray-400 mb-2">CAMERA</div>
+                <select className="w-full bg-[#122131] text-white p-2 rounded-lg border border-[#3b494b]">
+                  {devices
+                    .filter((d) => d.kind === "videoinput")
+                    .map((d) => (
+                      <option key={d.deviceId} value={d.deviceId}>
+                        {d.label || "Camera"}
+                      </option>
+                    ))}
+                </select>
+              </div>
             )}
           </div>
+
+          {/* SCREEN SHARE */}
+          <button
+            onClick={() => screen.toggle()}
+            className={`w-14 h-14 rounded-full flex items-center justify-center border transition-all duration-200 cursor-pointer ${
+              isScreenSharing
+                ? "bg-[#122131] border-[#3b494b] hover:border-cyan-400"
+                : "bg-red-500 border-red-400"
+            }`}
+          >
+            <span className="material-symbols-outlined">screen_share</span>
+          </button>
+
+          {/* END CALL */}
+          <button
+            onClick={() => (window.location.href = "/dashboard")}
+            className="w-14 h-14 rounded-full flex items-center justify-center border border-red-500 bg-red-600 text-white cursor-pointer"
+          >
+            <span className="material-symbols-outlined rotate-[135deg]">
+              call_end
+            </span>
+          </button>
+
+          {/* LIVE CODING */}
+          <button
+            onClick={onOpenLiveCoding}
+            className="w-14 h-14 rounded-full flex items-center justify-center border border-cyan-400 text-cyan-300 cursor-pointer"
+          >
+            <span className="material-symbols-outlined">terminal</span>
+          </button>
+
+          {/* PARTICIPANTS */}
+          <button
+            onClick={() => setShowParticipants(true)}
+            className="w-14 h-14 rounded-full flex items-center justify-center border transition-all duration-200 cursor-pointer"
+          >
+            <span className="material-symbols-outlined">groups</span>
+          </button>
+
+          {/* CHAT */}
+          <button
+            onClick={() => setShowChat(true)}
+            className="w-11 h-11 rounded-full flex items-center justify-center border border-[#3b494b] cursor-pointer"
+          >
+            <span className="material-symbols-outlined">chat</span>
+          </button>
         </div>
       </footer>
+
       <ChatDrawer open={showChat} onClose={() => setShowChat(false)} />
       <ParticipantsDrawer
         open={showParticipants}
         onClose={() => setShowParticipants(false)}
       />
+
       {isRecruiter && (
         <>
           <AIDrawer open={showAI} onClose={() => setShowAI(false)} />
-
           <QuestionsDrawer
             open={showQuestions}
             onClose={() => setShowQuestions(false)}

@@ -1,3 +1,4 @@
+import { MediaProvider } from "@/app/components/interview-room/MediaContext";
 import { requireInterviewAccess } from "@/lib/interview-guard";
 import InterviewWaitingClient from "./InterviewWaitingClient";
 import PasswordGate from "@/app/components/interview-room/PasswordGate";
@@ -21,10 +22,12 @@ export default async function InterviewWaitingPage({ params }: PageProps) {
   }
 
   return (
-    <InterviewWaitingClient
-      meetingCode={access.meetingCode}
-      title={access.title}
-      participantRole={access.participantRole}
-    />
+    <MediaProvider>
+      <InterviewWaitingClient
+        meetingCode={access.meetingCode}
+        title={access.title}
+        participantRole={access.participantRole}
+      />
+    </MediaProvider>
   );
 }
