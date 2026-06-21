@@ -31,16 +31,27 @@ export default function FooterControls({
   const micState = useMicrophoneState();
   const camState = useCameraState();
   const screenState = useScreenShareState();
+  const isScreenSharing = screenState.isEnabled;
 
   const mic = micState.microphone;
   const cam = camState.camera;
-  console.log("camState", camState);
-  console.log("camera", cam);
-  const screen = screenState.screenShare;
 
   const isMicOn = !micState.isMute;
   const isCamOn = !camState.isMute;
-  const isScreenSharing = screenState.isMute;
+
+  const toggleScreenShare = async () => {
+    try {
+      if (!call) {
+        console.warn("[screenShare] call is null");
+        return;
+      }
+      console.log("[screenShare] current:", isScreenSharing, "toggling...");
+      await call.screenShare.toggle();
+      console.log("[screenShare] toggled successfully");
+    } catch (e) {
+      console.error("screen share error:", e);
+    }
+  };
 
   const [showChat, setShowChat] = useState(false);
   const [showParticipants, setShowParticipants] = useState(false);
@@ -81,7 +92,7 @@ export default function FooterControls({
                 await cam.toggle();
               } catch (err: any) {
                 if (err?.name === "NotReadableError") {
-                  alert("Camera đang được sử dụng bởi ứng dụng hoặc tab khác.");
+                  alert("Camera đang được dùng bởi ứng dụng khác.");
                 } else {
                   alert("Không thể bật camera.");
                 }
@@ -108,8 +119,7 @@ export default function FooterControls({
             </button>
 
             {showDeviceSettings && (
-              <div className="absolute bottom-16 right-0 w-72 bg-[#0d1c2d]/95 backdrop-blur-xl border border-[#3b494b] rounded-xl p-3 shadow-2xl z-50 cursor-pointer">
-                {/* MIC */}
+              <div className="absolute bottom-16 right-0 w-72 bg-[#0d1c2d]/95 backdrop-blur-xl border border-[#3b494b] rounded-xl p-3 shadow-2xl z-50">
                 <div className="text-xs text-gray-400 mb-2">MIC INPUT</div>
                 <select className="w-full mb-3 bg-[#122131] text-white p-2 rounded-lg border border-[#3b494b]">
                   {devices
@@ -121,7 +131,6 @@ export default function FooterControls({
                     ))}
                 </select>
 
-                {/* CAMERA */}
                 <div className="text-xs text-gray-400 mb-2">CAMERA</div>
                 <select className="w-full bg-[#122131] text-white p-2 rounded-lg border border-[#3b494b]">
                   {devices
@@ -136,13 +145,13 @@ export default function FooterControls({
             )}
           </div>
 
-          {/* SCREEN SHARE */}
+          {/* SCREEN SHARE (FIXED) */}
           <button
-            onClick={() => screen.toggle()}
+            onClick={toggleScreenShare}
             className={`w-14 h-14 rounded-full flex items-center justify-center border transition-all duration-200 cursor-pointer ${
               isScreenSharing
-                ? "bg-[#122131] border-[#3b494b] hover:border-cyan-400"
-                : "bg-red-500 border-red-400"
+                ? "bg-cyan-500 border-cyan-300 text-black"
+                : "bg-[#122131] border-[#3b494b] hover:border-cyan-400"
             }`}
           >
             <span className="material-symbols-outlined">screen_share</span>
@@ -169,7 +178,7 @@ export default function FooterControls({
           {/* PARTICIPANTS */}
           <button
             onClick={() => setShowParticipants(true)}
-            className="w-14 h-14 rounded-full flex items-center justify-center border transition-all duration-200 cursor-pointer"
+            className="w-14 h-14 rounded-full flex items-center justify-center border cursor-pointer"
           >
             <span className="material-symbols-outlined">groups</span>
           </button>
@@ -185,6 +194,7 @@ export default function FooterControls({
       </footer>
 
       <ChatDrawer open={showChat} onClose={() => setShowChat(false)} />
+
       <ParticipantsDrawer
         open={showParticipants}
         onClose={() => setShowParticipants(false)}

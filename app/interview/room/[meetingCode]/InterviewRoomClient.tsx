@@ -12,6 +12,7 @@ import {
   StreamCall,
   ParticipantView,
   useCallStateHooks,
+  hasScreenShare,
 } from "@stream-io/video-react-sdk";
 import "@stream-io/video-react-sdk/dist/css/styles.css";
 import { useEffect, useRef, useState } from "react";
@@ -47,7 +48,12 @@ function MeetingGrid() {
           key={p.sessionId}
           className="w-full h-full min-h-[300px] rounded-3xl overflow-hidden bg-black flex items-center justify-center"
         >
-          <ParticipantView participant={p} />
+          <ParticipantView
+            participant={p}
+            trackType={
+              hasScreenShare(p) ? "screenShareTrack" : "videoTrack"
+            }
+          />
         </div>
       ))}
     </div>
