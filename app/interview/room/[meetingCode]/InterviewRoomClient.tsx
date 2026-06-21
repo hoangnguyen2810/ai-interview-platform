@@ -1,7 +1,5 @@
 "use client";
 
-import CandidateCodingView from "@/app/components/interview-room/coding/CandidateCodingView";
-import RecruiterCodingView from "@/app/components/interview-room/coding/RecruiterCodingView";
 import FooterControls from "@/app/components/interview-room/FooterControls";
 import Header from "@/app/components/interview-room/Header";
 import QuestionsDrawer from "@/app/components/interview-room/QuestionsDrawer";
@@ -23,6 +21,8 @@ import type {
   StreamVideoClient,
   UserResponse,
 } from "@stream-io/video-react-sdk";
+import CandidateCodingView from "@/app/components/interview-room/coding/CandidateCodingView";
+import RecruiterCodingView from "@/app/components/interview-room/coding/RecruiterCodingView";
 
 interface Props {
   meetingCode: string;
@@ -228,8 +228,6 @@ export default function InterviewRoomClient({
                   )}
                 </div>
               </div>
-
-              {/* CODING */}
               {showLiveCoding && (
                 <div className="w-[55%]">
                   {role === "candidate" ? (
@@ -239,6 +237,7 @@ export default function InterviewRoomClient({
                   )}
                 </div>
               )}
+              {/* CODING */}
             </main>
 
             {streamReady && (

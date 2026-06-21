@@ -202,7 +202,7 @@ export default function FooterControls({
           {/* CHAT */}
           <button
             onClick={handleOpenChat}
-            className="w-11 h-11 rounded-full flex items-center justify-center border border-[#3b494b] cursor-pointer relative"
+            className="w-14 h-14 rounded-full flex items-center justify-center border border-[#3b494b] cursor-pointer relative"
           >
             <span className="material-symbols-outlined">chat</span>
             {unreadCount > 0 && (
@@ -211,6 +211,28 @@ export default function FooterControls({
               </span>
             )}
           </button>
+
+          {/* AI ASSISTANT */}
+          {isRecruiter && (
+            <button
+              onClick={() => setShowAI(true)}
+              className="w-14 h-14 rounded-full flex items-center justify-center border border-purple-400 text-purple-300 hover:bg-purple-500/20 cursor-pointer"
+              title="AI Assistant"
+            >
+              <span className="material-symbols-outlined">smart_toy</span>
+            </button>
+          )}
+
+          {/* QUESTIONS */}
+          {isRecruiter && (
+            <button
+              onClick={() => setShowQuestions(true)}
+              className="w-14 h-14 rounded-full flex items-center justify-center border border-amber-400 text-amber-300 hover:bg-amber-500/20 cursor-pointer"
+              title="Questions"
+            >
+              <span className="material-symbols-outlined">quiz</span>
+            </button>
+          )}
         </div>
       </footer>
 
