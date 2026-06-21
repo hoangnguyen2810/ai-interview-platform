@@ -15,6 +15,7 @@ import {
   hasScreenShare,
 } from "@stream-io/video-react-sdk";
 import "@stream-io/video-react-sdk/dist/css/styles.css";
+import { useCamMicSync } from "@/app/components/interview-room/CamMicSyncContext";
 import { useEffect, useRef, useState } from "react";
 import type {
   Call,
@@ -82,6 +83,8 @@ export default function InterviewRoomClient({
 
   const isHost = participantRole === "HOST";
 
+  const { readPersisted, setCameraEnabled, setMicEnabled } = useCamMicSync();
+
   const clientInitializedRef = useRef(false);
   const hostEnterCalledRef = useRef(false);
 
@@ -119,18 +122,16 @@ export default function InterviewRoomClient({
 
         await streamCall.join({ create: true });
 
-        // ⏳ allow SDK stabilize
+        // allow SDK to stabilize
         await new Promise((r) => setTimeout(r, 300));
 
-        // ✅ READ ONCE SOURCE OF TRUTH
-        const cam = sessionStorage.getItem("waiting_cam") === "true";
-        const mic = sessionStorage.getItem("waiting_mic") === "true";
+        // Read persisted cam/mic state from CamMicSyncContext (shared across waiting → room)
+        const { camera: camOn, mic: micOn } = readPersisted();
 
-        // ✅ APPLY DEVICE STATE ONLY ONCE
-        if (mic) await streamCall.microphone.enable();
+        if (micOn) await streamCall.microphone.enable();
         else await streamCall.microphone.disable();
 
-        if (cam) {
+        if (camOn) {
           try {
             await streamCall.camera.enable();
           } catch (e) {
@@ -155,7 +156,29 @@ export default function InterviewRoomClient({
     }
 
     initStream();
-  }, [meetingCode, role, userFullName]);
+  }, [meetingCode, role, userFullName, readPersisted]);
+
+  // Sync SDK cam/mic state → sessionStorage so waiting room reflects changes made in meeting room
+  useEffect(() => {
+    if (!streamReady) return;
+    const { useMicrophoneState, useCameraState } = require("@stream-io/video-react-sdk").useCallStateHooks
+      ? require("@stream-io/video-react-sdk")
+      : { useMicrophoneState: () => null, useCameraState: () => null };
+
+    // We'll use a polling approach via the call object since we have it in scope
+    const id = window.setInterval(() => {
+      if (!call) return;
+      const micTrack = call.state?.mediaStream?.getAudioTracks()[0];
+      const camTrack = call.state?.mediaStream?.getVideoTracks()[0];
+      if (micTrack !== undefined) {
+        setMicEnabled(!micTrack.muted);
+      }
+      if (camTrack !== undefined) {
+        setCameraEnabled(!camTrack.muted);
+      }
+    }, 500);
+    return () => clearInterval(id);
+  }, [streamReady, call, setCameraEnabled, setMicEnabled]);
 
   // Host enter tracking
   useEffect(() => {

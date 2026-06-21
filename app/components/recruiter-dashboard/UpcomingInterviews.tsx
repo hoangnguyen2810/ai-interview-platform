@@ -64,7 +64,7 @@ function InterviewCard({ interview }: { interview: Interview }) {
   const status = isStarted ? "ONGOING" : "SCHEDULED";
 
   const handleEnter = () => {
-    router.push(`/interview/waiting/${encodeURIComponent(interview.meetingCode)}`);
+    router.push(`/interview/room/${encodeURIComponent(interview.meetingCode)}`);
   };
 
   return (

@@ -40,24 +40,46 @@ export default function InterviewWaitingClient({
       setAudioInputs(devices.filter((d) => d.kind === "audioinput"));
       setAudioOutputs(devices.filter((d) => d.kind === "audiooutput"));
     }
-
     loadDevices();
   }, []);
 
   const isHost = participantRole === "HOST";
   const [hostJoined, setHostJoined] = useState<boolean>(isHost);
 
+  const SESSION_CAM = "meeting_cam";
+  const SESSION_MIC = "meeting_mic";
+
   const onToggleCamera = () => {
     const next = !camOn;
     toggleCamera();
-    sessionStorage.setItem("waiting_cam", String(next));
+    sessionStorage.setItem(SESSION_CAM, String(next));
   };
 
   const onToggleMicro = () => {
     const next = !micOn;
     toggleMicro();
-    sessionStorage.setItem("waiting_mic", String(next));
+    sessionStorage.setItem(SESSION_MIC, String(next));
   };
+
+  // Poll sessionStorage to reflect cam/mic changes made in meeting room
+  useEffect(() => {
+    if (!stream) return;
+    const pollId = window.setInterval(() => {
+      const cam = sessionStorage.getItem(SESSION_CAM);
+      const mic = sessionStorage.getItem(SESSION_MIC);
+      if (cam === "false" && camOn) {
+        toggleCamera();
+      } else if (cam === "true" && !camOn) {
+        toggleCamera();
+      }
+      if (mic === "false" && micOn) {
+        toggleMicro();
+      } else if (mic === "true" && !micOn) {
+        toggleMicro();
+      }
+    }, 1000);
+    return () => clearInterval(pollId);
+  }, [stream, camOn, micOn, toggleCamera, toggleMicro]);
 
   // ✅ SAFE stream attach
   useEffect(() => {
@@ -106,15 +128,6 @@ export default function InterviewWaitingClient({
   }, [fetchHostStatus, isHost]);
 
   const canEnter = isHost || hostJoined;
-
-  useEffect(() => {
-    async function loadDevices() {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      setAudioInputs(devices.filter((d) => d.kind === "audioinput"));
-      setAudioOutputs(devices.filter((d) => d.kind === "audiooutput"));
-    }
-    loadDevices();
-  }, []);
 
   return (
     <div className="flex flex-col min-h-screen bg-[#051424] text-[#d4e4fa]">

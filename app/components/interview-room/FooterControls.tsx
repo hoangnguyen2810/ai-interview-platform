@@ -8,6 +8,9 @@ import AIDrawer from "./AIDrawer";
 import { useCallStateHooks } from "@stream-io/video-react-sdk";
 import type { Call } from "@stream-io/video-react-sdk";
 
+const SESSION_CAM = "meeting_cam";
+const SESSION_MIC = "meeting_mic";
+
 export default function FooterControls({
   role,
   participantRole,
@@ -73,7 +76,11 @@ export default function FooterControls({
         <div className="glass-panel rounded-full px-6 py-3 flex items-center justify-center gap-3 shadow-2xl">
           {/* MIC */}
           <button
-            onClick={() => mic.toggle()}
+            onClick={() => {
+              mic.toggle();
+              // Persist so waiting room sees the change
+              sessionStorage.setItem(SESSION_MIC, String(!isMicOn));
+            }}
             className={`w-14 h-14 rounded-full flex items-center justify-center border transition-all duration-200 cursor-pointer ${
               isMicOn
                 ? "bg-[#122131] border-[#3b494b] hover:border-cyan-400"
@@ -90,6 +97,8 @@ export default function FooterControls({
             onClick={async () => {
               try {
                 await cam.toggle();
+                // Persist so waiting room sees the change
+                sessionStorage.setItem(SESSION_CAM, String(!isCamOn));
               } catch (err: any) {
                 if (err?.name === "NotReadableError") {
                   alert("Camera đang được dùng bởi ứng dụng khác.");

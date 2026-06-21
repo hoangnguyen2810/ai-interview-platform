@@ -1,16 +1,18 @@
 /**
  * Layout chung cho toàn bộ segment /interview/*.
  *
- * KHÔNG mount MediaProvider ở đây nữa — mỗi page tự quản lý.
+ * Mount CamMicSyncProvider để cam/mic state persist giữa
+ * Waiting Room → Meeting Room navigation (cùng layout segment).
  *
- * - Waiting Room: tự mount MediaProvider cục bộ cho local camera preview
- *   (getUserMedia trước khi vào call).
- * - Meeting Room: dùng Stream Video SDK, không cần MediaContext.
+ * - Waiting Room: dùng CamMicSyncProvider để toggle cam/mic
+ * - Meeting Room: đọc persisted state, toggle ghi lại sessionStorage
  */
+import { CamMicSyncProvider } from "@/app/components/interview-room/CamMicSyncContext";
+
 export default function InterviewLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return children;
+  return <CamMicSyncProvider>{children}</CamMicSyncProvider>;
 }
