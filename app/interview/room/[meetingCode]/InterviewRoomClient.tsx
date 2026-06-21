@@ -33,28 +33,21 @@ function MeetingGrid() {
   const { useParticipants } = useCallStateHooks();
   const participants = useParticipants();
 
+  let cols = "grid-cols-1";
   const count = participants.length;
 
-  let cols = "grid-cols-1";
-
-  if (count === 2) {
-    cols = "grid-cols-2";
-  } else if (count >= 3 && count <= 4) {
-    cols = "grid-cols-2";
-  } else if (count > 4) {
-    cols = "grid-cols-3";
-  }
+  if (count === 2) cols = "grid-cols-2";
+  else if (count >= 3 && count <= 4) cols = "grid-cols-2";
+  else if (count > 4) cols = "grid-cols-3";
 
   return (
     <div className={`grid ${cols} gap-4 w-full h-full p-2`}>
-      {participants.map((participant) => (
+      {participants.map((p) => (
         <div
-          key={participant.sessionId}
+          key={p.sessionId}
           className="w-full h-full min-h-[300px] rounded-3xl overflow-hidden bg-black flex items-center justify-center"
         >
-          <div className="w-full h-full flex items-center justify-center">
-            <ParticipantView participant={participant} />
-          </div>
+          <ParticipantView participant={p} />
         </div>
       ))}
     </div>
@@ -81,7 +74,6 @@ export default function InterviewRoomClient({
   const role: "candidate" | "recruiter" =
     participantRole === "CANDIDATE" ? "candidate" : "recruiter";
 
-  const isCandidate = role === "candidate";
   const isHost = participantRole === "HOST";
 
   const clientInitializedRef = useRef(false);
@@ -100,24 +92,50 @@ export default function InterviewRoomClient({
         }
 
         const userId = `${role}-${meetingCode}`;
+
         const res = await fetch("/api/stream/token", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId }),
         });
+
         if (!res.ok) throw new Error("Failed to fetch Stream token");
         const { token } = await res.json();
 
         const user: UserResponse = {
           id: userId,
           name: userFullName,
-          role: role,
+          role,
         };
 
         const client = createStreamClient(apiKey, user, token);
         const streamCall = client.call("default", meetingCode);
 
         await streamCall.join({ create: true });
+
+        // ⏳ allow SDK stabilize
+        await new Promise((r) => setTimeout(r, 300));
+
+        // ✅ READ ONCE SOURCE OF TRUTH
+        const cam = sessionStorage.getItem("waiting_cam") === "true";
+        const mic = sessionStorage.getItem("waiting_mic") === "true";
+
+        // ✅ APPLY DEVICE STATE ONLY ONCE
+        if (mic) await streamCall.microphone.enable();
+        else await streamCall.microphone.disable();
+
+        if (cam) {
+          try {
+            await streamCall.camera.enable();
+          } catch (e) {
+            console.warn("Camera retry...", e);
+            setTimeout(() => {
+              streamCall.camera.enable().catch(console.error);
+            }, 500);
+          }
+        } else {
+          await streamCall.camera.disable();
+        }
 
         setStreamClient(client);
         setCall(streamCall);
@@ -131,74 +149,39 @@ export default function InterviewRoomClient({
     }
 
     initStream();
-  }, [meetingCode, role, isCandidate, userFullName]);
+  }, [meetingCode, role, userFullName]);
 
+  // Host enter tracking
   useEffect(() => {
     if (!isHost || hostEnterCalledRef.current) return;
     hostEnterCalledRef.current = true;
 
     fetch(`/api/interviews/${encodeURIComponent(meetingCode)}/host-enter`, {
       method: "POST",
-    }).catch((err) => {
-      console.error("[host-enter] failed:", err);
-    });
+    }).catch(console.error);
   }, [isHost, meetingCode]);
 
-  // Set meeting code cookie so API can read it
+  // cookie sync
   useEffect(() => {
     if (!streamReady) return;
-    document.cookie = `interview_meeting_code=${encodeURIComponent(meetingCode)}; path=/; SameSite=Lax`;
+    document.cookie = `interview_meeting_code=${encodeURIComponent(
+      meetingCode,
+    )}; path=/; SameSite=Lax`;
   }, [streamReady, meetingCode]);
 
+  // cleanup
   useEffect(() => {
     return () => {
-      if (call) {
-        call
-          .leave()
-          .catch((err) => console.error("[Stream] leave error:", err));
-      }
-      if (streamClient) {
-        streamClient
-          .disconnectUser()
-          .catch((err) => console.error("[Stream] disconnect error:", err));
-      }
+      call?.leave().catch(console.error);
+      streamClient?.disconnectUser().catch(console.error);
     };
   }, [call, streamClient]);
 
-  const currentUser = isCandidate
-    ? {
-        name: userFullName,
-        role: "Candidate",
-        avatar: userFullName.charAt(0).toUpperCase(),
-        roleKey: "candidate" as const,
-      }
-    : {
-        name: userFullName,
-        role: "Interviewer",
-        avatar: userFullName.charAt(0).toUpperCase(),
-        roleKey: "recruiter" as const,
-      };
-
-  const otherParticipant = isCandidate
-    ? {
-        name: otherParticipantName ?? "Interviewer",
-        role: "Interviewer",
-        avatar: (otherParticipantName ?? "I").charAt(0).toUpperCase(),
-      }
-    : {
-        name: otherParticipantName ?? "Candidate",
-        role: "Candidate",
-        avatar: (otherParticipantName ?? "C").charAt(0).toUpperCase(),
-      };
-
   if (streamError) {
     return (
-      <div className="h-screen w-screen bg-[#051424] text-white flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <span className="material-symbols-outlined text-red-400 text-5xl">
-            videocam_off
-          </span>
-          <p className="text-lg">Stream connection failed</p>
+      <div className="h-screen w-screen flex items-center justify-center text-white">
+        <div className="text-center">
+          <p className="text-red-400 text-lg">Stream connection failed</p>
           <p className="text-sm text-gray-400">{streamError}</p>
         </div>
       </div>
@@ -208,40 +191,31 @@ export default function InterviewRoomClient({
   return (
     <StreamVideo client={streamClient}>
       <StreamCall call={call}>
-        <div className="h-screen w-screen bg-[#051424] text-white overflow-hidden flex flex-col font-sans">
+        <div className="h-screen w-screen bg-[#051424] text-white flex flex-col">
           <Header title={title} meetingCode={meetingCode} role={role} />
 
-          <main className="flex-1 w-full flex gap-4 p-4 overflow-hidden min-h-0">
-            {/* VIDEO SECTION */}
-            <div
-              className={`transition-all duration-500 h-full flex flex-col ${
-                showLiveCoding ? "w-[45%] md:w-[40%]" : "w-full"
-              }`}
-            >
-              <div className="flex-1 min-h-0 rounded-3xl border border-[#163149] bg-[#07131f] shadow-xl overflow-hidden">
+          <main className="flex-1 flex gap-4 p-4 overflow-hidden">
+            {/* VIDEO */}
+            <div className={showLiveCoding ? "w-[45%]" : "w-full"}>
+              <div className="h-full rounded-3xl border border-[#163149] bg-[#07131f] overflow-hidden">
                 {streamReady ? (
                   <MeetingGrid />
                 ) : (
-                  <div className="h-full flex items-center justify-center rounded-2xl bg-[#0d1c2d] border border-[#23384d]">
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="w-10 h-10 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin" />
-                      <p className="text-xs text-cyan-200">Kết nối video...</p>
-                    </div>
+                  <div className="h-full flex items-center justify-center">
+                    Loading...
                   </div>
                 )}
               </div>
             </div>
 
-            {/* CODING SECTION */}
+            {/* CODING */}
             {showLiveCoding && (
-              <div className="w-full md:w-[60%] h-full animate-in slide-in-from-right duration-300">
-                <div className="h-full rounded-3xl border border-[#163149] bg-[#0b1622] shadow-xl overflow-hidden">
-                  {role === "candidate" ? (
-                    <CandidateCodingView />
-                  ) : (
-                    <RecruiterCodingView />
-                  )}
-                </div>
+              <div className="w-[55%]">
+                {role === "candidate" ? (
+                  <CandidateCodingView />
+                ) : (
+                  <RecruiterCodingView />
+                )}
               </div>
             )}
           </main>
@@ -249,7 +223,7 @@ export default function InterviewRoomClient({
           {streamReady && (
             <FooterControls
               role={role}
-              onOpenLiveCoding={() => setShowLiveCoding((prev) => !prev)}
+              onOpenLiveCoding={() => setShowLiveCoding((p) => !p)}
               userFullName={userFullName}
               otherParticipantName={otherParticipantName}
               call={call}

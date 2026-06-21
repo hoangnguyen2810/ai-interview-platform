@@ -34,6 +34,8 @@ export default function FooterControls({
 
   const mic = micState.microphone;
   const cam = camState.camera;
+  console.log("camState", camState);
+  console.log("camera", cam);
   const screen = screenState.screenShare;
 
   const isMicOn = !micState.isMute;
@@ -74,7 +76,17 @@ export default function FooterControls({
 
           {/* CAMERA */}
           <button
-            onClick={() => cam.toggle()}
+            onClick={async () => {
+              try {
+                await cam.toggle();
+              } catch (err: any) {
+                if (err?.name === "NotReadableError") {
+                  alert("Camera đang được sử dụng bởi ứng dụng hoặc tab khác.");
+                } else {
+                  alert("Không thể bật camera.");
+                }
+              }
+            }}
             className={`w-14 h-14 rounded-full flex items-center justify-center border transition-all duration-200 cursor-pointer ${
               isCamOn
                 ? "bg-[#122131] border-[#3b494b] hover:border-cyan-400"

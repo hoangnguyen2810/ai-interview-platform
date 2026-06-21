@@ -242,7 +242,7 @@ export async function requireInterviewAccess(
       role: user.role,
       meetingCode,
     });
-    redirect("/login");
+    redirect("/interview/access-denied");
   }
 
   // Password gate
