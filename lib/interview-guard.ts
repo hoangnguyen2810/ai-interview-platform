@@ -39,6 +39,10 @@ export interface InterviewAccess {
   participantRole: InterviewRole;
   /** Bằng true khi interview có password và user chưa verify */
   passwordRequired: boolean;
+  /** Tên thật của user hiện tại */
+  userFullName: string;
+  /** Tên thật của participant còn lại */
+  otherParticipantName: string | null;
 }
 
 export async function getAuthedUser(): Promise<AuthedUser | null> {
@@ -247,6 +251,33 @@ export async function requireInterviewAccess(
   const gatePassed = await isPasswordGatePassed(interview.id);
   const passwordRequired = hasPassword && !isHost && !gatePassed;
 
+  // Fetch user names
+  const userNameRes = await pool.query<{ full_name: string }>(
+    `SELECT full_name FROM users WHERE id = $1 LIMIT 1`,
+    [user.id],
+  );
+  const userFullName = userNameRes.rows[0]?.full_name ?? "Unknown";
+
+  let otherParticipantName: string | null = null;
+  if (participantRole === "CANDIDATE") {
+    const recruiterRes = await pool.query<{ full_name: string }>(
+      `SELECT u.full_name
+       FROM interview_participants ip
+       JOIN users u ON u.id = ip.user_id
+       WHERE ip.interview_id = $1 AND ip.participant_role = 'HOST'
+       LIMIT 1`,
+      [interview.id],
+    );
+    otherParticipantName = recruiterRes.rows[0]?.full_name ?? "Interviewer";
+  } else {
+    const candidateRes = await pool.query<{ candidate_name: string }>(
+      `SELECT candidate_name FROM interview_candidates
+       WHERE interview_id = $1 LIMIT 1`,
+      [interview.id],
+    );
+    otherParticipantName = candidateRes.rows[0]?.candidate_name ?? "Candidate";
+  }
+
   console.log("[guard] access check", {
     userId: user.id,
     role: user.role,
@@ -268,5 +299,7 @@ export async function requireInterviewAccess(
     scheduledAt: interview.scheduled_at,
     participantRole,
     passwordRequired,
+    userFullName,
+    otherParticipantName,
   };
 }

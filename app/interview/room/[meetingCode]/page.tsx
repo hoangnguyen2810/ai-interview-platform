@@ -25,6 +25,8 @@ export default async function InterviewRoomPage({ params }: PageProps) {
       meetingCode={access.meetingCode}
       title={access.title}
       participantRole={access.participantRole}
+      userFullName={access.userFullName}
+      otherParticipantName={access.otherParticipantName}
     />
   );
 }

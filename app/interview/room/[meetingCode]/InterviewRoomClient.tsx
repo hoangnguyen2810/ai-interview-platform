@@ -25,6 +25,8 @@ interface Props {
   meetingCode: string;
   title: string;
   participantRole: InterviewRole;
+  userFullName: string;
+  otherParticipantName: string | null;
 }
 
 function MeetingGrid() {
@@ -63,6 +65,8 @@ export default function InterviewRoomClient({
   meetingCode,
   title,
   participantRole,
+  userFullName,
+  otherParticipantName,
 }: Props) {
   const [questionOpen, setQuestionOpen] = useState(false);
   const [showLiveCoding, setShowLiveCoding] = useState(false);
@@ -106,7 +110,7 @@ export default function InterviewRoomClient({
 
         const user: UserResponse = {
           id: userId,
-          name: isCandidate ? "Candidate" : "Interviewer",
+          name: userFullName,
           role: role,
         };
 
@@ -127,7 +131,7 @@ export default function InterviewRoomClient({
     }
 
     initStream();
-  }, [meetingCode, role, isCandidate]);
+  }, [meetingCode, role, isCandidate, userFullName]);
 
   useEffect(() => {
     if (!isHost || hostEnterCalledRef.current) return;
@@ -139,6 +143,12 @@ export default function InterviewRoomClient({
       console.error("[host-enter] failed:", err);
     });
   }, [isHost, meetingCode]);
+
+  // Set meeting code cookie so API can read it
+  useEffect(() => {
+    if (!streamReady) return;
+    document.cookie = `interview_meeting_code=${encodeURIComponent(meetingCode)}; path=/; SameSite=Lax`;
+  }, [streamReady, meetingCode]);
 
   useEffect(() => {
     return () => {
@@ -157,21 +167,29 @@ export default function InterviewRoomClient({
 
   const currentUser = isCandidate
     ? {
-        name: "Candidate",
+        name: userFullName,
         role: "Candidate",
-        avatar: "C",
+        avatar: userFullName.charAt(0).toUpperCase(),
         roleKey: "candidate" as const,
       }
     : {
-        name: "Interviewer",
+        name: userFullName,
         role: "Interviewer",
-        avatar: "I",
+        avatar: userFullName.charAt(0).toUpperCase(),
         roleKey: "recruiter" as const,
       };
 
   const otherParticipant = isCandidate
-    ? { name: "Technical Interviewer", role: "Interviewer", avatar: "I" }
-    : { name: "Candidate", role: "Candidate", avatar: "C" };
+    ? {
+        name: otherParticipantName ?? "Interviewer",
+        role: "Interviewer",
+        avatar: (otherParticipantName ?? "I").charAt(0).toUpperCase(),
+      }
+    : {
+        name: otherParticipantName ?? "Candidate",
+        role: "Candidate",
+        avatar: (otherParticipantName ?? "C").charAt(0).toUpperCase(),
+      };
 
   if (streamError) {
     return (
@@ -231,8 +249,12 @@ export default function InterviewRoomClient({
           {streamReady && (
             <FooterControls
               role={role}
-              onOpenQuestions={() => setQuestionOpen(true)}
               onOpenLiveCoding={() => setShowLiveCoding((prev) => !prev)}
+              userFullName={userFullName}
+              otherParticipantName={otherParticipantName}
+              call={call}
+              participantRole={participantRole}
+              meetingCode={meetingCode}
             />
           )}
 

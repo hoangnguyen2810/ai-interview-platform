@@ -6,8 +6,25 @@ import ChatDrawer from "./ChatDrawer";
 import ParticipantsDrawer from "./ParticipantsDrawer";
 import AIDrawer from "./AIDrawer";
 import { useCallStateHooks } from "@stream-io/video-react-sdk";
+import type { Call } from "@stream-io/video-react-sdk";
 
-export default function FooterControls({ role, onOpenLiveCoding }: any) {
+export default function FooterControls({
+  role,
+  participantRole,
+  onOpenLiveCoding,
+  userFullName,
+  otherParticipantName,
+  call,
+  meetingCode,
+}: {
+  role: "candidate" | "recruiter";
+  participantRole: "CANDIDATE" | "HOST" | "CO_HOST";
+  onOpenLiveCoding: () => void;
+  userFullName: string;
+  otherParticipantName: string | null;
+  call: Call | null;
+  meetingCode: string;
+}) {
   const { useMicrophoneState, useCameraState, useScreenShareState } =
     useCallStateHooks();
 
@@ -159,6 +176,10 @@ export default function FooterControls({ role, onOpenLiveCoding }: any) {
       <ParticipantsDrawer
         open={showParticipants}
         onClose={() => setShowParticipants(false)}
+        userFullName={userFullName}
+        currentUserRole={role}
+        participantRole={participantRole}
+        meetingCode={meetingCode}
       />
 
       {isRecruiter && (
