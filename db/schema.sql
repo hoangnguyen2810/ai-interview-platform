@@ -161,11 +161,15 @@ CREATE TABLE interview_sessions (
 CREATE TABLE messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    session_id UUID NOT NULL
+    session_id UUID
         REFERENCES interview_sessions(id)
         ON DELETE CASCADE,
 
+    meeting_code VARCHAR(50),
+
     sender_id UUID REFERENCES users(id),
+
+    sender_name VARCHAR(255),
 
     guest_name VARCHAR(255),
 
@@ -181,6 +185,9 @@ CREATE TABLE messages (
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX idx_messages_meeting_code ON messages(meeting_code);
+CREATE INDEX idx_messages_meeting_created ON messages(meeting_code, created_at ASC);
 
 CREATE TABLE coding_questions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

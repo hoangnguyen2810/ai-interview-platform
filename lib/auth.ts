@@ -15,8 +15,9 @@ export function getAuthUserFromRequest(req: Request): AuthUser | null {
   const headerToken = req.headers.get("x-auth-token");
 
   const cookieHeader = req.headers.get("cookie") ?? "";
-  const cookieTokenMatch = cookieHeader.match(/(?:^|;\s*)token=([^;]+)/);
-  const cookieToken = cookieTokenMatch ? decodeURIComponent(cookieTokenMatch[1]) : null;
+  // Handle both "token=xxx" and "token=xxx; other=value" formats
+  const cookieTokenMatch = cookieHeader.match(/(?:^|;\s*)token=([^;]*)/);
+  const cookieToken = cookieTokenMatch ? decodeURIComponent(cookieTokenMatch[1].trim()) : null;
 
   const token = bearerToken || headerToken || cookieToken;
 

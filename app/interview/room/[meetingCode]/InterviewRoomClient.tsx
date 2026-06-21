@@ -15,6 +15,7 @@ import {
   hasScreenShare,
 } from "@stream-io/video-react-sdk";
 import "@stream-io/video-react-sdk/dist/css/styles.css";
+import { ChatProvider } from "@/app/components/interview-room/ChatContext";
 import { useCamMicSync } from "@/app/components/interview-room/CamMicSyncContext";
 import { useEffect, useRef, useState } from "react";
 import type {
@@ -29,6 +30,7 @@ interface Props {
   participantRole: InterviewRole;
   userFullName: string;
   otherParticipantName: string | null;
+  userId: string;
 }
 
 function MeetingGrid() {
@@ -51,9 +53,7 @@ function MeetingGrid() {
         >
           <ParticipantView
             participant={p}
-            trackType={
-              hasScreenShare(p) ? "screenShareTrack" : "videoTrack"
-            }
+            trackType={hasScreenShare(p) ? "screenShareTrack" : "videoTrack"}
           />
         </div>
       ))}
@@ -67,6 +67,7 @@ export default function InterviewRoomClient({
   participantRole,
   userFullName,
   otherParticipantName,
+  userId,
 }: Props) {
   const [questionOpen, setQuestionOpen] = useState(false);
   const [showLiveCoding, setShowLiveCoding] = useState(false);
@@ -158,24 +159,14 @@ export default function InterviewRoomClient({
     initStream();
   }, [meetingCode, role, userFullName, readPersisted]);
 
-  // Sync SDK cam/mic state → sessionStorage so waiting room reflects changes made in meeting room
+  // Sync SDK cam/mic track state → sessionStorage so waiting room reflects changes
   useEffect(() => {
-    if (!streamReady) return;
-    const { useMicrophoneState, useCameraState } = require("@stream-io/video-react-sdk").useCallStateHooks
-      ? require("@stream-io/video-react-sdk")
-      : { useMicrophoneState: () => null, useCameraState: () => null };
-
-    // We'll use a polling approach via the call object since we have it in scope
+    if (!streamReady || !call) return;
     const id = window.setInterval(() => {
-      if (!call) return;
       const micTrack = call.state?.mediaStream?.getAudioTracks()[0];
       const camTrack = call.state?.mediaStream?.getVideoTracks()[0];
-      if (micTrack !== undefined) {
-        setMicEnabled(!micTrack.muted);
-      }
-      if (camTrack !== undefined) {
-        setCameraEnabled(!camTrack.muted);
-      }
+      if (micTrack) setMicEnabled(!micTrack.muted);
+      if (camTrack) setCameraEnabled(!camTrack.muted);
     }, 500);
     return () => clearInterval(id);
   }, [streamReady, call, setCameraEnabled, setMicEnabled]);
@@ -218,55 +209,57 @@ export default function InterviewRoomClient({
   }
 
   return (
-    <StreamVideo client={streamClient}>
-      <StreamCall call={call}>
-        <div className="h-screen w-screen bg-[#051424] text-white flex flex-col">
-          <Header title={title} meetingCode={meetingCode} role={role} />
+    <ChatProvider call={call} meetingCode={meetingCode} currentUserId={userId}>
+      <StreamVideo client={streamClient}>
+        <StreamCall call={call}>
+          <div className="h-screen w-screen bg-[#051424] text-white flex flex-col">
+            <Header title={title} meetingCode={meetingCode} role={role} />
 
-          <main className="flex-1 flex gap-4 p-4 overflow-hidden">
-            {/* VIDEO */}
-            <div className={showLiveCoding ? "w-[45%]" : "w-full"}>
-              <div className="h-full rounded-3xl border border-[#163149] bg-[#07131f] overflow-hidden">
-                {streamReady ? (
-                  <MeetingGrid />
-                ) : (
-                  <div className="h-full flex items-center justify-center">
-                    Loading...
-                  </div>
-                )}
+            <main className="flex-1 flex gap-4 p-4 overflow-hidden">
+              {/* VIDEO */}
+              <div className={showLiveCoding ? "w-[45%]" : "w-full"}>
+                <div className="h-full rounded-3xl border border-[#163149] bg-[#07131f] overflow-hidden">
+                  {streamReady ? (
+                    <MeetingGrid />
+                  ) : (
+                    <div className="h-full flex items-center justify-center">
+                      Loading...
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
 
-            {/* CODING */}
-            {showLiveCoding && (
-              <div className="w-[55%]">
-                {role === "candidate" ? (
-                  <CandidateCodingView />
-                ) : (
-                  <RecruiterCodingView />
-                )}
-              </div>
+              {/* CODING */}
+              {showLiveCoding && (
+                <div className="w-[55%]">
+                  {role === "candidate" ? (
+                    <CandidateCodingView />
+                  ) : (
+                    <RecruiterCodingView />
+                  )}
+                </div>
+              )}
+            </main>
+
+            {streamReady && (
+              <FooterControls
+                role={role}
+                onOpenLiveCoding={() => setShowLiveCoding((p) => !p)}
+                userFullName={userFullName}
+                otherParticipantName={otherParticipantName}
+                call={call}
+                participantRole={participantRole}
+                meetingCode={meetingCode}
+              />
             )}
-          </main>
 
-          {streamReady && (
-            <FooterControls
-              role={role}
-              onOpenLiveCoding={() => setShowLiveCoding((p) => !p)}
-              userFullName={userFullName}
-              otherParticipantName={otherParticipantName}
-              call={call}
-              participantRole={participantRole}
-              meetingCode={meetingCode}
+            <QuestionsDrawer
+              open={questionOpen}
+              onClose={() => setQuestionOpen(false)}
             />
-          )}
-
-          <QuestionsDrawer
-            open={questionOpen}
-            onClose={() => setQuestionOpen(false)}
-          />
-        </div>
-      </StreamCall>
-    </StreamVideo>
+          </div>
+        </StreamCall>
+      </StreamVideo>
+    </ChatProvider>
   );
 }

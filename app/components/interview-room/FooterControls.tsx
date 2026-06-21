@@ -7,6 +7,7 @@ import ParticipantsDrawer from "./ParticipantsDrawer";
 import AIDrawer from "./AIDrawer";
 import { useCallStateHooks } from "@stream-io/video-react-sdk";
 import type { Call } from "@stream-io/video-react-sdk";
+import { useChat } from "./ChatContext";
 
 const SESSION_CAM = "meeting_cam";
 const SESSION_MIC = "meeting_mic";
@@ -57,6 +58,12 @@ export default function FooterControls({
   };
 
   const [showChat, setShowChat] = useState(false);
+  const { unreadCount, markRead } = useChat();
+
+  const handleOpenChat = () => {
+    setShowChat(true);
+    markRead();
+  };
   const [showParticipants, setShowParticipants] = useState(false);
   const [showAI, setShowAI] = useState(false);
   const [showQuestions, setShowQuestions] = useState(false);
@@ -194,10 +201,15 @@ export default function FooterControls({
 
           {/* CHAT */}
           <button
-            onClick={() => setShowChat(true)}
-            className="w-11 h-11 rounded-full flex items-center justify-center border border-[#3b494b] cursor-pointer"
+            onClick={handleOpenChat}
+            className="w-11 h-11 rounded-full flex items-center justify-center border border-[#3b494b] cursor-pointer relative"
           >
             <span className="material-symbols-outlined">chat</span>
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-cyan-400 text-black text-[10px] font-bold flex items-center justify-center">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </button>
         </div>
       </footer>
