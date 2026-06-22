@@ -1,8 +1,26 @@
+import { useState } from "react";
+import Editor from "@monaco-editor/react";
+
 export default function CandidateCodingView() {
+  const [code, setCode] = useState(`from typing import List
+
+class Solution:
+    def twoSum(self, nums: List[int], target: int):
+        seen = {}
+
+        for i, num in enumerate(nums):
+            diff = target - num
+
+            if diff in seen:
+                return [seen[diff], i]
+
+            seen[num] = i`);
+  const [language, setLanguage] = useState("python");
+
   return (
     <div className="w-full h-full flex bg-[#071524] rounded-xl overflow-hidden border border-cyan-500/20">
       {/* LEFT SIDE */}
-      <div className="w-1/2 flex flex-col border-r border-cyan-500/10">
+      <div className="flex-[4] flex flex-col border-r border-cyan-500/10">
         {/* QUESTION */}
         <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
           <h3 className="text-lg font-semibold text-white mb-4">
@@ -50,14 +68,23 @@ export default function CandidateCodingView() {
 
             {/* RIGHT */}
             <div className="flex items-center gap-3">
-              <select className="bg-[#122131] border border-cyan-500/10 text-white px-3 py-1.5 rounded-lg text-sm outline-none focus:border-cyan-400">
-                <option>Python3</option>
-                <option>Java</option>
-                <option>C++</option>
-                <option>JavaScript</option>
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                className="bg-[#122131] border border-cyan-500/10 text-white px-3 py-1.5 rounded-lg text-sm"
+              >
+                <option value="python">Python3</option>
+                <option value="java">Java</option>
+                <option value="cpp">C++</option>
+                <option value="javascript">JavaScript</option>
               </select>
 
-              <button className="px-4 py-1.5 rounded-lg bg-[#16304b] hover:bg-[#1f4368] text-white text-sm transition-colors">
+              <button
+                onClick={() => {
+                  console.log(code);
+                }}
+                className="px-4 py-1.5 rounded-lg bg-[#16304b]"
+              >
                 Run
               </button>
 
@@ -78,7 +105,7 @@ export default function CandidateCodingView() {
       </div>
 
       {/* RIGHT SIDE */}
-      <div className="w-1/2 flex flex-col">
+      <div className="flex-[5] flex flex flex-col">
         {/* EDITOR HEADER */}
         <div className="h-11 flex items-center justify-between px-4 border-b border-cyan-500/10 bg-[#122131]">
           <span className="text-sm text-white/70">solution.py</span>
@@ -91,22 +118,29 @@ export default function CandidateCodingView() {
         </div>
 
         {/* EDITOR */}
-        <div className="flex-1 overflow-auto custom-scrollbar bg-[#0d1c2d] p-6 font-mono text-sm">
-          <pre className="text-white/90 leading-7 whitespace-pre-wrap">
-            {`from typing import List
-
-class Solution:
-    def twoSum(self, nums: List[int], target: int):
-        seen = {}
-
-        for i, num in enumerate(nums):
-            diff = target - num
-
-            if diff in seen:
-                return [seen[diff], i]
-
-            seen[num] = i`}
-          </pre>
+        {/* EDITOR */}
+        <div className="flex-1 bg-[#0d1c2d]">
+          <Editor
+            language={language}
+            height="100%"
+            theme="vs-dark"
+            value={code}
+            onChange={(value) => setCode(value || "")}
+            options={{
+              minimap: {
+                enabled: false,
+              },
+              fontSize: 15,
+              automaticLayout: true,
+              scrollBeyondLastLine: false,
+              tabSize: 4,
+              wordWrap: "on",
+              padding: {
+                top: 16,
+              },
+              lineNumbers: "on",
+            }}
+          />
         </div>
       </div>
     </div>

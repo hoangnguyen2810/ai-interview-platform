@@ -33,23 +33,28 @@ interface Props {
   userId: string;
 }
 
-function MeetingGrid() {
+function MeetingGrid({ showLiveCoding }: { showLiveCoding: boolean }) {
   const { useParticipants } = useCallStateHooks();
   const participants = useParticipants();
 
-  let cols = "grid-cols-1";
   const count = participants.length;
 
-  if (count === 2) cols = "grid-cols-2";
-  else if (count >= 3 && count <= 4) cols = "grid-cols-2";
-  else if (count > 4) cols = "grid-cols-3";
+  let cols = "grid-cols-1";
+
+  if (showLiveCoding) {
+    cols = "grid-cols-1";
+  } else {
+    if (count === 2) cols = "grid-cols-2";
+    else if (count >= 3 && count <= 4) cols = "grid-cols-2";
+    else if (count > 4) cols = "grid-cols-3";
+  }
 
   return (
     <div className={`grid ${cols} gap-4 w-full h-full p-2`}>
       {participants.map((p) => (
         <div
           key={p.sessionId}
-          className="w-full h-full min-h-[300px] rounded-3xl overflow-hidden bg-black flex items-center justify-center"
+          className="w-full h-full rounded-3xl overflow-hidden bg-black"
         >
           <ParticipantView
             participant={p}
@@ -217,10 +222,10 @@ export default function InterviewRoomClient({
 
             <main className="flex-1 flex gap-4 p-4 overflow-hidden">
               {/* VIDEO */}
-              <div className={showLiveCoding ? "w-[45%]" : "w-full"}>
+              <div className={showLiveCoding ? "w-[30%]" : "w-full"}>
                 <div className="h-full rounded-3xl border border-[#163149] bg-[#07131f] overflow-hidden">
                   {streamReady ? (
-                    <MeetingGrid />
+                    <MeetingGrid showLiveCoding={showLiveCoding} />
                   ) : (
                     <div className="h-full flex items-center justify-center">
                       Loading...
@@ -229,7 +234,7 @@ export default function InterviewRoomClient({
                 </div>
               </div>
               {showLiveCoding && (
-                <div className="w-[55%]">
+                <div className="w-[70%]">
                   {role === "candidate" ? (
                     <CandidateCodingView />
                   ) : (
