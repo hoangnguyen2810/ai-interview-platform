@@ -14,6 +14,7 @@ import {
 } from "@stream-io/video-react-sdk";
 import "@stream-io/video-react-sdk/dist/css/styles.css";
 import { ChatProvider } from "@/app/components/interview-room/ChatContext";
+import { QuestionProvider } from "@/app/components/interview-room/QuestionContext";
 import { useCamMicSync } from "@/app/components/interview-room/CamMicSyncContext";
 import { useEffect, useRef, useState } from "react";
 import type {
@@ -215,55 +216,58 @@ export default function InterviewRoomClient({
 
   return (
     <ChatProvider call={call} meetingCode={meetingCode} currentUserId={userId}>
-      <StreamVideo client={streamClient}>
-        <StreamCall call={call}>
-          <div className="h-screen w-screen bg-[#051424] text-white flex flex-col">
-            <Header title={title} meetingCode={meetingCode} role={role} />
+      <QuestionProvider call={call} meetingCode={meetingCode}>
+        <StreamVideo client={streamClient}>
+          <StreamCall call={call}>
+            <div className="h-screen w-screen bg-[#051424] text-white flex flex-col">
+              <Header title={title} meetingCode={meetingCode} role={role} />
 
-            <main className="flex-1 flex gap-4 p-4 overflow-hidden">
-              {/* VIDEO */}
-              <div className={showLiveCoding ? "w-[30%]" : "w-full"}>
-                <div className="h-full rounded-3xl border border-[#163149] bg-[#07131f] overflow-hidden">
-                  {streamReady ? (
-                    <MeetingGrid showLiveCoding={showLiveCoding} />
-                  ) : (
-                    <div className="h-full flex items-center justify-center">
-                      Loading...
-                    </div>
-                  )}
+              <main className="flex-1 flex gap-4 p-4 overflow-hidden">
+                {/* VIDEO */}
+                <div className={showLiveCoding ? "w-[30%]" : "w-full"}>
+                  <div className="h-full rounded-3xl border border-[#163149] bg-[#07131f] overflow-hidden">
+                    {streamReady ? (
+                      <MeetingGrid showLiveCoding={showLiveCoding} />
+                    ) : (
+                      <div className="h-full flex items-center justify-center">
+                        Loading...
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-              {showLiveCoding && (
-                <div className="w-[70%]">
-                  {role === "candidate" ? (
-                    <CandidateCodingView />
-                  ) : (
-                    <RecruiterCodingView />
-                  )}
-                </div>
+                {showLiveCoding && (
+                  <div className="w-[70%]">
+                    {role === "candidate" ? (
+                      <CandidateCodingView />
+                    ) : (
+                      <RecruiterCodingView />
+                    )}
+                  </div>
+                )}
+              </main>
+
+              {streamReady && (
+                <FooterControls
+                  role={role}
+                  onOpenLiveCoding={() => setShowLiveCoding((p) => !p)}
+                  userFullName={userFullName}
+                  otherParticipantName={otherParticipantName}
+                  call={call}
+                  participantRole={participantRole}
+                  meetingCode={meetingCode}
+                />
               )}
-              {/* CODING */}
-            </main>
 
-            {streamReady && (
-              <FooterControls
+              <QuestionsDrawer
+                open={questionOpen}
+                onClose={() => setQuestionOpen(false)}
                 role={role}
-                onOpenLiveCoding={() => setShowLiveCoding((p) => !p)}
-                userFullName={userFullName}
-                otherParticipantName={otherParticipantName}
-                call={call}
-                participantRole={participantRole}
                 meetingCode={meetingCode}
               />
-            )}
-
-            <QuestionsDrawer
-              open={questionOpen}
-              onClose={() => setQuestionOpen(false)}
-            />
-          </div>
-        </StreamCall>
-      </StreamVideo>
+            </div>
+          </StreamCall>
+        </StreamVideo>
+      </QuestionProvider>
     </ChatProvider>
   );
 }

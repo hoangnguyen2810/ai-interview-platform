@@ -1,11 +1,18 @@
 "use client";
 
+import { useQuestions } from "./QuestionContext";
+import RecruiterQuestionsPanel from "./RecruiterQuestionsPanel";
+
 type Props = {
   open: boolean;
   onClose: () => void;
+  role: "recruiter" | "candidate";
+  meetingCode: string;
 };
 
-export default function QuestionsDrawer({ open, onClose }: Props) {
+export default function QuestionsDrawer({ open, onClose, role, meetingCode }: Props) {
+  const { questions, activeQuestion, isLoading, error } = useQuestions();
+
   return (
     <>
       {/* Overlay */}
@@ -37,10 +44,63 @@ export default function QuestionsDrawer({ open, onClose }: Props) {
         </div>
 
         <div className="p-6 overflow-y-auto h-[calc(100vh-64px)]">
-          {/* Nội dung câu hỏi */}
-          <p className="text-gray-300">
-            Interview questions sẽ hiển thị ở đây.
-          </p>
+          {role === "recruiter" ? (
+            <RecruiterQuestionsPanel meetingCode={meetingCode} />
+          ) : (
+            /* ── Candidate view ── */
+            <div className="flex flex-col gap-4">
+              {isLoading && (
+                <p className="text-gray-500 text-sm">Đang tải câu hỏi...</p>
+              )}
+              {error && (
+                <p className="text-red-400 text-sm">{error}</p>
+              )}
+              {!isLoading && questions.length === 0 && (
+                <div className="text-center py-12">
+                  <span className="material-symbols-outlined text-4xl text-gray-600">
+                    pending_actions
+                  </span>
+                  <p className="text-gray-500 text-sm mt-2">
+                    Chưa có câu hỏi nào được giao
+                  </p>
+                </div>
+              )}
+              {questions.length > 0 && (
+                <div className="space-y-3">
+                  {questions.map((q) => {
+                    const isActive = activeQuestion?.id === q.id;
+                    return (
+                      <div
+                        key={q.id}
+                        className={`
+                          p-4 rounded-lg border transition-all
+                          ${
+                            isActive
+                              ? "border-cyan-500 bg-cyan-500/10"
+                              : "border-[#1e3a50] bg-[#0d2035] opacity-60"
+                          }
+                        `}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          {isActive && (
+                            <span className="material-symbols-outlined text-cyan-400 text-sm">
+                              play_arrow
+                            </span>
+                          )}
+                          <span className="text-white font-semibold text-sm">
+                            {q.title}
+                          </span>
+                        </div>
+                        <p className="text-gray-400 text-xs leading-relaxed">
+                          {q.description}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </aside>
     </>

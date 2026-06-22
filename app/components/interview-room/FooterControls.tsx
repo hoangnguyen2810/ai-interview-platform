@@ -253,6 +253,8 @@ export default function FooterControls({
           <QuestionsDrawer
             open={showQuestions}
             onClose={() => setShowQuestions(false)}
+            role={role}
+            meetingCode={meetingCode}
           />
         </>
       )}

@@ -1,7 +1,9 @@
 import { useState } from "react";
 import Editor from "@monaco-editor/react";
+import { useQuestions } from "../QuestionContext";
 
 export default function CandidateCodingView() {
+  const { activeQuestion } = useQuestions();
   const [code, setCode] = useState(`from typing import List
 
 class Solution:
@@ -17,39 +19,52 @@ class Solution:
             seen[num] = i`);
   const [language, setLanguage] = useState("python");
 
+  const question = activeQuestion;
+
   return (
     <div className="w-full h-full flex bg-[#071524] rounded-xl overflow-hidden border border-cyan-500/20">
       {/* LEFT SIDE */}
       <div className="flex-[4] flex flex-col border-r border-cyan-500/10">
         {/* QUESTION */}
         <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">
-            Problem Description
-          </h3>
-
-          <p className="text-white/80 leading-7">
-            Given an array of integers nums and an integer target, return
-            indices of the two numbers such that they add up to target.
-          </p>
-
-          <div className="mt-8">
-            <h4 className="text-cyan-400 font-medium mb-2">Example 1</h4>
-
-            <div className="bg-[#122131] border border-cyan-500/10 rounded-lg p-4 text-sm text-white/80">
-              <p>Input: nums = [2,7,11,15], target = 9</p>
-              <p>Output: [0,1]</p>
+          {!question ? (
+            <div className="flex flex-col items-center justify-center h-full text-center gap-3">
+              <span className="material-symbols-outlined text-5xl text-gray-600">
+                pending_actions
+              </span>
+              <p className="text-gray-500 text-sm">
+                Đang chờ recruiter giao câu hỏi...
+              </p>
             </div>
-          </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-3 mb-4">
+                <h3 className="text-lg font-semibold text-white">
+                  {question.title}
+                </h3>
+                {question.difficulty && (
+                  <span
+                    className={`
+                      text-xs px-2 py-0.5 rounded-full font-semibold
+                      ${
+                        question.difficulty === "EASY"
+                          ? "bg-green-500/10 text-green-400"
+                          : question.difficulty === "MEDIUM"
+                            ? "bg-yellow-500/10 text-yellow-400"
+                            : "bg-red-500/10 text-red-400"
+                      }
+                    `}
+                  >
+                    {question.difficulty}
+                  </span>
+                )}
+              </div>
 
-          <div className="mt-8">
-            <h4 className="text-cyan-400 font-medium mb-2">Constraints</h4>
-
-            <ul className="space-y-2 text-sm text-white/80">
-              <li>• 2 ≤ nums.length ≤ 10⁴</li>
-              <li>• -10⁹ ≤ nums[i] ≤ 10⁹</li>
-              <li>• Exactly one valid answer exists.</li>
-            </ul>
-          </div>
+              <p className="text-white/80 leading-7 whitespace-pre-wrap">
+                {question.description}
+              </p>
+            </>
+          )}
         </div>
 
         {/* OUTPUT */}
@@ -105,7 +120,7 @@ class Solution:
       </div>
 
       {/* RIGHT SIDE */}
-      <div className="flex-[5] flex flex flex-col">
+      <div className="flex-[5] flex flex-col">
         {/* EDITOR HEADER */}
         <div className="h-11 flex items-center justify-between px-4 border-b border-cyan-500/10 bg-[#122131]">
           <span className="text-sm text-white/70">solution.py</span>
@@ -118,7 +133,6 @@ class Solution:
         </div>
 
         {/* EDITOR */}
-        {/* EDITOR */}
         <div className="flex-1 bg-[#0d1c2d]">
           <Editor
             language={language}
@@ -127,17 +141,13 @@ class Solution:
             value={code}
             onChange={(value) => setCode(value || "")}
             options={{
-              minimap: {
-                enabled: false,
-              },
+              minimap: { enabled: false },
               fontSize: 15,
               automaticLayout: true,
               scrollBeyondLastLine: false,
               tabSize: 4,
               wordWrap: "on",
-              padding: {
-                top: 16,
-              },
+              padding: { top: 16 },
               lineNumbers: "on",
             }}
           />
