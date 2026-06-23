@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { useRecruiterDashboard } from "./DashboardContext";
 import { useCountdown } from "@/hooks/useCountdown";
+import Link from "next/link";
 
 type Interview = {
   id: string;
@@ -196,9 +197,12 @@ export function UpcomingInterviews() {
         <h2 className="font-headline-lg text-headline-lg">
           Lịch phỏng vấn hôm nay
         </h2>
-        <span className="text-primary-fixed text-sm font-label-sm underline cursor-pointer">
+        <Link
+          href="/recruiter/interviews"
+          className="text-black bg-cyan-400 px-3 py-1 rounded-md text-sm font-medium transition hover:bg-cyan-300 hover:shadow-lg hover:shadow-cyan-400/30"
+        >
           Xem tất cả
-        </span>
+        </Link>
       </div>
 
       {interviews.length === 0 ? (

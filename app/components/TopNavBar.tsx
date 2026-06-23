@@ -26,9 +26,43 @@ export function TopNavBar() {
   return (
     <header className="bg-surface border-b border-outline-variant flex justify-between items-center px-margin-desktop w-full h-16 fixed top-0 z-50">
       <div className="flex items-center gap-8">
-        <span className="font-headline-lg text-headline-lg font-black text-primary-fixed tracking-tight">
-          NeuralCode AI
-        </span>
+        <button
+          onClick={() => {
+            if (role === "CANDIDATE") {
+              router.push("/candidate/dashboard");
+            } else if (role === "RECRUITER") {
+              router.push("/recruiter/dashboard");
+            } else {
+              router.push("/dashboard");
+            }
+          }}
+          className="group relative flex items-center gap-8 cursor-pointer transition-all duration-300 hover:scale-105 active:scale-95"
+        >
+          {/* Glow effect */}
+          <div className="absolute inset-0 rounded-lg bg-cyan-500/20 blur-xl opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+
+          <span
+            className="
+      relative
+      font-headline-lg
+      text-headline-lg
+      font-black
+      tracking-tight
+      bg-gradient-to-r
+      from-cyan-400
+      via-blue-500
+      to-purple-500
+      bg-clip-text
+      text-transparent
+      transition-all
+      duration-300
+      group-hover:brightness-125
+      group-hover:drop-shadow-[0_0_12px_rgba(34,211,238,0.7)]
+    "
+          >
+            CodePilot AI
+          </span>
+        </button>
       </div>
 
       <div className="flex items-center gap-4 relative">

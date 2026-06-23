@@ -26,7 +26,7 @@ export default function Header({ title, meetingCode, role }: HeaderProps) {
 
         <span className="font-bold text-xl tracking-tight">
           NEURAL
-          <span className="text-cyan-400">SYNTAX</span>
+          <span className="text-cyan-400">CodePilot AI</span>
         </span>
       </div>
 
