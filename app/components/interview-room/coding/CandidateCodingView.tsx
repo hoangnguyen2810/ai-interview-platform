@@ -1,23 +1,31 @@
-import { useState } from "react";
-import Editor from "@monaco-editor/react";
+"use client";
+
+import { useRef } from "react";
+import Editor, { OnMount } from "@monaco-editor/react";
 import { useQuestions } from "../QuestionContext";
+import { CodeProvider, useCode } from "../CodeContext";
 
-export default function CandidateCodingView() {
+function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
   const { activeQuestion } = useQuestions();
-  const [code, setCode] = useState(`from typing import List
+  const {
+    code,
+    language,
+    isConnected,
+    setCode,
+    setLanguage,
+    setCursorPosition,
+  } = useCode();
 
-class Solution:
-    def twoSum(self, nums: List[int], target: int):
-        seen = {}
+  const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 
-        for i, num in enumerate(nums):
-            diff = target - num
+  const handleEditorMount: OnMount = (editor) => {
+    editorRef.current = editor;
 
-            if diff in seen:
-                return [seen[diff], i]
-
-            seen[num] = i`);
-  const [language, setLanguage] = useState("python");
+    // Track cursor position
+    editor.onDidChangeCursorPosition((e) => {
+      setCursorPosition(e.position.lineNumber, e.position.column);
+    });
+  };
 
   const question = activeQuestion;
 
@@ -123,12 +131,35 @@ class Solution:
       <div className="flex-[5] flex flex-col">
         {/* EDITOR HEADER */}
         <div className="h-11 flex items-center justify-between px-4 border-b border-cyan-500/10 bg-[#122131]">
-          <span className="text-sm text-white/70">solution.py</span>
+          <span className="text-sm text-white/70">
+            solution.
+            {language === "python"
+              ? "py"
+              : language === "java"
+                ? "java"
+                : language === "cpp"
+                  ? "cpp"
+                  : "js"}
+          </span>
 
           <div className="flex items-center gap-3 text-white/50">
-            <button className="hover:text-cyan-400 transition-colors">⚙</button>
-
-            <button className="hover:text-cyan-400 transition-colors">⛶</button>
+            <span
+              className={`text-xs ${isConnected ? "text-green-400" : "text-red-400"}`}
+            >
+              {isConnected ? "● Live" : "○ Disconnected"}
+            </span>
+            <button
+              className="hover:text-cyan-400 transition-colors"
+              title="Settings"
+            >
+              ⚙
+            </button>
+            <button
+              className="hover:text-cyan-400 transition-colors"
+              title="Fullscreen"
+            >
+              ⛶
+            </button>
           </div>
         </div>
 
@@ -140,6 +171,7 @@ class Solution:
             theme="vs-dark"
             value={code}
             onChange={(value) => setCode(value || "")}
+            onMount={handleEditorMount}
             options={{
               minimap: { enabled: false },
               fontSize: 15,
@@ -154,5 +186,19 @@ class Solution:
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Wrapper with CodeProvider ────────────────────────────────────────────────
+
+interface Props {
+  meetingCode: string;
+}
+
+export default function CandidateCodingView({ meetingCode }: Props) {
+  return (
+    <CodeProvider meetingCode={meetingCode} isSender={true}>
+      <CandidateCodingEditor meetingCode={meetingCode} />
+    </CodeProvider>
   );
 }

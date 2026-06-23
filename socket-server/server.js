@@ -16,8 +16,9 @@ const { Server } = require("socket.io");
 const http = require("http");
 const url = require("url");
 
-const PORT = process.env.SOCKET_PORT || 3001;
+const SOCKET_PORT = process.env.SOCKET_PORT || 3001;
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:3000";
+const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || `http://localhost:${SOCKET_PORT}`;
 
 // ─── Create HTTP server + Socket.IO ────────────────────────────────────────────
 
@@ -41,6 +42,19 @@ io.on("connection", (socket) => {
     console.log(`[Socket.IO] ${socket.id} joined room: ${meetingCode}`);
   }
 
+  // ── code:update — relay code changes to everyone in the room ─────────────────
+  socket.on("code:update", (payload) => {
+    const mc = payload?.meetingCode || meetingCode;
+    if (!mc || !payload?.code) return;
+    io.to(mc).emit("code:update", {
+      code: payload.code,
+      language: payload.language,
+      cursorLine: payload.cursorLine,
+      cursorColumn: payload.cursorColumn,
+    });
+    console.log(`[Socket.IO] code:update relay | room: ${mc} | ${payload.code.length} chars`);
+  });
+
   socket.on("disconnect", () => {
     console.log(`[Socket.IO] Disconnected: ${socket.id}`);
   });
@@ -58,12 +72,20 @@ function emitQuestionActivated(meetingCode, question) {
   console.log(`[Socket.IO] → question:activated | room: ${meetingCode} | q: ${question.title}`);
 }
 
+function emitCodeUpdate(meetingCode, payload) {
+  io.to(meetingCode).emit("code:update", payload);
+  console.log(`[Socket.IO] → code:update | room: ${meetingCode} | ${payload.code.length} chars`);
+}
+
 // ─── HTTP endpoint handler ─────────────────────────────────────────────────────
 
 httpServer.on("request", (req, res) => {
   const parsed = url.parse(req.url, true);
   const pathname = parsed.pathname;
   const method = req.method;
+
+  // Skip Socket.IO internal requests (polling, upgrade, etc.)
+  if (pathname.startsWith("/socket.io/")) return;
 
   // CORS preflight
   if (method === "OPTIONS") {
@@ -123,6 +145,29 @@ httpServer.on("request", (req, res) => {
     return;
   }
 
+  // ── POST /emit/code-update ─────────────────────────────────────────────────
+  if (pathname === "/emit/code-update" && method === "POST") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      try {
+        const { meetingCode, code, language, cursorLine, cursorColumn } = JSON.parse(body);
+        if (!meetingCode || !code) {
+          res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+          res.end(JSON.stringify({ error: "missing meetingCode or code" }));
+          return;
+        }
+        emitCodeUpdate(meetingCode, { code, language, cursorLine, cursorColumn });
+        res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+        res.end(JSON.stringify({ success: true }));
+      } catch {
+        res.writeHead(500, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+        res.end(JSON.stringify({ error: "parse error" }));
+      }
+    });
+    return;
+  }
+
   // ── GET /health ──────────────────────────────────────────────────────────────
   if (pathname === "/health" && method === "GET") {
     res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
@@ -137,7 +182,7 @@ httpServer.on("request", (req, res) => {
 
 // ─── Start ─────────────────────────────────────────────────────────────────────
 
-httpServer.listen(PORT, () => {
-  console.log(`[Socket.IO] Server ready on http://localhost:${PORT}`);
+httpServer.listen(SOCKET_PORT, () => {
+  console.log(`[Socket.IO] Server ready on http://localhost:${SOCKET_PORT}`);
   console.log(`[Socket.IO] CORS origin: ${CLIENT_URL}`);
 });

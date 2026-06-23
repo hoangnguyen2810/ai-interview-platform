@@ -238,9 +238,9 @@ export default function InterviewRoomClient({
                 {showLiveCoding && (
                   <div className="w-[70%]">
                     {role === "candidate" ? (
-                      <CandidateCodingView />
+                      <CandidateCodingView meetingCode={meetingCode} />
                     ) : (
-                      <RecruiterCodingView />
+                      <RecruiterCodingView meetingCode={meetingCode} />
                     )}
                   </div>
                 )}

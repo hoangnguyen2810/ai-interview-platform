@@ -1,4 +1,11 @@
-export default function RecruiterCodingView() {
+"use client";
+
+import Editor from "@monaco-editor/react";
+import { CodeProvider, useCode } from "../CodeContext";
+
+function RecruiterCodingEditor({ meetingCode }: { meetingCode: string }) {
+  const { code, language, isConnected, setCode } = useCode();
+
   return (
     <div className="w-full h-full flex flex-col bg-[#071524] rounded-xl overflow-hidden border border-cyan-500/20">
       {/* HEADER */}
@@ -7,13 +14,13 @@ export default function RecruiterCodingView() {
           <h3 className="text-white font-medium">Live Coding</h3>
 
           <span className="px-2 py-0.5 text-xs rounded-md bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-            Python3
+            {language === "python" ? "Python3" : language === "java" ? "Java" : language === "cpp" ? "C++" : "JavaScript"}
           </span>
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="text-xs text-green-400 animate-pulse">
-            ● Typing...
+          <span className={`text-xs ${isConnected ? "text-green-400 animate-pulse" : "text-red-400"}`}>
+            {isConnected ? "● Receiving live code..." : "○ Disconnected"}
           </span>
 
           <span className="px-2 py-0.5 text-xs rounded-md bg-white/5 text-white/60 border border-white/10">
@@ -22,23 +29,27 @@ export default function RecruiterCodingView() {
         </div>
       </div>
 
-      {/* CODE */}
-      <div className="flex-1 overflow-auto custom-scrollbar bg-[#0d1c2d] p-6 font-mono text-sm">
-        <pre className="text-white/90 leading-7 whitespace-pre-wrap">
-          {`from typing import List
-
-class Solution:
-    def twoSum(self, nums: List[int], target: int):
-        seen = {}
-
-        for i, num in enumerate(nums):
-            diff = target - num
-
-            if diff in seen:
-                return [seen[diff], i]
-
-            seen[num] = i`}
-        </pre>
+      {/* CODE EDITOR (read-only for recruiter) */}
+      <div className="flex-1 overflow-hidden bg-[#0d1c2d]">
+        <Editor
+          language={language}
+          height="100%"
+          theme="vs-dark"
+          value={code || "// Waiting for candidate to start coding..."}
+          onChange={() => {}} // read-only
+          options={{
+            readOnly: true,
+            minimap: { enabled: false },
+            fontSize: 15,
+            automaticLayout: true,
+            scrollBeyondLastLine: false,
+            tabSize: 4,
+            wordWrap: "on",
+            padding: { top: 16 },
+            lineNumbers: "on",
+            renderLineHighlight: "none",
+          }}
+        />
       </div>
 
       {/* OUTPUT PANEL */}
@@ -56,27 +67,39 @@ class Solution:
 
         {/* Content */}
         <div className="p-4 text-sm">
-          <div className="flex items-center gap-2 text-green-400 mb-3">
-            ✓ Accepted
+          <div className="flex items-center gap-2 text-yellow-400 mb-3">
+            <span>○ Watching candidate code in real-time</span>
           </div>
 
           <div className="space-y-2 text-white/70">
-            <div>Runtime: 32 ms</div>
-            <div>Memory: 14.2 MB</div>
-            <div>Passed: 12 / 12 test cases</div>
+            <div>Status: {code ? "Code received" : "No code yet"}</div>
+            <div>Characters: {code.length}</div>
           </div>
         </div>
       </div>
 
       {/* FOOTER */}
       <div className="h-10 flex items-center justify-between px-4 border-t border-cyan-500/10 bg-[#0f1f30] text-xs text-white/50">
-        <span>solution.py</span>
+        <span>solution.{language === "python" ? "py" : language === "java" ? "java" : language === "cpp" ? "cpp" : "js"}</span>
 
         <div className="flex items-center gap-4">
-          <span>Candidate Cursor: Line 14</span>
-          <span>Last action: Run Code • 15s ago</span>
+          <span>Real-time sync via Socket.IO</span>
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Wrapper with CodeProvider ────────────────────────────────────────────────
+
+interface Props {
+  meetingCode: string;
+}
+
+export default function RecruiterCodingView({ meetingCode }: Props) {
+  return (
+    <CodeProvider meetingCode={meetingCode} isSender={false}>
+      <RecruiterCodingEditor meetingCode={meetingCode} />
+    </CodeProvider>
   );
 }
