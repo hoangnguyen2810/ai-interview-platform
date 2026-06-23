@@ -14,7 +14,7 @@ const ITEMS = [
 export default function ProfileStatusCard({ profile }: ProfileStatusCardProps) {
   return (
     <div className="glass-panel p-6 rounded-2xl">
-      <h3 className="font-bold mb-4">Profile Status</h3>
+      <h3 className="font-bold mb-4">Trạng thái hồ sơ</h3>
 
       <div className="space-y-3 text-sm">
         {ITEMS.map((item) => {
@@ -22,7 +22,9 @@ export default function ProfileStatusCard({ profile }: ProfileStatusCardProps) {
           return (
             <div key={item.key} className="flex justify-between">
               <span>{item.label}</span>
-              <span className={done ? "text-primary" : "text-on-surface-variant"}>
+              <span
+                className={done ? "text-primary" : "text-on-surface-variant"}
+              >
                 {done ? "✔" : "✕"}
               </span>
             </div>

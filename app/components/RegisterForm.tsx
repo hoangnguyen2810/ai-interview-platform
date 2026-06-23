@@ -1,6 +1,8 @@
 "use client";
 
+import { BriefcaseBusiness, Eye, EyeOff, User } from "lucide-react";
 import { useState } from "react";
+import Image from "next/image";
 
 export default function RegisterForm() {
   const [showPass, setShowPass] = useState(false);
@@ -79,22 +81,26 @@ export default function RegisterForm() {
             className="mb-8 inline-flex items-center justify-center p-4 rounded-xl
             bg-[rgba(15,23,42,0.8)] border border-[rgba(30,41,59,0.5)] shadow-lg"
           >
-            <span className="text-5xl">🧠</span>
+            <span className="text-5xl">
+              <Image
+                src="/favicon.ico"
+                alt="CodePilot AI"
+                width={48}
+                height={48}
+                priority
+              />
+            </span>
           </div>
 
           {/* TITLE */}
           <h1 className="text-[36px] font-bold leading-tight tracking-tighter mb-6">
-            Nâng tầm{" "}
-            <span className="bg-gradient-to-r from-[#dbfcff] to-[#d0bcff] bg-clip-text text-transparent">
-              Tư duy Lập trình
-            </span>{" "}
-            cùng AI
+            Nền tảng Phỏng vấn Thông minh cùng AI
           </h1>
 
           {/* DESC */}
           <p className="text-[#b9cacb] leading-relaxed">
-            Hệ thống phỏng vấn thông minh sử dụng NeuralCode AI để phân tích
-            logic, tối ưu cú pháp và hỗ trợ ứng viên đạt tiềm năng tối đa.
+            Hệ thống phỏng vấn thông minh sử dụng AI để phân tích logic, tối ưu
+            cú pháp và hỗ trợ ứng viên đạt tiềm năng tối đa.
           </p>
 
           {/* TERMINAL */}
@@ -107,7 +113,7 @@ export default function RegisterForm() {
 
             <p>
               <span className="text-[#00dbe9]">const</span> neuralAssistant ={" "}
-              <span className="text-[#d8e3fb]">new</span> NeuralAI();
+              <span className="text-[#d8e3fb]">new</span> CodePilot AI();
             </p>
 
             <p className="text-[#b9cacb]">
@@ -133,15 +139,12 @@ export default function RegisterForm() {
                 className="bg-gradient-to-r from-[#00f0ff] via-[#dbfcff] to-[#d0bcff]
       bg-clip-text text-transparent drop-shadow-[0_0_20px_rgba(0,219,233,0.3)]"
               >
-                NeuralAI Code
+                CodePilot AI
               </span>
             </h1>
             <h2 className="text-[28px] font-semibold text-[#d4e4fa] mb-2">
-              Bắt đầu hành trình của bạn
+              Bắt đầu buổi phỏng vấn của bạn
             </h2>
-            <p className="text-[#b9cacb]">
-              Tham gia cộng đồng kỹ sư tài năng nhất ngay hôm nay.
-            </p>
           </header>
 
           <form onSubmit={handleRegister} className="space-y-6">
@@ -169,9 +172,16 @@ export default function RegisterForm() {
                   peer-checked:border-[#00dbe9]
                   peer-checked:bg-[#273647]/30"
                 >
-                  <span className="text-[#b9cacb] group-hover:text-[#d4e4fa]">
-                    💻
-                  </span>
+                  <User
+                    size={26}
+                    className="
+        text-[#849495]
+        transition-all duration-300
+        group-hover:text-cyan-300
+        peer-checked:text-[#00dbe9]
+      "
+                  />
+
                   <span className="text-[12px] mt-2">Ứng viên</span>
                 </div>
               </label>
@@ -198,7 +208,15 @@ export default function RegisterForm() {
                   peer-checked:border-[#00dbe9]
                   peer-checked:bg-[#273647]/30"
                 >
-                  <span className="text-[#b9cacb]">🏢</span>
+                  <BriefcaseBusiness
+                    size={26}
+                    className="
+        text-[#849495]
+        transition-all duration-300
+        group-hover:text-cyan-300
+      "
+                  />
+
                   <span className="text-[12px] mt-2">Nhà tuyển dụng</span>
                 </div>
               </label>
@@ -234,7 +252,7 @@ export default function RegisterForm() {
                 }
                 className="w-full mt-2 p-3 rounded-lg bg-[#122131]
   border border-[#3b494b] focus:border-[#00f0ff] outline-none"
-                placeholder="example@neuralcode.ai"
+                placeholder="example@codepilot.ai"
               />
             </div>
 
@@ -260,9 +278,21 @@ export default function RegisterForm() {
                 <button
                   type="button"
                   onClick={() => setShowPass(!showPass)}
-                  className="absolute right-3 top-3 text-[#b9cacb]"
+                  className="
+    absolute right-3 top-1/2 -translate-y-1/2
+    w-8 h-8
+    flex items-center justify-center
+    rounded-lg
+    bg-[#122131]
+    border border-[#3b494b]
+    text-[#849495]
+    transition-all duration-300
+    hover:text-[#00f0ff]
+    hover:border-[#00f0ff]
+    hover:bg-[#17324d]
+  "
                 >
-                  {showPass ? "🙈" : "👁️"}
+                  {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
 
@@ -290,25 +320,43 @@ export default function RegisterForm() {
             </div>
 
             {/* TERMS */}
-            <label className="flex w-full items-start gap-3 text-[12px] text-[#b9cacb] mt-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={acceptTerms}
-                onChange={(e) => setAcceptTerms(e.target.checked)}
-                className="mt-1.5 h-4 w-4 shrink-0 accent-[#00f0ff]"
-              />
+            <div className="flex justify-center mt-6">
+              <label className="flex max-w-md items-center gap-3 text-[12px] text-[#b9cacb] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={acceptTerms}
+                  onChange={(e) => setAcceptTerms(e.target.checked)}
+                  className="h-4 w-4 shrink-0 accent-[#00f0ff]"
+                />
 
-              <span className="leading-5 w-full">
-                Tôi đồng ý với{" "}
-                <a href="/terms" className="text-[#00dbe9] hover:underline">
-                  Điều khoản sử dụng
-                </a>{" "}
-                và{" "}
-                <a href="/privacy" className="text-[#00dbe9] hover:underline">
-                  Chính sách bảo mật
-                </a>
-              </span>
-            </label>
+                <span className="leading-5">
+                  Tôi đồng ý với{" "}
+                  <a
+                    href="/terms"
+                    className="
+          text-[#00dbe9]
+          transition-all duration-300
+          hover:text-white
+          hover:drop-shadow-[0_0_8px_rgba(0,240,255,0.8)]
+        "
+                  >
+                    Điều khoản sử dụng
+                  </a>{" "}
+                  và{" "}
+                  <a
+                    href="/privacy"
+                    className="
+          text-[#00dbe9]
+          transition-all duration-300
+          hover:text-white
+          hover:drop-shadow-[0_0_8px_rgba(0,240,255,0.8)]
+        "
+                  >
+                    Chính sách bảo mật
+                  </a>
+                </span>
+              </label>
+            </div>
 
             {/* BUTTON */}
             <button
@@ -330,7 +378,15 @@ export default function RegisterForm() {
           {/* FOOTER */}
           <p className="text-center mt-8 text-[12px] text-[#b9cacb]">
             Đã có tài khoản?{" "}
-            <a className="text-[#00dbe9]" href="/login">
+            <a
+              className="
+          text-[#00dbe9]
+          transition-all duration-300
+          hover:text-white
+          hover:drop-shadow-[0_0_8px_rgba(0,240,255,0.8)]
+        "
+              href="/login"
+            >
               Đăng nhập
             </a>
           </p>

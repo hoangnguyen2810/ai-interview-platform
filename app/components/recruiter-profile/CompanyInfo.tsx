@@ -20,9 +20,7 @@ export default function CompanyInfo({ profile }: CompanyInfoProps) {
         />
         <div>
           <p className="font-semibold">{c.name || "Chưa cập nhật"}</p>
-          <p className="text-xs opacity-60">
-            {profile.position || "—"}
-          </p>
+          <p className="text-xs opacity-60">{profile.position}</p>
         </div>
       </div>
 
@@ -32,7 +30,14 @@ export default function CompanyInfo({ profile }: CompanyInfoProps) {
 
       {c.website && (
         <a
-          className="text-primary underline break-all"
+          className="
+  text-primary
+  no-underline
+  break-all
+  transition-all duration-300
+  hover:text-primary-fixed
+  hover:drop-shadow-[0_0_8px_rgba(0,240,255,0.8)]
+"
           href={c.website}
           target="_blank"
           rel="noreferrer"

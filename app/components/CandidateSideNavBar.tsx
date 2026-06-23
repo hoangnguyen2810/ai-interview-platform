@@ -1,14 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 type NavItem = {
   label: string;
   icon: string;
   href: string;
-  active?: boolean;
 };
 
 type NavGroup = {
@@ -19,19 +18,25 @@ type NavGroup = {
 const NAV_GROUPS: NavGroup[] = [
   {
     title: "Tổng quan",
-    items: [{ label: "Dashboard", icon: "dashboard", href: "#", active: true }],
+    items: [
+      { label: "Trang chủ", icon: "dashboard", href: "/candidate/dashboard" },
+    ],
   },
   {
     title: "Tài nguyên",
     items: [
       { label: "Câu hỏi luyện tập", icon: "quiz", href: "#" },
-      { label: "Kho kiến thức", icon: "menu_book", href: "#" },
+      {
+        label: "Kho kiến thức",
+        icon: "menu_book",
+        href: "/candidate/knowledge",
+      },
     ],
   },
   {
     title: "Cá nhân",
     items: [
-      { label: "Hồ sơ cá nhân", icon: "person", href: "#" },
+      { label: "Hồ sơ cá nhân", icon: "person", href: "/candidate/profile" },
       { label: "Cài đặt", icon: "settings", href: "#" },
     ],
   },
@@ -43,10 +48,10 @@ const AVATAR_URL =
 export function CandidateSideNavBar() {
   const [role, setRole] = useState<string | null>(null);
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     const user = localStorage.getItem("user");
-
     if (user) {
       const parsed = JSON.parse(user);
       setRole(parsed?.role);
@@ -62,6 +67,7 @@ export function CandidateSideNavBar() {
       router.push("/dashboard");
     }
   };
+
   return (
     <aside className="bg-surface-container-lowest border-r border-outline-variant flex flex-col h-full w-sidebar-width fixed left-0 top-16 bottom-0 hidden md:flex z-40">
       <div className="flex flex-col h-full">
@@ -80,23 +86,7 @@ export function CandidateSideNavBar() {
                 />
               </div>
 
-              <span
-                className="
-      text-lg
-      font-black
-      tracking-tight
-      leading-none
-      bg-gradient-to-r
-      from-cyan-400
-      via-blue-500
-      to-indigo-500
-      bg-clip-text
-      text-transparent
-      transition-all
-      duration-300
-      group-hover:drop-shadow-[0_0_12px_rgba(34,211,238,0.6)]
-    "
-              >
+              <span className="text-lg font-black tracking-tight leading-none bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-500 bg-clip-text text-transparent">
                 CodePilot AI
               </span>
             </button>
@@ -112,22 +102,27 @@ export function CandidateSideNavBar() {
               </h3>
 
               <div className="space-y-1">
-                {group.items.map((item) => (
-                  <a
-                    key={item.label}
-                    href={item.href}
-                    className={
-                      item.active
-                        ? "flex items-center gap-3 px-4 py-2.5 bg-secondary-container text-on-secondary-container rounded-lg"
-                        : "flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:bg-surface-container-highest rounded-lg transition"
-                    }
-                  >
-                    <span className="material-symbols-outlined text-[20px]">
-                      {item.icon}
-                    </span>
-                    <span className="text-sm">{item.label}</span>
-                  </a>
-                ))}
+                {group.items.map((item) => {
+                  const isActive =
+                    item.href !== "#" ? pathname.startsWith(item.href) : false;
+
+                  return (
+                    <a
+                      key={item.label}
+                      href={item.href}
+                      className={
+                        isActive
+                          ? "flex items-center gap-3 px-4 py-2.5 bg-secondary-container text-on-secondary-container rounded-lg shadow"
+                          : "flex items-center gap-3 px-4 py-2 text-on-surface-variant hover:bg-surface-container-highest rounded-lg transition"
+                      }
+                    >
+                      <span className="material-symbols-outlined text-[20px]">
+                        {item.icon}
+                      </span>
+                      <span className="text-sm">{item.label}</span>
+                    </a>
+                  );
+                })}
               </div>
             </div>
           ))}

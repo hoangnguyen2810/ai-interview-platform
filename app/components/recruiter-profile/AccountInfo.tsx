@@ -23,21 +23,24 @@ export default function AccountInfo({ profile }: AccountInfoProps) {
     <div className="p-6 rounded-xl border border-outline-variant bg-surface-container space-y-4">
       <h3 className="text-lg font-bold">Tài khoản</h3>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <p className="text-xs opacity-60">Role</p>
-          <p>Recruiter</p>
-        </div>
+      <div className="p-3 rounded bg-surface border border-outline-variant">
+        <p className="text-xs opacity-60 mb-1">Vai trò</p>
+        <p>Nhà tuyển dụng</p>
+      </div>
 
-        <div>
-          <p className="text-xs opacity-60">Joined</p>
-          <p>{formatDate(profile.joinedAt)}</p>
-        </div>
+      <div className="p-3 rounded bg-surface border border-outline-variant">
+        <p className="text-xs opacity-60 mb-1">Tham gia</p>
+        <p>{formatDate(profile.joinedAt)}</p>
+      </div>
 
-        <div>
-          <p className="text-xs opacity-60">Last login</p>
-          <p>{formatDateTime(profile.lastLoginAt)}</p>
-        </div>
+      <div className="p-3 rounded bg-surface border border-outline-variant">
+        <p className="text-xs opacity-60 mb-1">Truy cập gần nhất</p>
+        <p>{formatDateTime(profile.lastLoginAt)}</p>
+      </div>
+
+      <div className="p-3 rounded bg-surface border border-outline-variant">
+        <p className="text-xs opacity-60 mb-1">Trạng thái</p>
+        <p className="text-green-500 font-medium">Đang hoạt động</p>
       </div>
     </div>
   );

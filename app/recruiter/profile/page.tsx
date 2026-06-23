@@ -9,8 +9,6 @@ import EditRecruiterModal from "@/app/components/recruiter-profile/EditRecruiter
 import PersonalInfo from "@/app/components/recruiter-profile/PersonalInfo";
 import ProfileCompletion from "@/app/components/recruiter-profile/ProfileCompletion";
 import ProfileHeader from "@/app/components/recruiter-profile/ProfileHeader";
-import Security from "@/app/components/recruiter-profile/Security";
-import StatsCard from "@/app/components/recruiter-profile/StatsCards";
 
 import { SideNavBar } from "@/app/components/SideNavBar";
 import { TopNavBar } from "@/app/components/TopNavBar";
@@ -97,19 +95,18 @@ export default function RecruiterProfilePage() {
                 profile={profile}
                 onEdit={() => setOpenEdit(true)}
               />
-              <StatsCard stats={stats} />
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-8">
                   <PersonalInfo profile={profile} />
                   <CompanyInfo profile={profile} />
-                  <AccountInfo profile={profile} />
+
                   <ActivityTimeline activities={activities} />
                 </div>
 
                 <div className="space-y-8">
                   <ProfileCompletion profile={profile} />
-                  <Security />
+                  <AccountInfo profile={profile} />
                 </div>
               </div>
             </>

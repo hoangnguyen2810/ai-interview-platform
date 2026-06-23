@@ -48,7 +48,7 @@ export default function SocialLinksCard({ profile }: SocialLinksCardProps) {
     <div className="glass-panel rounded-2xl p-6">
       <h3 className="font-bold mb-4 flex items-center gap-2">
         <span className="material-symbols-outlined text-primary">link</span>
-        Profiles
+        Hồ sơ
       </h3>
 
       <div className="flex flex-col gap-3">

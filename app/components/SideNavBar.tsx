@@ -20,7 +20,7 @@ const NAV_GROUPS: NavGroup[] = [
     title: "Tổng quan",
     items: [
       {
-        label: "Dashboard",
+        label: "Trang chủ",
         icon: "dashboard",
         href: "/recruiter/dashboard",
       },
@@ -65,13 +65,13 @@ const NAV_GROUPS: NavGroup[] = [
     title: "Hệ thống",
     items: [
       {
-        label: "Cài đặt",
-        icon: "settings",
-        href: "#",
+        label: "Hồ sơ cá nhân",
+        icon: "help",
+        href: "/recruiter/profile",
       },
       {
-        label: "Trợ giúp & Hỗ trợ",
-        icon: "help",
+        label: "Cài đặt",
+        icon: "settings",
         href: "#",
       },
     ],

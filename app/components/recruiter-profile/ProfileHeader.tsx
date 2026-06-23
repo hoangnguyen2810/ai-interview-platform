@@ -11,7 +11,7 @@ const FALLBACK_AVATAR = "https://i.pravatar.cc/150";
 
 export default function ProfileHeader({ profile, onEdit }: ProfileHeaderProps) {
   const name = profile.fullName || "Chưa cập nhật";
-  const position = profile.position || "Recruiter";
+  const position = profile.position || "Nhà tuyển dụng";
   const company = profile.company.name || "Chưa cập nhật công ty";
   const avatar = profile.avatarUrl || FALLBACK_AVATAR;
 
@@ -30,25 +30,20 @@ export default function ProfileHeader({ profile, onEdit }: ProfileHeaderProps) {
           {position}
         </span>
 
-        <p className="text-sm opacity-70">{company}</p>
-
         <div className="flex gap-3 mt-4">
           <button
             onClick={onEdit}
-            className="px-4 py-2 bg-primary-container rounded-lg"
+            className="px-4 py-2
+  bg-cyan-500/10
+  border border-cyan-500/30
+  text-cyan-400
+  rounded-lg
+  hover:bg-cyan-500/20
+  hover:text-white
+  transition-all"
           >
-            Edit Profile
+            Chỉnh sửa hồ sơ
           </button>
-          {profile.company.website && (
-            <a
-              className="px-4 py-2 border rounded-lg"
-              href={profile.company.website}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Public Page
-            </a>
-          )}
         </div>
       </div>
     </section>

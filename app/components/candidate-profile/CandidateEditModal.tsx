@@ -35,7 +35,7 @@ export default function CandidateEditModal({ open, onClose }: Props) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="w-[500px] glass-panel rounded-2xl p-6 space-y-4">
         <div className="flex justify-between items-center">
-          <h2 className="text-xl font-bold">Edit Profile</h2>
+          <h2 className="text-xl font-bold">Chỉnh sửa hồ sơ</h2>
 
           <button onClick={onClose} className="text-on-surface-variant">
             ✕

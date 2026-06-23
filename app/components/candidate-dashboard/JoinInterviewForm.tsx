@@ -36,7 +36,7 @@ export function JoinInterviewForm() {
       </div>
 
       <p className="text-sm text-gray-400">
-        Nhập mã phòng mà recruiter đã gửi cho bạn.
+        Nhập mã phòng mà nhà tuyển dụng đã gửi cho bạn.
       </p>
 
       <div className="flex gap-2">

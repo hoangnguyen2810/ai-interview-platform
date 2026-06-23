@@ -22,8 +22,8 @@ export default function CVCard({ profile }: CVCardProps) {
       <div className="glass-panel p-6 rounded-2xl">
         <h3 className="font-bold mb-4">CV File</h3>
         <div className="flex items-center justify-between p-4 bg-surface-container-high rounded-xl text-on-surface-variant text-sm">
-          <span>Chưa upload CV</span>
-          <span>Hãy vào Edit Profile để thêm CV</span>
+          <span>Chưa tải lên CV</span>
+          <span>Hãy vào phần Chỉnh sửa để thêm CV</span>
         </div>
       </div>
     );
