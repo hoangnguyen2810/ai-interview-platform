@@ -1,9 +1,58 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState, useCallback } from "react";
 import Editor, { OnMount } from "@monaco-editor/react";
 import { useQuestions } from "../QuestionContext";
 import { CodeProvider, useCode } from "../CodeContext";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface ExecutionResult {
+  executionId: string;
+  status: string;
+  stdout: string;
+  stderr: string;
+  runtimeMs: number;
+  exitCode: number;
+  success: boolean;
+  error?: string;
+}
+
+// ─── Status Badge Component ──────────────────────────────────────────────────
+
+function StatusBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
+    PENDING: "bg-yellow-500/20 text-yellow-400",
+    RUNNING: "bg-blue-500/20 text-blue-400 animate-pulse",
+    SUCCESS: "bg-green-500/20 text-green-400",
+    TIMEOUT: "bg-orange-500/20 text-orange-400",
+    COMPILE_ERROR: "bg-red-500/20 text-red-400",
+    RUNTIME_ERROR: "bg-red-500/20 text-red-400",
+    SYSTEM_ERROR: "bg-gray-500/20 text-gray-400",
+  };
+
+  const icons: Record<string, string> = {
+    PENDING: "⏳",
+    RUNNING: "⚙️",
+    SUCCESS: "✓",
+    TIMEOUT: "⏱️",
+    COMPILE_ERROR: "⚠️",
+    RUNTIME_ERROR: "⚠️",
+    SYSTEM_ERROR: "❌",
+  };
+
+  return (
+    <span
+      className={`text-xs px-2 py-1 rounded-full font-medium ${
+        styles[status] || "bg-gray-500/20 text-gray-400"
+      }`}
+    >
+      {icons[status] || "?"} {status}
+    </span>
+  );
+}
+
+// ─── Main Editor Component ───────────────────────────────────────────────────
 
 function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
   const { activeQuestion } = useQuestions();
@@ -16,16 +65,74 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
     setCursorPosition,
   } = useCode();
 
+  // ─── State ────────────────────────────────────────────────────────────────
+  const [stdin, setStdin] = useState("");
+  const [isRunning, setIsRunning] = useState(false);
+  const [result, setResult] = useState<ExecutionResult | null>(null);
+  const [activeTab, setActiveTab] = useState<"testcase" | "result">("testcase");
+
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 
+  // ─── Handlers ────────────────────────────────────────────────────────────
   const handleEditorMount: OnMount = (editor) => {
     editorRef.current = editor;
 
-    // Track cursor position
     editor.onDidChangeCursorPosition((e) => {
       setCursorPosition(e.position.lineNumber, e.position.column);
     });
   };
+
+  const handleRun = useCallback(async () => {
+    if (!code.trim()) return;
+
+    setIsRunning(true);
+    setResult(null);
+    setActiveTab("result");
+
+    try {
+      const response = await fetch("/api/sandbox/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code,
+          language,
+          stdin,
+          meetingCode,
+          questionId: activeQuestion?.id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setResult({
+          executionId: data.executionId || "",
+          status: "SYSTEM_ERROR",
+          stdout: "",
+          stderr: data.error || "Execution failed",
+          runtimeMs: 0,
+          exitCode: -1,
+          success: false,
+          error: data.details,
+        });
+      } else {
+        setResult(data);
+      }
+    } catch (error) {
+      setResult({
+        executionId: "",
+        status: "SYSTEM_ERROR",
+        stdout: "",
+        stderr: error instanceof Error ? error.message : "Network error",
+        runtimeMs: 0,
+        exitCode: -1,
+        success: false,
+        error: "Failed to connect to execution service",
+      });
+    } finally {
+      setIsRunning(false);
+    }
+  }, [code, language, stdin, meetingCode, activeQuestion?.id]);
 
   const question = activeQuestion;
 
@@ -78,18 +185,35 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
         {/* OUTPUT */}
         <div className="h-56 border-t border-cyan-500/10 bg-[#0d1c2d]">
           <div className="flex items-center justify-between px-4 border-b border-cyan-500/10">
-            {/* LEFT */}
+            {/* TABS */}
             <div className="flex items-center">
-              <button className="px-4 py-3 text-cyan-400 border-b-2 border-cyan-400">
+              <button
+                onClick={() => setActiveTab("testcase")}
+                className={`px-4 py-3 text-sm transition-colors ${
+                  activeTab === "testcase"
+                    ? "text-cyan-400 border-b-2 border-cyan-400"
+                    : "text-white/50 hover:text-cyan-300"
+                }`}
+              >
                 Testcase
               </button>
 
-              <button className="px-4 py-3 text-white/50 hover:text-cyan-300 transition-colors">
+              <button
+                onClick={() => setActiveTab("result")}
+                className={`px-4 py-3 text-sm transition-colors flex items-center gap-2 ${
+                  activeTab === "result"
+                    ? "text-cyan-400 border-b-2 border-cyan-400"
+                    : "text-white/50 hover:text-cyan-300"
+                }`}
+              >
                 Test Result
+                {result && (
+                  <StatusBadge status={result.status} />
+                )}
               </button>
             </div>
 
-            {/* RIGHT */}
+            {/* ACTIONS */}
             <div className="flex items-center gap-3">
               <select
                 value={language}
@@ -103,12 +227,18 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
               </select>
 
               <button
-                onClick={() => {
-                  console.log(code);
-                }}
-                className="px-4 py-1.5 rounded-lg bg-[#16304b]"
+                onClick={handleRun}
+                disabled={isRunning || !code.trim()}
+                className="px-4 py-1.5 rounded-lg bg-[#16304b] hover:bg-[#1e3a5f] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                Run
+                {isRunning ? (
+                  <>
+                    <span className="animate-spin">⚙</span>
+                    Running...
+                  </>
+                ) : (
+                  "Run"
+                )}
               </button>
 
               <button className="px-4 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-[#051424] font-semibold text-sm transition-colors">
@@ -117,12 +247,69 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
             </div>
           </div>
 
-          <div className="p-4">
-            <textarea
-              className="w-full h-32 bg-[#122131] border border-cyan-500/10 focus:border-cyan-400 rounded-lg p-3 text-white resize-none outline-none"
-              defaultValue={`[2,7,11,15]
-9`}
-            />
+          {/* CONTENT */}
+          <div className="p-4 h-32 overflow-auto">
+            {activeTab === "testcase" ? (
+              <textarea
+                value={stdin}
+                onChange={(e) => setStdin(e.target.value)}
+                placeholder="Enter input for your code (optional)..."
+                className="w-full h-full bg-[#122131] border border-cyan-500/10 focus:border-cyan-400 rounded-lg p-3 text-white resize-none outline-none placeholder-white/30"
+              />
+            ) : (
+              <div className="space-y-2">
+                {isRunning ? (
+                  <div className="flex items-center gap-2 text-blue-400">
+                    <span className="animate-spin">⚙</span>
+                    <span>Executing code in sandbox...</span>
+                  </div>
+                ) : result ? (
+                  <>
+                    {/* Runtime info */}
+                    <div className="flex items-center gap-4 text-xs text-white/50 mb-2">
+                      <span>
+                        Status: <StatusBadge status={result.status} />
+                      </span>
+                      {result.runtimeMs > 0 && (
+                        <span>Runtime: {result.runtimeMs}ms</span>
+                      )}
+                      {result.exitCode !== undefined && (
+                        <span>Exit code: {result.exitCode}</span>
+                      )}
+                    </div>
+
+                    {/* Stdout */}
+                    {result.stdout && (
+                      <div>
+                        <p className="text-xs text-green-400 mb-1">Output:</p>
+                        <pre className="text-sm text-white/90 bg-[#0a1929] rounded p-2 overflow-x-auto">
+                          {result.stdout}
+                        </pre>
+                      </div>
+                    )}
+
+                    {/* Stderr */}
+                    {result.stderr && (
+                      <div>
+                        <p className="text-xs text-red-400 mb-1">Error:</p>
+                        <pre className="text-sm text-red-300 bg-[#1a0a0a] rounded p-2 overflow-x-auto">
+                          {result.stderr}
+                        </pre>
+                      </div>
+                    )}
+
+                    {/* No output */}
+                    {!result.stdout && !result.stderr && (
+                      <p className="text-white/50 text-sm">No output</p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-white/50 text-sm">
+                    Click "Run" to execute your code
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

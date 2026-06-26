@@ -4,7 +4,7 @@ import { MobileBottomNav } from "../../components/recruiter-dashboard/MobileBott
 import { HeroSection } from "../../components/recruiter-dashboard/HeroSection";
 import { QuickStats } from "../../components/recruiter-dashboard/QuickStats";
 import { UpcomingInterviews } from "../../components/recruiter-dashboard/UpcomingInterviews";
-import { RecentEvaluations } from "../../components/recruiter-dashboard/RecentEvaluations";
+import { RecentInterviews } from "../../componen../../components/recruiter-dashboard/RecentInterviews";
 import { AIAssistantPanel } from "@/app/components/recruiter-dashboard/AIAssistantPanel";
 import { DashboardShell } from "@/app/components/recruiter-dashboard/DashboardShell";
 
@@ -20,7 +20,7 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
             <div className="lg:col-span-2 space-y-6">
               <UpcomingInterviews />
-              <RecentEvaluations />
+              <RecentInterviews />
             </div>
             <AIAssistantPanel />
           </div>

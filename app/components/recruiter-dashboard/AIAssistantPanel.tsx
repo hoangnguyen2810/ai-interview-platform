@@ -2,7 +2,7 @@ export function AIAssistantPanel() {
   return (
     <div className="space-y-6">
       <h2 className="font-headline-lg text-headline-lg">
-        AI Hỗ trợ tạo chuỗi phỏng vấn
+        Hỗ trợ tạo chuỗi phỏng vấn
       </h2>
       <div className="glass-card rounded-2xl p-6 space-y-6 neon-border-hover transition-all">
         <div className="space-y-4">
@@ -17,7 +17,7 @@ export function AIAssistantPanel() {
                 Thiết lập chuỗi
               </h3>
               <p className="text-[10px] text-primary-fixed-dim uppercase tracking-widest">
-                Bulk AI Engine
+                CodePilot AI Engine
               </p>
             </div>
           </div>
@@ -77,16 +77,6 @@ export function AIAssistantPanel() {
           <p className="text-[11px] text-on-surface-variant leading-relaxed">
             Hệ thống sẽ tự động đối chiếu hồ sơ với JD để gợi ý thứ tự phỏng vấn
             tối ưu nhất.
-          </p>
-        </div>
-      </div>
-      <div className="relative h-32 rounded-2xl overflow-hidden glass-card">
-        <div className="absolute inset-0 bg-gradient-to-t from-surface to-transparent p-5 flex flex-col justify-end">
-          <div className="font-bold text-on-surface text-sm">
-            Cộng đồng Interviewers
-          </div>
-          <p className="text-[10px] text-on-surface-variant">
-            Kết nối và chia sẻ cùng 2,000+ chuyên gia.
           </p>
         </div>
       </div>

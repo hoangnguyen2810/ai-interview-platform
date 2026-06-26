@@ -56,13 +56,6 @@ export interface RecruiterProfile {
   company: RecruiterCompany;
 }
 
-export interface RecruiterStats {
-  openJobs: number;
-  applications: number;
-  aiInterviews: number;
-  hired: number;
-}
-
 export interface RecruiterActivity {
   type: string;
   text: string;

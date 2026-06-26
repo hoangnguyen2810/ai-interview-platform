@@ -38,7 +38,7 @@ export default function ActivityTimeline({
         <div className="space-y-4 border-l border-outline-variant pl-4">
           {activities.map((a, idx) => (
             <div key={`${a.type}-${idx}`}>
-              <p>{a.text}</p>
+              <p>Đã tạo phòng phỏng vấn #{a.text.split("#")[1]?.slice(0, 8)}</p>
               <p className="text-xs opacity-60">{timeAgo(a.at)}</p>
             </div>
           ))}

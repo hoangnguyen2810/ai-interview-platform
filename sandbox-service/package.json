@@ -1,0 +1,16 @@
+{
+  "name": "sandbox-service",
+  "version": "1.0.0",
+  "description": "Docker-based code execution sandbox for coding interviews",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "dockerode": "^4.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

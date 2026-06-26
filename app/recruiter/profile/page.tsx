@@ -14,11 +14,7 @@ import { SideNavBar } from "@/app/components/SideNavBar";
 import { TopNavBar } from "@/app/components/TopNavBar";
 
 import { fetchRecruiterProfile } from "@/lib/profile-api";
-import type {
-  RecruiterActivity,
-  RecruiterProfile,
-  RecruiterStats,
-} from "@/lib/profile-types";
+import type { RecruiterActivity, RecruiterProfile } from "@/lib/profile-types";
 
 const EMPTY_PROFILE: RecruiterProfile = {
   userId: "",
@@ -38,16 +34,9 @@ const EMPTY_PROFILE: RecruiterProfile = {
   company: { name: "", website: "", description: "", logoUrl: "" },
 };
 
-const EMPTY_STATS: RecruiterStats = {
-  openJobs: 0,
-  applications: 0,
-  aiInterviews: 0,
-  hired: 0,
-};
-
 export default function RecruiterProfilePage() {
   const [profile, setProfile] = useState<RecruiterProfile>(EMPTY_PROFILE);
-  const [stats, setStats] = useState<RecruiterStats>(EMPTY_STATS);
+
   const [activities, setActivities] = useState<RecruiterActivity[]>([]);
   const [openEdit, setOpenEdit] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -57,9 +46,8 @@ export default function RecruiterProfilePage() {
     setLoading(true);
     setError("");
     try {
-      const { profile, stats, activities } = await fetchRecruiterProfile();
+      const { profile, activities } = await fetchRecruiterProfile();
       setProfile(profile);
-      setStats(stats);
       setActivities(activities);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không thể tải hồ sơ");
