@@ -1,11 +1,9 @@
 "use client";
 
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import Editor, { OnMount } from "@monaco-editor/react";
 import { useQuestions } from "../QuestionContext";
 import { CodeProvider, useCode } from "../CodeContext";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ExecutionResult {
   executionId: string;
@@ -17,8 +15,6 @@ interface ExecutionResult {
   success: boolean;
   error?: string;
 }
-
-// ─── Status Badge Component ──────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
@@ -52,8 +48,6 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-// ─── Main Editor Component ───────────────────────────────────────────────────
-
 function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
   const { activeQuestion } = useQuestions();
   const {
@@ -65,15 +59,45 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
     setCursorPosition,
   } = useCode();
 
-  // ─── State ────────────────────────────────────────────────────────────────
-  const [stdin, setStdin] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<ExecutionResult | null>(null);
-  const [activeTab, setActiveTab] = useState<"testcase" | "result">("testcase");
 
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+  const [outputHeight, setOutputHeight] = useState(224); // ~ h-56
+  const isResizing = useRef(false);
 
-  // ─── Handlers ────────────────────────────────────────────────────────────
+  const handleMouseDown = () => {
+    isResizing.current = true;
+  };
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isResizing.current) return;
+
+    const container = document.getElementById("left-panel");
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    const newHeight = rect.bottom - e.clientY;
+
+    if (newHeight >= 120 && newHeight <= 500) {
+      setOutputHeight(newHeight);
+    }
+  }, []);
+
+  const handleMouseUp = useCallback(() => {
+    isResizing.current = false;
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [handleMouseMove, handleMouseUp]);
+
   const handleEditorMount: OnMount = (editor) => {
     editorRef.current = editor;
 
@@ -87,7 +111,6 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
 
     setIsRunning(true);
     setResult(null);
-    setActiveTab("result");
 
     try {
       const response = await fetch("/api/sandbox/execute", {
@@ -96,7 +119,7 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
         body: JSON.stringify({
           code,
           language,
-          stdin,
+          stdin: "",
           meetingCode,
           questionId: activeQuestion?.id,
         }),
@@ -132,14 +155,17 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
     } finally {
       setIsRunning(false);
     }
-  }, [code, language, stdin, meetingCode, activeQuestion?.id]);
+  }, [code, language, meetingCode, activeQuestion?.id]);
 
   const question = activeQuestion;
 
   return (
     <div className="w-full h-full flex bg-[#071524] rounded-xl overflow-hidden border border-cyan-500/20">
       {/* LEFT SIDE */}
-      <div className="flex-[4] flex flex-col border-r border-cyan-500/10">
+      <div
+        id="left-panel"
+        className="flex-[4] flex flex-col border-r border-cyan-500/10"
+      >
         {/* QUESTION */}
         <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
           {!question ? (
@@ -157,6 +183,7 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
                 <h3 className="text-lg font-semibold text-white">
                   {question.title}
                 </h3>
+
                 {question.difficulty && (
                   <span
                     className={`
@@ -182,50 +209,24 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
           )}
         </div>
 
-        {/* OUTPUT */}
-        <div className="h-56 border-t border-cyan-500/10 bg-[#0d1c2d]">
-          <div className="flex items-center justify-between px-4 border-b border-cyan-500/10">
-            {/* TABS */}
-            <div className="flex items-center">
-              <button
-                onClick={() => setActiveTab("testcase")}
-                className={`px-4 py-3 text-sm transition-colors ${
-                  activeTab === "testcase"
-                    ? "text-cyan-400 border-b-2 border-cyan-400"
-                    : "text-white/50 hover:text-cyan-300"
-                }`}
-              >
-                Testcase
-              </button>
+        <div
+          onMouseDown={handleMouseDown}
+          className="h-1 cursor-row-resize bg-cyan-500/20 hover:bg-cyan-400 transition"
+        ></div>
 
-              <button
-                onClick={() => setActiveTab("result")}
-                className={`px-4 py-3 text-sm transition-colors flex items-center gap-2 ${
-                  activeTab === "result"
-                    ? "text-cyan-400 border-b-2 border-cyan-400"
-                    : "text-white/50 hover:text-cyan-300"
-                }`}
-              >
-                Test Result
-                {result && (
-                  <StatusBadge status={result.status} />
-                )}
+        {/* OUTPUT (ONLY) */}
+        <div
+          style={{ height: outputHeight }}
+          className="border-t border-cyan-500/10 bg-[#0d1c2d] flex flex-col"
+        >
+          <div className="flex items-center justify-between px-4 border-b border-cyan-500/10">
+            <div className="flex items-center">
+              <button className="px-4 py-3 text-sm text-cyan-400 border-b-2 border-cyan-400">
+                Output
               </button>
             </div>
 
-            {/* ACTIONS */}
             <div className="flex items-center gap-3">
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                className="bg-[#122131] border border-cyan-500/10 text-white px-3 py-1.5 rounded-lg text-sm"
-              >
-                <option value="python">Python3</option>
-                <option value="java">Java</option>
-                <option value="cpp">C++</option>
-                <option value="javascript">JavaScript</option>
-              </select>
-
               <button
                 onClick={handleRun}
                 disabled={isRunning || !code.trim()}
@@ -247,68 +248,52 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
             </div>
           </div>
 
-          {/* CONTENT */}
-          <div className="p-4 h-32 overflow-auto">
-            {activeTab === "testcase" ? (
-              <textarea
-                value={stdin}
-                onChange={(e) => setStdin(e.target.value)}
-                placeholder="Enter input for your code (optional)..."
-                className="w-full h-full bg-[#122131] border border-cyan-500/10 focus:border-cyan-400 rounded-lg p-3 text-white resize-none outline-none placeholder-white/30"
-              />
-            ) : (
-              <div className="space-y-2">
-                {isRunning ? (
-                  <div className="flex items-center gap-2 text-blue-400">
-                    <span className="animate-spin">⚙</span>
-                    <span>Executing code in sandbox...</span>
-                  </div>
-                ) : result ? (
-                  <>
-                    {/* Runtime info */}
-                    <div className="flex items-center gap-4 text-xs text-white/50 mb-2">
-                      <span>
-                        Status: <StatusBadge status={result.status} />
-                      </span>
-                      {result.runtimeMs > 0 && (
-                        <span>Runtime: {result.runtimeMs}ms</span>
-                      )}
-                      {result.exitCode !== undefined && (
-                        <span>Exit code: {result.exitCode}</span>
-                      )}
-                    </div>
-
-                    {/* Stdout */}
-                    {result.stdout && (
-                      <div>
-                        <p className="text-xs text-green-400 mb-1">Output:</p>
-                        <pre className="text-sm text-white/90 bg-[#0a1929] rounded p-2 overflow-x-auto">
-                          {result.stdout}
-                        </pre>
-                      </div>
-                    )}
-
-                    {/* Stderr */}
-                    {result.stderr && (
-                      <div>
-                        <p className="text-xs text-red-400 mb-1">Error:</p>
-                        <pre className="text-sm text-red-300 bg-[#1a0a0a] rounded p-2 overflow-x-auto">
-                          {result.stderr}
-                        </pre>
-                      </div>
-                    )}
-
-                    {/* No output */}
-                    {!result.stdout && !result.stderr && (
-                      <p className="text-white/50 text-sm">No output</p>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-white/50 text-sm">
-                    Click "Run" to execute your code
-                  </p>
-                )}
+          <div className="p-4 h-32 overflow-y-auto custom-scrollbar">
+            {isRunning ? (
+              <div className="flex items-center gap-2 text-blue-400">
+                <span className="animate-spin">⚙</span>
+                <span>Thực thi mã trong môi trường (sandbox)...</span>
               </div>
+            ) : result ? (
+              <>
+                <div className="flex items-center gap-4 text-xs text-white/50 mb-2">
+                  <span>
+                    Status: <StatusBadge status={result.status} />
+                  </span>
+                  {result.runtimeMs > 0 && (
+                    <span>Runtime: {result.runtimeMs}ms</span>
+                  )}
+                  {result.exitCode !== undefined && (
+                    <span>Exit code: {result.exitCode}</span>
+                  )}
+                </div>
+
+                {result.stdout && (
+                  <div>
+                    <p className="text-xs text-green-400 mb-1">Output:</p>
+                    <pre className="text-sm text-white/90 bg-[#0a1929] rounded p-2 overflow-x-auto">
+                      {result.stdout}
+                    </pre>
+                  </div>
+                )}
+
+                {result.stderr && (
+                  <div>
+                    <p className="text-xs text-red-400 mb-1">Error:</p>
+                    <pre className="text-sm text-red-300 bg-[#1a0a0a] rounded p-2 overflow-x-auto">
+                      {result.stderr}
+                    </pre>
+                  </div>
+                )}
+
+                {!result.stdout && !result.stderr && (
+                  <p className="text-white/50 text-sm">No output</p>
+                )}
+              </>
+            ) : (
+              <p className="text-white/50 text-sm">
+                Nhấn "Run" để thực thi mã của bạn.
+              </p>
             )}
           </div>
         </div>
@@ -316,7 +301,6 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
 
       {/* RIGHT SIDE */}
       <div className="flex-[5] flex flex-col">
-        {/* EDITOR HEADER */}
         <div className="h-11 flex items-center justify-between px-4 border-b border-cyan-500/10 bg-[#122131]">
           <span className="text-sm text-white/70">
             solution.
@@ -330,27 +314,30 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
           </span>
 
           <div className="flex items-center gap-3 text-white/50">
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              className="bg-[#122131] border border-cyan-500/10 text-white px-3 py-1.5 rounded-lg text-sm"
+            >
+              <option value="python">Python3</option>
+              <option value="java">Java</option>
+              <option value="cpp">C++</option>
+              <option value="javascript">JavaScript</option>
+            </select>
+
             <span
-              className={`text-xs ${isConnected ? "text-green-400" : "text-red-400"}`}
+              className={`text-xs ${
+                isConnected ? "text-green-400" : "text-red-400"
+              }`}
             >
               {isConnected ? "● Live" : "○ Disconnected"}
             </span>
-            <button
-              className="hover:text-cyan-400 transition-colors"
-              title="Settings"
-            >
-              ⚙
-            </button>
-            <button
-              className="hover:text-cyan-400 transition-colors"
-              title="Fullscreen"
-            >
-              ⛶
-            </button>
+
+            <button className="hover:text-cyan-400 transition-colors">⚙</button>
+            <button className="hover:text-cyan-400 transition-colors">⛶</button>
           </div>
         </div>
 
-        {/* EDITOR */}
         <div className="flex-1 bg-[#0d1c2d]">
           <Editor
             language={language}
@@ -375,8 +362,6 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
     </div>
   );
 }
-
-// ─── Wrapper with CodeProvider ────────────────────────────────────────────────
 
 interface Props {
   meetingCode: string;
