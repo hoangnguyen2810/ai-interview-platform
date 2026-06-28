@@ -29,7 +29,9 @@ function CreateQuestionForm({
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [difficulty, setDifficulty] = useState<"" | "EASY" | "MEDIUM" | "HARD">("");
+  const [difficulty, setDifficulty] = useState<"" | "EASY" | "MEDIUM" | "HARD">(
+    "",
+  );
   const [assignToInterview, setAssignToInterview] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -50,7 +52,12 @@ function CreateQuestionForm({
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title, description, difficulty: difficulty || null, assignToInterview }),
+          body: JSON.stringify({
+            title,
+            description,
+            difficulty: difficulty || null,
+            assignToInterview,
+          }),
         },
       );
       const data = await res.json();
@@ -73,7 +80,9 @@ function CreateQuestionForm({
     >
       <div className="flex items-center justify-between">
         <h4 className="text-cyan-400 font-semibold text-sm flex items-center gap-2">
-          <span className="material-symbols-outlined text-base">add_circle</span>
+          <span className="material-symbols-outlined text-base">
+            add_circle
+          </span>
           Tạo câu hỏi mới
         </h4>
         <button
@@ -124,13 +133,14 @@ function CreateQuestionForm({
               onClick={() => setDifficulty(difficulty === d ? "" : d)}
               className={`
                 flex-1 py-2 rounded-lg text-xs font-semibold transition-all border
-                ${difficulty === d
-                  ? d === "EASY"
-                    ? "bg-green-500/20 border-green-500 text-green-400"
-                    : d === "MEDIUM"
-                      ? "bg-yellow-500/20 border-yellow-500 text-yellow-400"
-                      : "bg-red-500/20 border-red-500 text-red-400"
-                  : "bg-[#122131] border-[#3b494b] text-gray-400 hover:border-gray-500"
+                ${
+                  difficulty === d
+                    ? d === "EASY"
+                      ? "bg-green-500/20 border-green-500 text-green-400"
+                      : d === "MEDIUM"
+                        ? "bg-yellow-500/20 border-yellow-500 text-yellow-400"
+                        : "bg-red-500/20 border-red-500 text-red-400"
+                    : "bg-[#122131] border-[#3b494b] text-gray-400 hover:border-gray-500"
                 }
               `}
             >
@@ -242,14 +252,18 @@ export default function RecruiterQuestionsPanel({ meetingCode }: Props) {
   };
 
   const difficultyColor = (d: string | null) => {
-    if (d === "EASY") return "text-green-400 bg-green-400/10 border-green-400/20";
-    if (d === "MEDIUM") return "text-yellow-400 bg-yellow-400/10 border-yellow-400/20";
+    if (d === "EASY")
+      return "text-green-400 bg-green-400/10 border-green-400/20";
+    if (d === "MEDIUM")
+      return "text-yellow-400 bg-yellow-400/10 border-yellow-400/20";
     if (d === "HARD") return "text-red-400 bg-red-400/10 border-red-400/20";
     return "text-gray-400 bg-gray-400/10 border-gray-400/20";
   };
 
   const difficultyBadge = (d: string | null) => (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${difficultyColor(d)}`}>
+    <span
+      className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${difficultyColor(d)}`}
+    >
       {d ?? "—"}
     </span>
   );
@@ -300,9 +314,10 @@ export default function RecruiterQuestionsPanel({ meetingCode }: Props) {
                   key={q.id}
                   className={`
                     flex items-start gap-3 p-3 rounded-lg border transition-all cursor-pointer group
-                    ${isActive
-                      ? "border-cyan-500 bg-cyan-500/10"
-                      : "border-[#1e3a50] bg-[#0d2035] hover:border-cyan-500/50"
+                    ${
+                      isActive
+                        ? "border-cyan-500 bg-cyan-500/10"
+                        : "border-[#1e3a50] bg-[#0d2035] hover:border-cyan-500/50"
                     }
                   `}
                   onClick={() => handleSetActive(q)}
@@ -326,9 +341,10 @@ export default function RecruiterQuestionsPanel({ meetingCode }: Props) {
                   <button
                     className={`
                       shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors
-                      ${isActive
-                        ? "bg-cyan-500 text-[#051424]"
-                        : "bg-[#16304b] text-cyan-400 hover:bg-cyan-500 hover:text-[#051424]"
+                      ${
+                        isActive
+                          ? "bg-cyan-500 text-[#051424]"
+                          : "bg-[#16304b] text-cyan-400 hover:bg-cyan-500 hover:text-[#051424]"
                       }
                     `}
                     onClick={(e) => {
@@ -337,7 +353,11 @@ export default function RecruiterQuestionsPanel({ meetingCode }: Props) {
                     }}
                     disabled={settingId === q.id}
                   >
-                    {settingId === q.id ? "..." : isActive ? "Đang chọn" : "Chọn"}
+                    {settingId === q.id
+                      ? "..."
+                      : isActive
+                        ? "Đang chọn"
+                        : "Chọn"}
                   </button>
                 </div>
               );
@@ -373,7 +393,9 @@ export default function RecruiterQuestionsPanel({ meetingCode }: Props) {
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className="text-white text-sm truncate">{q.title}</span>
+                    <span className="text-white text-sm truncate">
+                      {q.title}
+                    </span>
                     {difficultyBadge(q.difficulty)}
                   </div>
                   <p className="text-gray-500 text-xs line-clamp-1 leading-relaxed">
@@ -385,7 +407,11 @@ export default function RecruiterQuestionsPanel({ meetingCode }: Props) {
                   onClick={() => handleAddQuestion(q.id)}
                   disabled={addingId === q.id || q.isAssigned}
                 >
-                  {addingId === q.id ? "..." : q.isAssigned ? "Đã thêm" : "+ Thêm"}
+                  {addingId === q.id
+                    ? "..."
+                    : q.isAssigned
+                      ? "Đã thêm"
+                      : "+ Thêm"}
                 </button>
               </div>
             ))}

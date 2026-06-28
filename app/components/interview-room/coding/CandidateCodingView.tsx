@@ -61,6 +61,9 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
 
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<ExecutionResult | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const submitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const [outputHeight, setOutputHeight] = useState(224); // ~ h-56
@@ -157,10 +160,71 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
     }
   }, [code, language, meetingCode, activeQuestion?.id]);
 
+  const handleSubmit = useCallback(async () => {
+    if (!code.trim() || isSubmitting) return;
+
+    setIsSubmitting(true);
+    try {
+      const response = await fetch(
+        `/api/interviews/${encodeURIComponent(meetingCode)}/submissions`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            code,
+            language,
+            stdin: "",
+            questionId: activeQuestion?.id,
+          }),
+        },
+      );
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSubmitted(true);
+        if (submitTimeoutRef.current) clearTimeout(submitTimeoutRef.current);
+        submitTimeoutRef.current = setTimeout(
+          () => setSubmitted(false),
+          4000,
+        );
+      } else {
+        alert(data.message || "Submit thất bại");
+      }
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? `Lỗi kết nối: ${error.message}`
+          : "Lỗi kết nối",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [code, language, meetingCode, activeQuestion?.id, isSubmitting]);
+
+  useEffect(() => {
+    return () => {
+      if (submitTimeoutRef.current) clearTimeout(submitTimeoutRef.current);
+    };
+  }, []);
+
   const question = activeQuestion;
 
   return (
-    <div className="w-full h-full flex bg-[#071524] rounded-xl overflow-hidden border border-cyan-500/20">
+    <div className="w-full h-full flex bg-[#071524] rounded-xl overflow-hidden border border-cyan-500/20 relative">
+      {/* ── Submitted notification banner ── */}
+      {submitted && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-green-500/15 border border-green-500/40 text-green-300 px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 backdrop-blur-md animate-in fade-in slide-in-from-top-2">
+          <span className="material-symbols-outlined text-green-400">check_circle</span>
+          <div>
+            <p className="font-semibold text-sm">Đã submit code thành công</p>
+            <p className="text-xs text-green-300/70">
+              Recruiter đã nhận được bài làm của bạn.
+            </p>
+          </div>
+        </div>
+      )}
       {/* LEFT SIDE */}
       <div
         id="left-panel"
@@ -242,8 +306,24 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
                 )}
               </button>
 
-              <button className="px-4 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-[#051424] font-semibold text-sm transition-colors">
-                Submit
+              <button
+                onClick={handleSubmit}
+                disabled={isSubmitting || !code.trim() || submitted}
+                className="px-4 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-[#051424] font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {isSubmitting ? (
+                  <>
+                    <span className="animate-spin">⚙</span>
+                    Submitting...
+                  </>
+                ) : submitted ? (
+                  <>
+                    <span>✓</span>
+                    Submitted
+                  </>
+                ) : (
+                  "Submit"
+                )}
               </button>
             </div>
           </div>

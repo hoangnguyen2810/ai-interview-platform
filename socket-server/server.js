@@ -5,10 +5,14 @@
  * Events:
  *  - question:added   {id, title, description, difficulty}
  *  - question:activated {id, title, description, difficulty}
+ *  - code:update       {code, language, cursorLine, cursorColumn}
+ *  - submission:added  {submissionId, questionId, language, sourceCode, stdout, stderr, runtimeMs, status, success, createdAt, candidateName, ...}
  *
  * HTTP endpoints (for Next.js API to call):
  *  - POST /emit/question-added   {meetingCode, question}
  *  - POST /emit/question-activated {meetingCode, question}
+ *  - POST /emit/code-update      {meetingCode, code, language, ...}
+ *  - POST /emit/submission-added {meetingCode, submission}
  *  - GET  /health
  */
 
@@ -75,6 +79,11 @@ function emitQuestionActivated(meetingCode, question) {
 function emitCodeUpdate(meetingCode, payload) {
   io.to(meetingCode).emit("code:update", payload);
   console.log(`[Socket.IO] → code:update | room: ${meetingCode} | ${payload.code.length} chars`);
+}
+
+function emitSubmissionAdded(meetingCode, submission) {
+  io.to(meetingCode).emit("submission:added", submission);
+  console.log(`[Socket.IO] → submission:added | room: ${meetingCode} | sid: ${submission.submissionId}`);
 }
 
 // ─── HTTP endpoint handler ─────────────────────────────────────────────────────
@@ -158,6 +167,29 @@ httpServer.on("request", (req, res) => {
           return;
         }
         emitCodeUpdate(meetingCode, { code, language, cursorLine, cursorColumn });
+        res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+        res.end(JSON.stringify({ success: true }));
+      } catch {
+        res.writeHead(500, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+        res.end(JSON.stringify({ error: "parse error" }));
+      }
+    });
+    return;
+  }
+
+  // ── POST /emit/submission-added ─────────────────────────────────────────────
+  if (pathname === "/emit/submission-added" && method === "POST") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      try {
+        const { meetingCode, submission } = JSON.parse(body);
+        if (!meetingCode || !submission) {
+          res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+          res.end(JSON.stringify({ error: "missing meetingCode or submission" }));
+          return;
+        }
+        emitSubmissionAdded(meetingCode, submission);
         res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
         res.end(JSON.stringify({ success: true }));
       } catch {
