@@ -1,10 +1,11 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 import os
 import shutil
 import ollama
 import pymupdf4llm
 
 from app.core.prompts import CV_PROMPT
+from app.core import sessions as session_store
 
 router = APIRouter()
 
@@ -15,7 +16,10 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
 @router.post("/cv/upload")
-async def upload_cv(file: UploadFile = File(...)):
+async def upload_cv(
+    file: UploadFile = File(...),
+    session_id: str = Form(...),
+):
 
     if not file.filename:
         raise HTTPException(
@@ -27,6 +31,12 @@ async def upload_cv(file: UploadFile = File(...)):
         raise HTTPException(
             status_code=400,
             detail="Chỉ hỗ trợ file PDF."
+        )
+
+    if not session_store.has_session(session_id):
+        raise HTTPException(
+            status_code=404,
+            detail="session not found"
         )
 
     save_path = os.path.join(
@@ -68,12 +78,25 @@ async def upload_cv(file: UploadFile = File(...)):
             keep_alive="30m"
         )
 
+        analysis_text = response["message"]["content"]
+
+        # Store CV + analysis in session memory
+        session_store.set_cv(
+            session_id=session_id,
+            filename=file.filename,
+            markdown=markdown,
+            analysis=analysis_text,
+        )
+
         return {
             "success": True,
+            "session_id": session_id,
             "filename": file.filename,
-            "analysis": response["message"]["content"]
+            "analysis": analysis_text
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500,

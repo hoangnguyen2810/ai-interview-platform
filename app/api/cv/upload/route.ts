@@ -4,6 +4,7 @@ export async function POST(req: Request) {
   try {
     const formData = await req.formData();
     const file = formData.get("file");
+    const sessionId = formData.get("session_id");
 
     if (!file || !(file instanceof File)) {
       return Response.json(
@@ -12,9 +13,17 @@ export async function POST(req: Request) {
       );
     }
 
+    if (!sessionId || typeof sessionId !== "string") {
+      return Response.json(
+        { success: false, detail: "Thiếu session_id." },
+        { status: 400 },
+      );
+    }
+
     // Re-pack into a new FormData to forward to Python backend
     const forwarded = new FormData();
     forwarded.append("file", file, file.name);
+    forwarded.append("session_id", sessionId);
 
     const res = await fetch(`${AI_BACKEND}/cv/upload`, {
       method: "POST",
