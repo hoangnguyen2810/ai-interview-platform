@@ -24,6 +24,8 @@ export default function AIDrawer({ open, onClose }: Props) {
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [cvUploading, setCvUploading] = useState(false);
   const [cvDragging, setCvDragging] = useState(false);
+  const [cvAnalysis, setCvAnalysis] = useState<{ filename: string; analysis: string } | null>(null);
+  const cvAnalysisRef = useRef<{ filename: string; analysis: string } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -32,16 +34,27 @@ export default function AIDrawer({ open, onClose }: Props) {
     if (!input.trim() || loading) return;
 
     const userMessage = input;
+    const newMessages: Message[] = [...messages, { role: "user", content: userMessage }];
 
-    setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
+    setMessages(newMessages);
     setInput("");
-    setLoading(true);
+
+    // Read CV context from ref (always fresh, no stale closure)
+    const analysis = cvAnalysisRef.current;
+    const systemPrompt = analysis
+      ? `Bạn đang có thông tin phân tích CV của ứng viên:\n\nTên file: ${analysis.filename}\n\n${analysis.analysis}\n\nTrả lời dựa trên thông tin CV trên khi được hỏi về ứng viên.`
+      : null;
 
     try {
+      setLoading(true);
+      const payload = systemPrompt
+        ? { messages: newMessages, system: systemPrompt }
+        : { messages: newMessages };
+
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMessage }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -111,6 +124,10 @@ export default function AIDrawer({ open, onClose }: Props) {
           cvFilename: file.name,
         },
       ]);
+
+      // Store CV analysis for chat context persistence
+      setCvAnalysis({ filename: file.name, analysis: data.analysis });
+      cvAnalysisRef.current = { filename: file.name, analysis: data.analysis };
     } catch (err) {
       setMessages((prev) => [
         ...prev,
