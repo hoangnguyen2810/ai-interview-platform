@@ -57,7 +57,17 @@ export function MediaProvider({ children }: { children: ReactNode }) {
       try {
         const s = await navigator.mediaDevices.getUserMedia({
           video: true,
-          audio: true,
+          // Audio is intentionally omitted here.
+          //
+          // Why: the Stream SDK (streamCall.microphone.enable) owns the mic
+          // for the actual interview call. If MediaContext also grabs a
+          // second audio track, two MediaStreamAudioSourceNodes end up
+          // racing for the same physical microphone. Combined with each
+          // peer's speakers playing back the other peer's audio, this
+          // produced the "echo heard on both candidate + recruiter sides"
+          // bug. Keeping the channel pure-video makes MediaContext a
+          // preview-only stream.
+          audio: false,
         });
         if (cancelled) {
           s.getTracks().forEach((t) => t.stop());
@@ -102,14 +112,15 @@ export function MediaProvider({ children }: { children: ReactNode }) {
   }, [cameraEnabled]);
 
   const toggleMicro = useCallback(() => {
-    const s = streamRef.current;
-    if (!s) return;
-    const next = !micEnabled;
-    s.getAudioTracks().forEach((t) => {
-      t.enabled = next;
-    });
-    setMicEnabled(next);
-  }, [micEnabled]);
+    // Mic is owned by the Stream SDK's microphone.
+    // MediaContext no longer has an audio track to toggle, so we only flip
+    // the local boolean state. The real enable/disable happens in:
+    //   - InterviewRoomClient.tsx via streamCall.microphone.enable/disable
+    //   - FooterControls.tsx via mic.toggle()
+    // persisted to sessionStorage so the other page (Waiting ↔ Meeting) sees
+    // it via CamMicSyncContext.
+    setMicEnabled((prev) => !prev);
+  }, []);
 
   const value = useMemo<MediaContextValue>(
     () => ({

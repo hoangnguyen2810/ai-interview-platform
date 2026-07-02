@@ -30,79 +30,205 @@ function setStoredSessionId(id: string | null): void {
 
 // ─── Small inline icons (no external deps) ───────────────────────────────────
 const IconPlus = () => (
-  <svg
-    width="13"
-    height="13"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-  >
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
     <path d="M12 5v14M5 12h14" />
   </svg>
 );
 const IconClose = () => (
-  <svg
-    width="15"
-    height="15"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-  >
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
     <path d="M18 6 6 18M6 6l12 12" />
   </svg>
 );
 const IconPaperclip = () => (
-  <svg
-    width="13"
-    height="13"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21.44 11.05 12.25 20.24a5.5 5.5 0 0 1-7.78-7.78l9.19-9.19a3.67 3.67 0 0 1 5.19 5.19l-9.2 9.19a1.83 1.83 0 0 1-2.59-2.59l8.49-8.48" />
   </svg>
 );
 const IconSend = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 19V5M5 12l7-7 7 7" />
   </svg>
 );
-const IconFile = () => (
-  <svg
-    width="14"
-    height="14"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-    <path d="M14 2v6h6" />
+const IconMic = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3Z" />
+    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+    <line x1="12" x2="12" y1="19" y2="22" />
   </svg>
 );
+const IconMicOff = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="2" x2="22" y1="2" y2="22" />
+    <path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2" />
+    <path d="M5 10v2a7 7 0 0 0 12 5" />
+    <path d="M15 9.34V5a3 3 0 0 0-5.68-1.33" />
+    <path d="M9 9v3a3 3 0 0 0 5.12 2.12" />
+    <line x1="12" x2="12" y1="19" y2="22" />
+  </svg>
+);
+
+// ─── Voice Input helpers ────────────────────────────────────────────────────────
+
+type VoiceState = "idle" | "recording" | "transcribing";
+
+/**
+ * Streaming voice input hook.
+ *
+ * Strategy: record audio in 3-second chunks via MediaRecorder timeslice.
+ * After each chunk, send it to faster-whisper and update `onPartial` with the
+ * live transcription.  When the user stops, one final chunk is sent and
+ * `onFinal` is called with the complete text.
+ */
+function useVoiceInput(onPartial: (text: string) => void) {
+  const [voiceState, setVoiceState] = useState<VoiceState>("idle");
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+
+  const streamRef = useRef<MediaStream | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const sendQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const isStreamingRef = useRef(false);
+
+  const stopTracks = useCallback(() => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+  }, []);
+
+  const transcribeChunk = useCallback(
+    async (chunk: Blob): Promise<string> => {
+      const form = new FormData();
+      form.append("audio", chunk, "chunk.webm");
+      form.append("language", "vi");
+
+      const res = await fetch("/api/speech-to-text", { method: "POST", body: form });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error((json as { detail?: string })?.detail ?? `HTTP ${res.status}`);
+      }
+      const json = (await res.json()) as { text?: string };
+      return (json.text ?? "").trim();
+    },
+    [],
+  );
+
+  const startRecording = useCallback(async () => {
+    setVoiceError(null);
+    setVoiceState("recording");
+    isStreamingRef.current = true;
+
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e) {
+      const name = (e as DOMException).name;
+      if (name === "NotAllowedError") {
+        setVoiceError("Không có quyền truy cập microphone. Vui lòng cho phép trong trình duyệt.");
+      } else if (name === "NotFoundError") {
+        setVoiceError("Không tìm thấy microphone trên thiết bị.");
+      } else {
+        setVoiceError("Không thể bật microphone.");
+      }
+      setVoiceState("idle");
+      return;
+    }
+
+    streamRef.current = stream;
+
+    // Collect all audio chunks into a single blob for final send
+    const allChunks: Blob[] = [];
+
+    const recorder = new MediaRecorder(stream, { mimeType: "audio/webm;codecs=opus" });
+    recorderRef.current = recorder;
+
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) {
+        allChunks.push(e.data);
+        // Stream every 3-second chunk to whisper for real-time feedback
+        if (isStreamingRef.current) {
+          const chunkCopy = e.data;
+          sendQueueRef.current = sendQueueRef.current.then(async () => {
+            if (!isStreamingRef.current) return;
+            try {
+              const text = await transcribeChunk(chunkCopy);
+              if (text) onPartial(text);
+            } catch {
+              // silent — partial errors don't interrupt recording
+            }
+          });
+        }
+      }
+    };
+
+    recorder.onerror = () => {
+      setVoiceError("Lỗi ghi âm. Vui lòng thử lại.");
+      isStreamingRef.current = false;
+      stopTracks();
+      setVoiceState("idle");
+    };
+
+    recorder.onstop = () => {
+      stopTracks();
+      setVoiceState("transcribing");
+      isStreamingRef.current = false;
+    };
+
+    // Collect all chunks into one blob and send as final transcription
+    // (the partial stream already gave live feedback)
+    const sendFinal = async () => {
+      if (allChunks.length === 0) {
+        setVoiceState("idle");
+        return;
+      }
+      const finalBlob = new Blob(allChunks, { type: "audio/webm" });
+      try {
+        const text = await transcribeChunk(finalBlob);
+        if (text) onPartial(text); // final complete text
+      } catch {
+        // final error already shown via voiceError in onstop
+      }
+      setVoiceState("idle");
+    };
+
+    // Override onstop to run sendFinal
+    const origOnStop = recorder.onstop;
+    recorder.onstop = (ev: Event) => {
+      origOnStop?.call(recorder, ev);
+      void sendFinal();
+    };
+
+    recorder.start(3000); // 3-second timeslice = 3s of audio per chunk → real-time
+  }, [stopTracks, transcribeChunk, onPartial]);
+
+  const stopRecording = useCallback(() => {
+    isStreamingRef.current = false;
+    const rec = recorderRef.current;
+    if (!rec) return;
+    try { rec.requestData(); } catch { /* flush */ }
+    rec.stop();
+    recorderRef.current = null;
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isStreamingRef.current = false;
+      recorderRef.current?.stop();
+      stopTracks();
+    };
+  }, [stopTracks]);
+
+  return { voiceState, voiceError, setVoiceError, startRecording, stopRecording };
+}
+
+// ─── Main component ─────────────────────────────────────────────────────────────
 
 export default function AIDrawer({ open, onClose }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Voice input: feed partial transcripts directly into the input textarea
+  const { voiceState, voiceError, setVoiceError, startRecording, stopRecording } =
+    useVoiceInput((partial) => setInput((prev) => (prev ? `${prev} ${partial}` : partial).trim()));
 
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [cvUploading, setCvUploading] = useState(false);
@@ -115,14 +241,12 @@ export default function AIDrawer({ open, onClose }: Props) {
   const sessionIdRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ─── Session lifecycle ────────────────────────────────────────────────────
+  // ─── Session lifecycle ─────────────────────────────────────────────────────
   const ensureSession = useCallback(async (): Promise<string> => {
     const existing = sessionIdRef.current ?? getStoredSessionId();
     if (existing) {
       try {
-        const r = await fetch(`${AI_BACKEND_URL}/sessions/${existing}`, {
-          method: "GET",
-        });
+        const r = await fetch(`${AI_BACKEND_URL}/sessions/${existing}`, { method: "GET" });
         if (r.ok) {
           sessionIdRef.current = existing;
           setSessionId(existing);
@@ -130,10 +254,9 @@ export default function AIDrawer({ open, onClose }: Props) {
           return existing;
         }
       } catch {
-        // fall through to creating a new one
+        // fall through
       }
     }
-
     const res = await fetch(`${AI_BACKEND_URL}/sessions`, { method: "POST" });
     if (!res.ok) throw new Error("Cannot create session");
     const data = await res.json();
@@ -144,14 +267,11 @@ export default function AIDrawer({ open, onClose }: Props) {
     return data.session_id;
   }, []);
 
-  // Reset (start a brand-new session, like a new chat thread)
   const resetSession = useCallback(async () => {
     const current = sessionIdRef.current;
     if (current) {
       try {
-        await fetch(`${AI_BACKEND_URL}/sessions/${current}`, {
-          method: "DELETE",
-        });
+        await fetch(`${AI_BACKEND_URL}/sessions/${current}`, { method: "DELETE" });
       } catch {
         // ignore
       }
@@ -165,7 +285,6 @@ export default function AIDrawer({ open, onClose }: Props) {
     await ensureSession();
   }, [ensureSession]);
 
-  // Ensure a session exists when the drawer opens
   useEffect(() => {
     if (open && !sessionReady) {
       ensureSession().catch((e) =>
@@ -226,7 +345,19 @@ export default function AIDrawer({ open, onClose }: Props) {
     }
   };
 
-  // ─── Upload & analyze CV ────────────────────────────────────────────────────
+// ─── Voice input handler ─────────────────────────────────────────────────
+  const handleVoiceClick = () => {
+    if (voiceState === "recording") {
+      stopRecording();
+      // Input is already being filled by partial transcripts.
+      // User manually sends with Enter or the send button.
+      return;
+    }
+    if (voiceState !== "idle") return;
+    void startRecording();
+  };
+
+  // ─── Upload & analyze CV ─────────────────────────────────────────────────
   const uploadCV = useCallback(
     async (file: File) => {
       if (!file.name.toLowerCase().endsWith(".pdf")) {
@@ -262,7 +393,7 @@ export default function AIDrawer({ open, onClose }: Props) {
         ...prev,
         {
           role: "user",
-          content: `📄 Đã gửi file: **${file.name}**`,
+          content: `Đã gửi file: **${file.name}**`,
           isCVAnalysis: false,
         },
       ]);
@@ -288,7 +419,7 @@ export default function AIDrawer({ open, onClose }: Props) {
           ...prev,
           {
             role: "ai",
-            content: `📋 **Phân tích CV: ${file.name}**\n\n${data.analysis}`,
+            content: `**Phân tích CV: ${file.name}**\n\n${data.analysis}`,
             isCVAnalysis: true,
             cvFilename: file.name,
           },
@@ -313,7 +444,7 @@ export default function AIDrawer({ open, onClose }: Props) {
     [ensureSession],
   );
 
-  // ─── File input handlers ────────────────────────────────────────────────────
+  // ─── File input handlers ──────────────────────────────────────────────────
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) uploadCV(file);
@@ -337,13 +468,15 @@ export default function AIDrawer({ open, onClose }: Props) {
     if (file) uploadCV(file);
   };
 
-  // ─── Render ────────────────────────────────────────────────────────────────
+  // ─── Render helpers ──────────────────────────────────────────────────────
   const messagesList = messages;
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messagesList.length]);
+
+  const isVoiceBusy = voiceState !== "idle";
 
   if (!open) return null;
 
@@ -384,7 +517,7 @@ export default function AIDrawer({ open, onClose }: Props) {
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 bg-[#181818]">
         {messagesList.length === 0 && (
           <div className="text-center text-[12.5px] text-[#6e6e6e] mt-16 px-4">
-            <p className="mb-1.5 text-[#9a9a9a]">Xin chào 👋</p>
+            <p className="mb-1.5 text-[#9a9a9a]">Xin chào</p>
             <p>Upload CV hoặc hỏi bất kỳ câu hỏi nào về phỏng vấn IT.</p>
           </div>
         )}
@@ -424,7 +557,20 @@ export default function AIDrawer({ open, onClose }: Props) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Composer (Cursor-style: upload + input combined in one bordered block) */}
+      {/* Voice error */}
+      {voiceError && (
+        <div className="mx-3 mb-2 px-3 py-2 rounded bg-red-900/40 border border-red-800 text-[11px] text-red-300">
+          {voiceError}
+          <button
+            className="ml-2 underline"
+            onClick={() => setVoiceError(null)}
+          >
+            Đóng
+          </button>
+        </div>
+      )}
+
+      {/* Composer */}
       <div className="px-3 pb-3 pt-2 border-t border-[#2a2a2a] bg-[#181818] shrink-0">
         <div
           className={`rounded-lg border transition-colors ${
@@ -436,6 +582,20 @@ export default function AIDrawer({ open, onClose }: Props) {
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
+          {/* Transcription status banner */}
+          {voiceState === "recording" && (
+            <div className="flex items-center gap-1.5 px-3 pt-2 text-[11px] text-red-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse" />
+              Recording...
+            </div>
+          )}
+          {voiceState === "transcribing" && (
+            <div className="flex items-center gap-1.5 px-3 pt-2 text-[11px] text-yellow-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
+              Transcribing...
+            </div>
+          )}
+
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -453,24 +613,63 @@ export default function AIDrawer({ open, onClose }: Props) {
             className="w-full resize-none bg-transparent px-3 pt-2.5 pb-1 text-[13px] text-[#e4e4e4] placeholder-[#6e6e6e] focus:outline-none disabled:opacity-50"
           />
           <div className="flex items-center justify-between px-2 pb-2 pt-1">
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={cvUploading}
-              title="Upload CV (PDF)"
-              className="flex items-center gap-1 text-[11.5px] px-2 py-1 rounded text-[#9a9a9a] hover:bg-[#2a2a2a] hover:text-[#e4e4e4] disabled:opacity-50 transition-colors"
-            >
-              {cvUploading ? (
-                <>
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#b8860b] animate-pulse" />
-                  Đang upload...
-                </>
-              ) : (
-                <>
-                  <IconPaperclip />
-                  CV.pdf
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-1">
+              {/* Upload CV */}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={cvUploading}
+                title="Upload CV (PDF)"
+                className="flex items-center gap-1 text-[11.5px] px-2 py-1 rounded text-[#9a9a9a] hover:bg-[#2a2a2a] hover:text-[#e4e4e4] disabled:opacity-50 transition-colors"
+              >
+                {cvUploading ? (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#b8860b] animate-pulse" />
+                    Upload...
+                  </>
+                ) : (
+                  <>
+                    <IconPaperclip />
+                    CV.pdf
+                  </>
+                )}
+              </button>
+
+              {/* Voice input */}
+              <button
+                onClick={handleVoiceClick}
+                disabled={voiceState === "transcribing"}
+                title={
+                  voiceState === "recording"
+                    ? "Dừng ghi âm"
+                    : voiceState === "transcribing"
+                      ? "Đang nhận dạng..."
+                      : "Ghi âm bằng giọng nói"
+                }
+                className={`flex items-center gap-1 text-[11.5px] px-2 py-1 rounded transition-colors disabled:cursor-not-allowed ${
+                  voiceState === "recording"
+                    ? "text-red-400 bg-red-900/30 hover:bg-red-900/50"
+                    : "text-[#9a9a9a] hover:bg-[#2a2a2a] hover:text-[#e4e4e4] disabled:opacity-40"
+                }`}
+              >
+                {voiceState === "recording" ? (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse" />
+                    Stop
+                  </>
+                ) : voiceState === "transcribing" ? (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
+                    ...
+                  </>
+                ) : (
+                  <>
+                    <IconMic />
+                    Mic
+                  </>
+                )}
+              </button>
+            </div>
+
             <button
               onClick={sendMessage}
               disabled={loading || !input.trim()}
