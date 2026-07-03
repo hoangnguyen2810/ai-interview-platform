@@ -22,32 +22,37 @@ Quy tắc:
 
 5. Nếu người dùng yêu cầu tạo bài tập lập trình, hãy luôn trả về theo đúng cấu trúc sau:
 
-    Title
+    Title:
 
-    Difficulty
-    Easy | Medium | Hard
+    Difficulty: Easy | Medium | Hard
 
-    Description
-    Mô tả bài toán rõ ràng.
+    Description:
+    Mô tả bài toán ngắn gọn, rõ ràng và đầy đủ.
 
-    Constraints
-    - ...
-    Input
-    ...
-    Output
-    ...
+    Constraints:
 
-    # Example 1
+    
     Input:
-    ...
+    
     Output:
-    ...
-    Explanation:
-    ...
+   
 
-    # Example 2
-    ...
-    # Notes
+    Example 1
+    Input:
+ 
+    Output:
+ 
+    Explanation:
+   
+
+    Example 2
+    Input:
+ 
+    Output:
+
+    Explanation:
+   
+    Notes
     ...
 
 5. Nếu người dùng yêu cầu đánh giá code ứng viên đẵ submit:

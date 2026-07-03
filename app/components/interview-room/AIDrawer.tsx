@@ -30,34 +30,86 @@ function setStoredSessionId(id: string | null): void {
 
 // ─── Small inline icons (no external deps) ───────────────────────────────────
 const IconPlus = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+  <svg
+    width="13"
+    height="13"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+  >
     <path d="M12 5v14M5 12h14" />
   </svg>
 );
 const IconClose = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+  <svg
+    width="15"
+    height="15"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+  >
     <path d="M18 6 6 18M6 6l12 12" />
   </svg>
 );
 const IconPaperclip = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="13"
+    height="13"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M21.44 11.05 12.25 20.24a5.5 5.5 0 0 1-7.78-7.78l9.19-9.19a3.67 3.67 0 0 1 5.19 5.19l-9.2 9.19a1.83 1.83 0 0 1-2.59-2.59l8.49-8.48" />
   </svg>
 );
 const IconSend = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M12 19V5M5 12l7-7 7 7" />
   </svg>
 );
 const IconMic = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="13"
+    height="13"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3Z" />
     <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
     <line x1="12" x2="12" y1="19" y2="22" />
   </svg>
 );
 const IconMicOff = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="13"
+    height="13"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <line x1="2" x2="22" y1="2" y2="22" />
     <path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2" />
     <path d="M5 10v2a7 7 0 0 0 12 5" />
@@ -119,10 +171,15 @@ function useVoiceInput(
         form.append("initial_prompt", initialPrompt);
       }
 
-      const res = await fetch("/api/speech-to-text", { method: "POST", body: form });
+      const res = await fetch("/api/speech-to-text", {
+        method: "POST",
+        body: form,
+      });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
-        throw new Error((json as { detail?: string })?.detail ?? `HTTP ${res.status}`);
+        throw new Error(
+          (json as { detail?: string })?.detail ?? `HTTP ${res.status}`,
+        );
       }
       const json = (await res.json()) as { text?: string };
       return (json.text ?? "").trim();
@@ -135,7 +192,11 @@ function useVoiceInput(
     if (!incoming.length || !prevTail.length) return incoming;
     // Walk backwards from the end of prevTail to find the longest suffix
     // that is also a prefix of incoming (greedy approach).
-    for (let len = Math.min(prevTail.length, incoming.length); len >= 0; len--) {
+    for (
+      let len = Math.min(prevTail.length, incoming.length);
+      len >= 0;
+      len--
+    ) {
       const tail = prevTail.slice(-len);
       if (incoming.startsWith(tail)) {
         const trimmed = incoming.slice(len).trim();
@@ -162,7 +223,9 @@ function useVoiceInput(
     } catch (e) {
       const name = (e as DOMException).name;
       if (name === "NotAllowedError") {
-        setVoiceError("Không có quyền truy cập microphone. Vui lòng cho phép trong trình duyệt.");
+        setVoiceError(
+          "Không có quyền truy cập microphone. Vui lòng cho phép trong trình duyệt.",
+        );
       } else if (name === "NotFoundError") {
         setVoiceError("Không tìm thấy microphone trên thiết bị.");
       } else {
@@ -175,7 +238,9 @@ function useVoiceInput(
     streamRef.current = stream;
     const allChunks: Blob[] = [];
 
-    const recorder = new MediaRecorder(stream, { mimeType: "audio/webm;codecs=opus" });
+    const recorder = new MediaRecorder(stream, {
+      mimeType: "audio/webm;codecs=opus",
+    });
     recorderRef.current = recorder;
 
     recorder.ondataavailable = (e) => {
@@ -192,7 +257,9 @@ function useVoiceInput(
               const deduped = deduplicate(text, prevTail);
               prevTailRef.current = text.slice(-OVERLAP_WINDOW);
               if (deduped) {
-                console.log(`[voice partial] raw=${JSON.stringify(text)} deduped=${JSON.stringify(deduped)}`);
+                console.log(
+                  `[voice partial] raw=${JSON.stringify(text)} deduped=${JSON.stringify(deduped)}`,
+                );
                 onPartial(deduped);
               }
             } catch {
@@ -228,7 +295,9 @@ function useVoiceInput(
           const prevTail = prevTailRef.current;
           const deduped = deduplicate(text, prevTail);
           if (deduped) {
-            console.log(`[voice final] raw=${JSON.stringify(text)} deduped=${JSON.stringify(deduped)}`);
+            console.log(
+              `[voice final] raw=${JSON.stringify(text)} deduped=${JSON.stringify(deduped)}`,
+            );
             onPartial(deduped);
           }
         }
@@ -251,7 +320,11 @@ function useVoiceInput(
     isStreamingRef.current = false;
     const rec = recorderRef.current;
     if (!rec) return;
-    try { rec.requestData(); } catch { /* flush */ }
+    try {
+      rec.requestData();
+    } catch {
+      /* flush */
+    }
     rec.stop();
     recorderRef.current = null;
   }, []);
@@ -264,7 +337,13 @@ function useVoiceInput(
     };
   }, [stopTracks]);
 
-  return { voiceState, voiceError, setVoiceError, startRecording, stopRecording };
+  return {
+    voiceState,
+    voiceError,
+    setVoiceError,
+    startRecording,
+    stopRecording,
+  };
 }
 
 // ─── Main component ─────────────────────────────────────────────────────────────
@@ -281,11 +360,17 @@ export default function AIDrawer({ open, onClose }: Props) {
   const [cvContext, setCvContext] = useState<string>("");
 
   // Voice input: feed partial transcripts directly into the input textarea
-  const { voiceState, voiceError, setVoiceError, startRecording, stopRecording } =
-    useVoiceInput(
-      (partial) => setInput((prev) => (prev ? `${prev} ${partial}` : partial).trim()),
-      cvContext,
-    );
+  const {
+    voiceState,
+    voiceError,
+    setVoiceError,
+    startRecording,
+    stopRecording,
+  } = useVoiceInput(
+    (partial) =>
+      setInput((prev) => (prev ? `${prev} ${partial}` : partial).trim()),
+    cvContext,
+  );
 
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
@@ -298,7 +383,9 @@ export default function AIDrawer({ open, onClose }: Props) {
     const existing = sessionIdRef.current ?? getStoredSessionId();
     if (existing) {
       try {
-        const r = await fetch(`${AI_BACKEND_URL}/sessions/${existing}`, { method: "GET" });
+        const r = await fetch(`${AI_BACKEND_URL}/sessions/${existing}`, {
+          method: "GET",
+        });
         if (r.ok) {
           sessionIdRef.current = existing;
           setSessionId(existing);
@@ -323,7 +410,9 @@ export default function AIDrawer({ open, onClose }: Props) {
     const current = sessionIdRef.current;
     if (current) {
       try {
-        await fetch(`${AI_BACKEND_URL}/sessions/${current}`, { method: "DELETE" });
+        await fetch(`${AI_BACKEND_URL}/sessions/${current}`, {
+          method: "DELETE",
+        });
       } catch {
         // ignore
       }
@@ -397,7 +486,7 @@ export default function AIDrawer({ open, onClose }: Props) {
     }
   };
 
-// ─── Voice input handler ─────────────────────────────────────────────────
+  // ─── Voice input handler ─────────────────────────────────────────────────
   const handleVoiceClick = () => {
     if (voiceState === "recording") {
       stopRecording();
@@ -445,7 +534,7 @@ export default function AIDrawer({ open, onClose }: Props) {
         ...prev,
         {
           role: "user",
-          content: `Đã gửi file: **${file.name}**`,
+          content: `Đã gửi file: ${file.name}`,
           isCVAnalysis: false,
         },
       ]);
@@ -471,7 +560,7 @@ export default function AIDrawer({ open, onClose }: Props) {
           ...prev,
           {
             role: "ai",
-            content: `**Phân tích CV: ${file.name}**\n\n${data.analysis}`,
+            content: `Phân tích CV: ${file.name}\n\n${data.analysis}`,
             isCVAnalysis: true,
             cvFilename: file.name,
           },
@@ -482,7 +571,9 @@ export default function AIDrawer({ open, onClose }: Props) {
         // Refresh CV context so voice input can use it for initial_prompt
         if (sid) {
           try {
-            const ctxRes = await fetch(`${AI_BACKEND_URL}/sessions/${sid}/cv-context`);
+            const ctxRes = await fetch(
+              `${AI_BACKEND_URL}/sessions/${sid}/cv-context`,
+            );
             if (ctxRes.ok) {
               const ctxData = await ctxRes.json();
               setCvContext(ctxData.prompt ?? "");
