@@ -1,12 +1,15 @@
 """POST /speech-to-text — transcribe an audio blob using faster-whisper."""
 
+import logging
+import time
+
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 
 from app.services import speech_service
 
 router = APIRouter()
+logger = logging.getLogger("speech_api")
 
-# Default language — change to "en" if your interviews are in English
 DEFAULT_LANGUAGE = "vi"
 
 
@@ -14,15 +17,10 @@ DEFAULT_LANGUAGE = "vi"
 async def speech_to_text(
     file: UploadFile = File(...),
     language: str | None = Form(default=None),
+    initial_prompt: str | None = Form(default=None),
 ):
-    """
-    Accept an audio file (typically audio/webm from MediaRecorder) and
-    return the transcribed text.
-
-    Form fields:
-      - file   — audio blob (required)
-      - language — BCP-47 tag e.g. "vi", "en" (optional, default: "vi")
-    """
+    """Accept an audio file and return the transcribed text."""
+    t0 = time.perf_counter()
     if not file.filename and not file.content_type:
         raise HTTPException(status_code=400, detail="No audio file provided.")
 
@@ -34,8 +32,7 @@ async def speech_to_text(
     if len(audio_bytes) == 0:
         raise HTTPException(status_code=400, detail="Audio file is empty.")
 
-    # sanity upper bound — 60 seconds of audio at 128 kbps ≈ 960 KiB
-    MAX_BYTES = 10 * 1024 * 1024  # 10 MiB
+    MAX_BYTES = 10 * 1024 * 1024
     if len(audio_bytes) > MAX_BYTES:
         raise HTTPException(
             status_code=413,
@@ -44,13 +41,32 @@ async def speech_to_text(
 
     lang = language or DEFAULT_LANGUAGE
 
+    logger.info(
+        "[speech-to-text] audio_bytes=%d lang=%s prompt_chars=%d",
+        len(audio_bytes),
+        lang,
+        len(initial_prompt) if initial_prompt else 0,
+    )
+
     try:
-        result = speech_service.transcribe_blob(audio_bytes, language=lang)
+        result = speech_service.transcribe_blob(
+            audio_bytes,
+            language=lang,
+            initial_prompt=initial_prompt,
+        )
     except Exception as e:
+        logger.exception("[speech-to-text] transcription error")
         raise HTTPException(
             status_code=500,
             detail=f"Transcription failed: {e}",
         ) from e
+
+    elapsed_ms = (time.perf_counter() - t0) * 1000
+    logger.info(
+        "[speech-to-text] OK elapsed=%.1fms text_chars=%d",
+        elapsed_ms,
+        len(result.text),
+    )
 
     return {
         "text": result.text,

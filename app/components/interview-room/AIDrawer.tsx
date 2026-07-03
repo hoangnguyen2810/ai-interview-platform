@@ -71,15 +71,31 @@ const IconMicOff = () => (
 
 type VoiceState = "idle" | "recording" | "transcribing";
 
+/** Number of characters to keep from the end of the previous transcript
+ *  to detect overlap with the next chunk (3s). */
+const OVERLAP_WINDOW = 30;
+
+/** Minimum characters in a transcript to be considered non-noise. */
+const MIN_TEXT_LENGTH = 3;
+
+/** Maximum overlap ratio: if a new transcript starts with more than
+ *  this fraction of the previous tail, treat it as duplication. */
+const MAX_OVERLAP_RATIO = 0.65;
+
 /**
  * Streaming voice input hook.
  *
- * Strategy: record audio in 3-second chunks via MediaRecorder timeslice.
- * After each chunk, send it to faster-whisper and update `onPartial` with the
- * live transcription.  When the user stops, one final chunk is sent and
- * `onFinal` is called with the complete text.
+ * Accuracy improvements over the original:
+ *  - Deduplication: overlapping tail of the previous chunk is trimmed
+ *    so the same words are not typed twice.
+ *  - Silence filter: transcripts shorter than MIN_TEXT_LENGTH are skipped.
+ *  - initial_prompt: domain context (CV/JD terms) passed to Whisper.
+ *  - Proper field name: "file" (not "audio") matches the backend.
  */
-function useVoiceInput(onPartial: (text: string) => void) {
+function useVoiceInput(
+  onPartial: (text: string) => void,
+  initialPrompt: string = "",
+) {
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
   const [voiceError, setVoiceError] = useState<string | null>(null);
 
@@ -87,6 +103,7 @@ function useVoiceInput(onPartial: (text: string) => void) {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const sendQueueRef = useRef<Promise<void>>(Promise.resolve());
   const isStreamingRef = useRef(false);
+  const prevTailRef = useRef("");
 
   const stopTracks = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -96,8 +113,11 @@ function useVoiceInput(onPartial: (text: string) => void) {
   const transcribeChunk = useCallback(
     async (chunk: Blob): Promise<string> => {
       const form = new FormData();
-      form.append("audio", chunk, "chunk.webm");
+      form.append("file", chunk, "chunk.webm");
       form.append("language", "vi");
+      if (initialPrompt) {
+        form.append("initial_prompt", initialPrompt);
+      }
 
       const res = await fetch("/api/speech-to-text", { method: "POST", body: form });
       if (!res.ok) {
@@ -107,13 +127,34 @@ function useVoiceInput(onPartial: (text: string) => void) {
       const json = (await res.json()) as { text?: string };
       return (json.text ?? "").trim();
     },
-    [],
+    [initialPrompt],
   );
+
+  /** Strip overlapping prefix from `incoming` using `prevTail` as anchor. */
+  const deduplicate = (incoming: string, prevTail: string): string => {
+    if (!incoming.length || !prevTail.length) return incoming;
+    // Walk backwards from the end of prevTail to find the longest suffix
+    // that is also a prefix of incoming (greedy approach).
+    for (let len = Math.min(prevTail.length, incoming.length); len >= 0; len--) {
+      const tail = prevTail.slice(-len);
+      if (incoming.startsWith(tail)) {
+        const trimmed = incoming.slice(len).trim();
+        if (trimmed) {
+          console.log(
+            `[voice dedup] stripped ${len} chars overlap: ${JSON.stringify(tail)}`,
+          );
+        }
+        return trimmed;
+      }
+    }
+    return incoming;
+  };
 
   const startRecording = useCallback(async () => {
     setVoiceError(null);
     setVoiceState("recording");
     isStreamingRef.current = true;
+    prevTailRef.current = "";
 
     let stream: MediaStream;
     try {
@@ -132,8 +173,6 @@ function useVoiceInput(onPartial: (text: string) => void) {
     }
 
     streamRef.current = stream;
-
-    // Collect all audio chunks into a single blob for final send
     const allChunks: Blob[] = [];
 
     const recorder = new MediaRecorder(stream, { mimeType: "audio/webm;codecs=opus" });
@@ -142,14 +181,20 @@ function useVoiceInput(onPartial: (text: string) => void) {
     recorder.ondataavailable = (e) => {
       if (e.data && e.data.size > 0) {
         allChunks.push(e.data);
-        // Stream every 3-second chunk to whisper for real-time feedback
         if (isStreamingRef.current) {
           const chunkCopy = e.data;
           sendQueueRef.current = sendQueueRef.current.then(async () => {
             if (!isStreamingRef.current) return;
             try {
               const text = await transcribeChunk(chunkCopy);
-              if (text) onPartial(text);
+              if (text.length < MIN_TEXT_LENGTH) return;
+              const prevTail = prevTailRef.current;
+              const deduped = deduplicate(text, prevTail);
+              prevTailRef.current = text.slice(-OVERLAP_WINDOW);
+              if (deduped) {
+                console.log(`[voice partial] raw=${JSON.stringify(text)} deduped=${JSON.stringify(deduped)}`);
+                onPartial(deduped);
+              }
             } catch {
               // silent — partial errors don't interrupt recording
             }
@@ -171,8 +216,6 @@ function useVoiceInput(onPartial: (text: string) => void) {
       isStreamingRef.current = false;
     };
 
-    // Collect all chunks into one blob and send as final transcription
-    // (the partial stream already gave live feedback)
     const sendFinal = async () => {
       if (allChunks.length === 0) {
         setVoiceState("idle");
@@ -181,21 +224,27 @@ function useVoiceInput(onPartial: (text: string) => void) {
       const finalBlob = new Blob(allChunks, { type: "audio/webm" });
       try {
         const text = await transcribeChunk(finalBlob);
-        if (text) onPartial(text); // final complete text
+        if (text.length >= MIN_TEXT_LENGTH) {
+          const prevTail = prevTailRef.current;
+          const deduped = deduplicate(text, prevTail);
+          if (deduped) {
+            console.log(`[voice final] raw=${JSON.stringify(text)} deduped=${JSON.stringify(deduped)}`);
+            onPartial(deduped);
+          }
+        }
       } catch {
         // final error already shown via voiceError in onstop
       }
       setVoiceState("idle");
     };
 
-    // Override onstop to run sendFinal
     const origOnStop = recorder.onstop;
     recorder.onstop = (ev: Event) => {
       origOnStop?.call(recorder, ev);
       void sendFinal();
     };
 
-    recorder.start(3000); // 3-second timeslice = 3s of audio per chunk → real-time
+    recorder.start(3000);
   }, [stopTracks, transcribeChunk, onPartial]);
 
   const stopRecording = useCallback(() => {
@@ -207,7 +256,6 @@ function useVoiceInput(onPartial: (text: string) => void) {
     recorderRef.current = null;
   }, []);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       isStreamingRef.current = false;
@@ -226,14 +274,18 @@ export default function AIDrawer({ open, onClose }: Props) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Voice input: feed partial transcripts directly into the input textarea
-  const { voiceState, voiceError, setVoiceError, startRecording, stopRecording } =
-    useVoiceInput((partial) => setInput((prev) => (prev ? `${prev} ${partial}` : partial).trim()));
-
   const [cvFile, setCvFile] = useState<File | null>(null);
   const [cvUploading, setCvUploading] = useState(false);
   const [cvDragging, setCvDragging] = useState(false);
   const [cvFilename, setCvFilename] = useState<string | null>(null);
+  const [cvContext, setCvContext] = useState<string>("");
+
+  // Voice input: feed partial transcripts directly into the input textarea
+  const { voiceState, voiceError, setVoiceError, startRecording, stopRecording } =
+    useVoiceInput(
+      (partial) => setInput((prev) => (prev ? `${prev} ${partial}` : partial).trim()),
+      cvContext,
+    );
 
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
@@ -426,6 +478,19 @@ export default function AIDrawer({ open, onClose }: Props) {
         ]);
 
         setCvFilename(file.name);
+
+        // Refresh CV context so voice input can use it for initial_prompt
+        if (sid) {
+          try {
+            const ctxRes = await fetch(`${AI_BACKEND_URL}/sessions/${sid}/cv-context`);
+            if (ctxRes.ok) {
+              const ctxData = await ctxRes.json();
+              setCvContext(ctxData.prompt ?? "");
+            }
+          } catch {
+            // non-critical — voice will just use no context
+          }
+        }
       } catch (err) {
         setMessages((prev) => [
           ...prev,

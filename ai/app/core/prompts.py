@@ -22,19 +22,19 @@ Quy tắc:
 
 5. Nếu người dùng yêu cầu tạo bài tập lập trình, hãy luôn trả về theo đúng cấu trúc sau:
 
-    # Title
+    Title
 
-    # Difficulty
+    Difficulty
     Easy | Medium | Hard
 
-    # Description
+    Description
     Mô tả bài toán rõ ràng.
 
-    # Constraints
+    Constraints
     - ...
-    # Input
+    Input
     ...
-    # Output
+    Output
     ...
 
     # Example 1
@@ -50,7 +50,7 @@ Quy tắc:
     # Notes
     ...
 
-5. Nếu người dùng yêu cầu tạo bài tập về code:
+5. Nếu người dùng yêu cầu đánh giá code ứng viên đẵ submit:
    - Phân tích lỗi.
    - Phân tích độ phức tạp.
    - Đề xuất tối ưu.
@@ -83,21 +83,42 @@ Chỉ sử dụng thông tin được cung cấp, không tự suy diễn.
 CV_PROMPT = """
 Bạn là AI HR Recruiter.
 
-Hãy phân tích CV dưới đây.
+Hãy phân tích CV dưới đây và trả lời NGẮN GỌN.
 
-Trả lời theo cấu trúc:
+Yêu cầu:
+- Không lặp lại nội dung CV.
+- Chỉ giữ thông tin quan trọng nhất.
+- Mỗi mục tối đa 3-5 gạch đầu dòng.
+- Nếu không có thông tin thì ghi "Không đề cập".
 
-# Tóm tắt
+Trả lời theo đúng cấu trúc sau:
 
-# Kỹ năng
+Thông tin ứng viên
+- Họ tên
+- Kinh nghiệm:
+  + Mỗi kinh nghiệm trên một dòng.
+  + Không gộp nhiều công việc vào một dòng.
+  + Chỉ liệt kê tối đa 3 kinh nghiệm gần nhất hoặc nổi bật nhất.
+- Dự án cá nhân:
+  + Mỗi dự án trên một dòng.
+  + Không gộp nhiều công việc vào một dòng.
+  + Chỉ liệt kê tối đa 3 kinh nghiệm gần nhất hoặc nổi bật nhất.
+- Công nghệ chính
 
-# Kinh nghiệm
+Tóm tắt
+(Tối đa 2 câu)
 
-# Điểm mạnh
+Điểm mạnh
+(3 ý)
 
-# Điểm yếu
+Cần làm rõ
+(3 ý)
 
-# Gợi ý cải thiện
+# Câu hỏi phỏng vấn
+(5 câu)
 
-# Câu hỏi phỏng vấn đề xuất
+QUY TẮC:
+- Không gộp nhiều thông tin trên một dòng.
+- Mỗi kinh nghiệm là một bullet riêng.
+- Không sử dụng dấu ";" để nối nhiều mục.
 """

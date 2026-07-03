@@ -8,21 +8,24 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Invalid form data" }, { status: 400 });
   }
 
-  const audioFile = formData.get("audio");
+  const audioFile = formData.get("file");
   if (!audioFile || typeof audioFile === "string") {
     return Response.json({ error: "No audio file" }, { status: 400 });
   }
 
-  // Read as raw Blob to ensure proper serialization when forwarding
   const blob: Blob = audioFile as Blob;
   const arrayBuffer = await blob.arrayBuffer();
   const lang = formData.get("language");
+  const initialPrompt = formData.get("initial_prompt");
 
   try {
     const backend = new FormData();
     backend.append("file", new File([arrayBuffer], "voice.webm", { type: blob.type || "audio/webm" }));
     if (typeof lang === "string") {
       backend.append("language", lang);
+    }
+    if (typeof initialPrompt === "string" && initialPrompt.trim()) {
+      backend.append("initial_prompt", initialPrompt.trim());
     }
 
     const res = await fetch("http://127.0.0.1:8000/speech-to-text", {
