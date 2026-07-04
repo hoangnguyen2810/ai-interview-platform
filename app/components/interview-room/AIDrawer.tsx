@@ -640,7 +640,7 @@ export default function AIDrawer({ open, onClose, meetingCode }: Props) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-y-0 right-0 w-96 bg-[#181818] shadow-2xl z-50 flex flex-col border-l border-[#2a2a2a] font-sans text-[13px]">
+    <div className="fixed inset-y-0 right-0 w-[600px] bg-[#181818] shadow-2xl z-50 flex flex-col border-l border-[#2a2a2a] font-sans text-[13px]">
       {/* Header */}
       <div className="flex items-center justify-between px-3 h-11 border-b border-[#2a2a2a] bg-[#181818] shrink-0">
         <div className="flex-1 min-w-0 flex items-center gap-2">
@@ -699,192 +699,190 @@ export default function AIDrawer({ open, onClose, meetingCode }: Props) {
       {/* Body */}
       {tab === "chat" ? (
         <>
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 bg-[#181818]">
-        {messagesList.length === 0 && (
-          <div className="text-center text-[12.5px] text-[#6e6e6e] mt-16 px-4">
-            <p className="mb-1.5 text-[#9a9a9a]">Xin chào</p>
-            <p>Upload CV hoặc hỏi bất kỳ câu hỏi nào về phỏng vấn IT.</p>
-          </div>
-        )}
-        {messagesList.map((m, i) => (
-          <div
-            key={i}
-            className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-          >
-            {m.role === "user" ? (
-              <div className="max-w-[85%] px-3 py-2 rounded-md text-[13px] leading-relaxed whitespace-pre-wrap break-words bg-[#2a2d3a] text-[#e4e4e4] border border-[#343850]">
-                {m.content}
-              </div>
-            ) : (
-              <div
-                className={`max-w-[88%] px-3 py-2 rounded-md text-[13px] leading-relaxed whitespace-pre-wrap break-words border-l-2 ${
-                  m.isCVAnalysis
-                    ? "bg-[#221c12] border-[#b8860b] text-[#e4e4e4]"
-                    : "bg-[#1f1f1f] border-[#3b82f6] text-[#dcdcdc]"
-                }`}
-              >
-                {m.content}
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 bg-[#181818]">
+            {messagesList.length === 0 && (
+              <div className="text-center text-[12.5px] text-[#6e6e6e] mt-16 px-4">
+                <p className="mb-1.5 text-[#9a9a9a]">Xin chào</p>
+                <p>Upload CV hoặc hỏi bất kỳ câu hỏi nào về phỏng vấn IT.</p>
               </div>
             )}
+            {messagesList.map((m, i) => (
+              <div
+                key={i}
+                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+              >
+                {m.role === "user" ? (
+                  <div className="max-w-[85%] px-3 py-2 rounded-md text-[13px] leading-relaxed whitespace-pre-wrap break-words bg-[#2a2d3a] text-[#e4e4e4] border border-[#343850]">
+                    {m.content}
+                  </div>
+                ) : (
+                  <div
+                    className={`max-w-[88%] px-3 py-2 rounded-md text-[13px] leading-relaxed whitespace-pre-wrap break-words border-l-2 ${
+                      m.isCVAnalysis
+                        ? "bg-[#221c12] border-[#b8860b] text-[#e4e4e4]"
+                        : "bg-[#1f1f1f] border-[#3b82f6] text-[#dcdcdc]"
+                    }`}
+                  >
+                    {m.content}
+                  </div>
+                )}
+              </div>
+            ))}
+            {loading && (
+              <div className="flex justify-start">
+                <div className="bg-[#1f1f1f] border-l-2 border-[#3b82f6] px-3 py-2 rounded-md text-[13px] text-[#8a8a8a]">
+                  <span className="inline-flex gap-1 items-center">
+                    <span className="h-1 w-1 rounded-full bg-[#8a8a8a] animate-bounce [animation-delay:-0.3s]" />
+                    <span className="h-1 w-1 rounded-full bg-[#8a8a8a] animate-bounce [animation-delay:-0.15s]" />
+                    <span className="h-1 w-1 rounded-full bg-[#8a8a8a] animate-bounce" />
+                  </span>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
           </div>
-        ))}
-        {loading && (
-          <div className="flex justify-start">
-            <div className="bg-[#1f1f1f] border-l-2 border-[#3b82f6] px-3 py-2 rounded-md text-[13px] text-[#8a8a8a]">
-              <span className="inline-flex gap-1 items-center">
-                <span className="h-1 w-1 rounded-full bg-[#8a8a8a] animate-bounce [animation-delay:-0.3s]" />
-                <span className="h-1 w-1 rounded-full bg-[#8a8a8a] animate-bounce [animation-delay:-0.15s]" />
-                <span className="h-1 w-1 rounded-full bg-[#8a8a8a] animate-bounce" />
-              </span>
-            </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
 
-      {/* Voice error */}
-      {voiceError && (
-        <div className="mx-3 mb-2 px-3 py-2 rounded bg-red-900/40 border border-red-800 text-[11px] text-red-300">
-          {voiceError}
-          <button
-            className="ml-2 underline"
-            onClick={() => setVoiceError(null)}
-          >
-            Đóng
-          </button>
-        </div>
-      )}
-
-      {/* Composer */}
-      <div className="px-3 pb-3 pt-2 border-t border-[#2a2a2a] bg-[#181818] shrink-0">
-        <div
-          className={`rounded-lg border transition-colors ${
-            cvDragging
-              ? "border-[#3b82f6] bg-[#1a2030]"
-              : "border-[#2f2f2f] bg-[#1f1f1f] focus-within:border-[#3f3f3f]"
-          }`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          {/* Transcription status banner */}
-          {voiceState === "recording" && (
-            <div className="flex items-center gap-1.5 px-3 pt-2 text-[11px] text-red-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse" />
-              Recording...
-            </div>
-          )}
-          {voiceState === "transcribing" && (
-            <div className="flex items-center gap-1.5 px-3 pt-2 text-[11px] text-yellow-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
-              Transcribing...
+          {/* Voice error */}
+          {voiceError && (
+            <div className="mx-3 mb-2 px-3 py-2 rounded bg-red-900/40 border border-red-800 text-[11px] text-red-300">
+              {voiceError}
+              <button
+                className="ml-2 underline"
+                onClick={() => setVoiceError(null)}
+              >
+                Đóng
+              </button>
             </div>
           )}
 
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-              }
-            }}
-            placeholder={
-              cvDragging ? "Thả file PDF vào đây..." : "Hỏi gì đó..."
-            }
-            disabled={loading}
-            rows={2}
-            className="w-full resize-none bg-transparent px-3 pt-2.5 pb-1 text-[13px] text-[#e4e4e4] placeholder-[#6e6e6e] focus:outline-none disabled:opacity-50"
-          />
-          <div className="flex items-center justify-between px-2 pb-2 pt-1">
-            <div className="flex items-center gap-1">
-              {/* Upload CV */}
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={cvUploading}
-                title="Upload CV (PDF)"
-                className="flex items-center gap-1 text-[11.5px] px-2 py-1 rounded text-[#9a9a9a] hover:bg-[#2a2a2a] hover:text-[#e4e4e4] disabled:opacity-50 transition-colors"
-              >
-                {cvUploading ? (
-                  <>
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#b8860b] animate-pulse" />
-                    Upload...
-                  </>
-                ) : (
-                  <>
-                    <IconPaperclip />
-                    CV.pdf
-                  </>
-                )}
-              </button>
-
-              {/* Voice input */}
-              <button
-                onClick={handleVoiceClick}
-                disabled={voiceState === "transcribing"}
-                title={
-                  voiceState === "recording"
-                    ? "Dừng ghi âm"
-                    : voiceState === "transcribing"
-                      ? "Đang nhận dạng..."
-                      : "Ghi âm bằng giọng nói"
-                }
-                className={`flex items-center gap-1 text-[11.5px] px-2 py-1 rounded transition-colors disabled:cursor-not-allowed ${
-                  voiceState === "recording"
-                    ? "text-red-400 bg-red-900/30 hover:bg-red-900/50"
-                    : "text-[#9a9a9a] hover:bg-[#2a2a2a] hover:text-[#e4e4e4] disabled:opacity-40"
-                }`}
-              >
-                {voiceState === "recording" ? (
-                  <>
-                    <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse" />
-                    Stop
-                  </>
-                ) : voiceState === "transcribing" ? (
-                  <>
-                    <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
-                    ...
-                  </>
-                ) : (
-                  <>
-                    <IconMic />
-                    Mic
-                  </>
-                )}
-              </button>
-            </div>
-
-            <button
-              onClick={sendMessage}
-              disabled={loading || !input.trim()}
-              title="Gửi"
-              className="flex items-center justify-center h-6 w-6 rounded-md bg-[#3b82f6] text-white disabled:bg-[#2a2a2a] disabled:text-[#5a5a5a] hover:bg-[#2f6fe0] disabled:cursor-not-allowed transition-colors"
+          {/* Composer */}
+          <div className="px-3 pb-3 pt-2 border-t border-[#2a2a2a] bg-[#181818] shrink-0">
+            <div
+              className={`rounded-lg border transition-colors ${
+                cvDragging
+                  ? "border-[#3b82f6] bg-[#1a2030]"
+                  : "border-[#2f2f2f] bg-[#1f1f1f] focus-within:border-[#3f3f3f]"
+              }`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
             >
-              <IconSend />
-            </button>
+              {/* Transcription status banner */}
+              {voiceState === "recording" && (
+                <div className="flex items-center gap-1.5 px-3 pt-2 text-[11px] text-red-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse" />
+                  Recording...
+                </div>
+              )}
+              {voiceState === "transcribing" && (
+                <div className="flex items-center gap-1.5 px-3 pt-2 text-[11px] text-yellow-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
+                  Transcribing...
+                </div>
+              )}
+
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                  }
+                }}
+                placeholder={
+                  cvDragging ? "Thả file PDF vào đây..." : "Hỏi gì đó..."
+                }
+                disabled={loading}
+                rows={2}
+                className="w-full resize-none bg-transparent px-3 pt-2.5 pb-1 text-[13px] text-[#e4e4e4] placeholder-[#6e6e6e] focus:outline-none disabled:opacity-50"
+              />
+              <div className="flex items-center justify-between px-2 pb-2 pt-1">
+                <div className="flex items-center gap-1">
+                  {/* Upload CV */}
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={cvUploading}
+                    title="Upload CV (PDF)"
+                    className="flex items-center gap-1 text-[11.5px] px-2 py-1 rounded text-[#9a9a9a] hover:bg-[#2a2a2a] hover:text-[#e4e4e4] disabled:opacity-50 transition-colors"
+                  >
+                    {cvUploading ? (
+                      <>
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#b8860b] animate-pulse" />
+                        Upload...
+                      </>
+                    ) : (
+                      <>
+                        <IconPaperclip />
+                        CV.pdf
+                      </>
+                    )}
+                  </button>
+
+                  {/* Voice input */}
+                  <button
+                    onClick={handleVoiceClick}
+                    disabled={voiceState === "transcribing"}
+                    title={
+                      voiceState === "recording"
+                        ? "Dừng ghi âm"
+                        : voiceState === "transcribing"
+                          ? "Đang nhận dạng..."
+                          : "Ghi âm bằng giọng nói"
+                    }
+                    className={`flex items-center gap-1 text-[11.5px] px-2 py-1 rounded transition-colors disabled:cursor-not-allowed ${
+                      voiceState === "recording"
+                        ? "text-red-400 bg-red-900/30 hover:bg-red-900/50"
+                        : "text-[#9a9a9a] hover:bg-[#2a2a2a] hover:text-[#e4e4e4] disabled:opacity-40"
+                    }`}
+                  >
+                    {voiceState === "recording" ? (
+                      <>
+                        <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse" />
+                        Stop
+                      </>
+                    ) : voiceState === "transcribing" ? (
+                      <>
+                        <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
+                        ...
+                      </>
+                    ) : (
+                      <>
+                        <IconMic />
+                        Mic
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <button
+                  onClick={sendMessage}
+                  disabled={loading || !input.trim()}
+                  title="Gửi"
+                  className="flex items-center justify-center h-6 w-6 rounded-md bg-[#3b82f6] text-white disabled:bg-[#2a2a2a] disabled:text-[#5a5a5a] hover:bg-[#2f6fe0] disabled:cursor-not-allowed transition-colors"
+                >
+                  <IconSend />
+                </button>
+              </div>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf"
+              onChange={handleFileChange}
+              className="hidden"
+            />
           </div>
-        </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".pdf"
-          onChange={handleFileChange}
-          className="hidden"
-        />
-      </div>
         </>
+      ) : meetingCode ? (
+        <div className="flex-1 min-h-0 bg-[#181818]">
+          <AIReviewList meetingCode={meetingCode} />
+        </div>
       ) : (
-        meetingCode ? (
-          <div className="flex-1 min-h-0 bg-[#181818]">
-            <AIReviewList meetingCode={meetingCode} />
-          </div>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-[11.5px] text-[#6e6e6e] p-4 text-center">
-            Không tìm thấy meetingCode.
-          </div>
-        )
+        <div className="flex-1 flex items-center justify-center text-[11.5px] text-[#6e6e6e] p-4 text-center">
+          Không tìm thấy meetingCode.
+        </div>
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import TestCaseEditorModal from "./TestCaseEditorModal";
 
 interface Review {
   reviewId: string;
@@ -14,16 +15,26 @@ interface Review {
   strengths: string;
   weaknesses: string;
   hint: string;
+  // New fields from the refactored analyzer/reviewer pipeline.
+  executionMode?: "stdin" | "hardcoded" | "function" | "unknown";
+  analysisReason?: string;
+  analysisConfidence?: number | null;
+  analysisEntryPoint?: string;
+  usesHardcodedValues?: boolean;
+  canAutoRun?: boolean;
 }
 
 interface AITestCase {
   id: string;
   description: string;
   edgeCaseType: string;
+  inputData: string;
   expectedOutput: string;
   actualOutput: string;
   status: "PENDING" | "PASSED" | "FAILED" | "RUNTIME_ERROR" | "TIMEOUT";
   runtimeMs: number;
+  source?: "AI" | "MANUAL";
+  aiVerified?: boolean | null;
 }
 
 interface Submission {
@@ -58,6 +69,13 @@ const STATUS_COLORS: Record<string, string> = {
   COMPILE_ERROR: "bg-red-500/20 text-red-300 border-red-500/40",
   WRONG_ANSWER: "bg-orange-500/20 text-orange-300 border-orange-500/40",
   SYSTEM_ERROR: "bg-gray-500/20 text-gray-300 border-gray-500/40",
+};
+
+const MODE_LABEL: Record<string, string> = {
+  stdin: "Đọc stdin/stdout",
+  hardcoded: "Hardcode giá trị",
+  function: "Chỉ định nghĩa hàm",
+  unknown: "Không xác định được",
 };
 
 /** Safely parse JSON; returns fallback when response is empty or non-JSON
@@ -107,6 +125,22 @@ function ScoreBar({ label, value }: { label: string; value: number }) {
   );
 }
 
+function CorrectnessBadge({ value }: { value: string }) {
+  const cls =
+    value === "PASS"
+      ? "text-green-400 bg-green-500/10 border-green-500/30"
+      : value === "PARTIAL"
+        ? "text-yellow-400 bg-yellow-500/10 border-yellow-500/30"
+        : value === "FAIL"
+          ? "text-red-400 bg-red-500/10 border-red-500/30"
+          : "text-gray-300 bg-gray-500/10 border-gray-500/30";
+  return (
+    <span className={`text-[10px] px-1.5 py-0.5 rounded border ${cls}`}>
+      {value === "CANNOT_RUN" ? "Không thể chạy tự động" : value}
+    </span>
+  );
+}
+
 interface Props {
   meetingCode: string;
 }
@@ -119,6 +153,31 @@ export default function AIReviewList({ meetingCode }: Props) {
   const [loadingReview, setLoadingReview] = useState(false);
   const [triggering, setTriggering] = useState(false);
   const [triggerError, setTriggerError] = useState<string | null>(null);
+
+  // Role-gated UI: hide Edit/Run affordances from candidates.
+  const [isRecruiter, setIsRecruiter] = useState(false);
+
+  // Editor modal state.
+  const [editingTest, setEditingTest] = useState<AITestCase | null>(null);
+  const [runningTestIds, setRunningTestIds] = useState<Set<string>>(new Set());
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/me", { credentials: "include" })
+      .then((r) => readJson<{ user?: { role?: string } | null }>(r, { user: null }))
+      .then((data) => {
+        if (cancelled) return;
+        const role = data.user?.role ?? "";
+        setIsRecruiter(role === "RECRUITER" || role === "ADMIN");
+      })
+      .catch(() => {
+        if (!cancelled) setIsRecruiter(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const loadSubmissions = useCallback(async () => {
     setLoading(true);
@@ -223,6 +282,119 @@ export default function AIReviewList({ meetingCode }: Props) {
   };
 
   const selected = submissions.find((s) => s.submissionId === selectedId);
+
+  const runTests = useCallback(
+    async (submissionId: string, testIds: string[]) => {
+      if (testIds.length === 0) return;
+      setActionError(null);
+      setRunningTestIds((prev) => {
+        const next = new Set(prev);
+        testIds.forEach((id) => next.add(id));
+        return next;
+      });
+      try {
+        const res = await fetch(
+          `/api/interviews/${encodeURIComponent(meetingCode)}/ai-tests`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "run",
+              submissionId,
+              testIds,
+            }),
+          },
+        );
+        const data = await readJson<{ success?: boolean; message?: string }>(
+          res,
+          { success: false },
+        );
+        if (!data.success) {
+          setActionError(data.message ?? `Chạy thất bại (HTTP ${res.status})`);
+        }
+        await loadReview(submissionId);
+      } catch (e) {
+        setActionError(e instanceof Error ? e.message : "Lỗi không xác định");
+      } finally {
+        setRunningTestIds((prev) => {
+          const next = new Set(prev);
+          testIds.forEach((id) => next.delete(id));
+          return next;
+        });
+      }
+    },
+    [meetingCode, loadReview],
+  );
+
+  const handleEditorSave = useCallback(
+    async (id: string, patch: {
+      inputData: string;
+      expectedOutput: string;
+      description: string;
+      edgeCaseType: string;
+    }) => {
+      if (!selected) return;
+      setActionError(null);
+      try {
+        const res = await fetch(
+          `/api/interviews/${encodeURIComponent(meetingCode)}/ai-tests`,
+          {
+            method: "PATCH",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id,
+              submissionId: selected.submissionId,
+              inputData: patch.inputData,
+              expectedOutput: patch.expectedOutput,
+              description: patch.description,
+              edgeCaseType: patch.edgeCaseType,
+            }),
+          },
+        );
+        const data = await readJson<{ success?: boolean; message?: string }>(
+          res,
+          { success: false },
+        );
+        if (!data.success) {
+          setActionError(data.message ?? `Lưu thất bại (HTTP ${res.status})`);
+          return;
+        }
+        setEditingTest(null);
+        await loadReview(selected.submissionId);
+      } catch (e) {
+        setActionError(e instanceof Error ? e.message : "Lỗi không xác định");
+      }
+    },
+    [meetingCode, loadReview, selected],
+  );
+
+  const handleEditorDelete = useCallback(
+    async (id: string) => {
+      if (!selected) return;
+      setActionError(null);
+      try {
+        const res = await fetch(
+          `/api/interviews/${encodeURIComponent(meetingCode)}/ai-tests?id=${id}&submissionId=${selected.submissionId}`,
+          { method: "DELETE", credentials: "include" },
+        );
+        const data = await readJson<{ success?: boolean; message?: string }>(
+          res,
+          { success: false },
+        );
+        if (!data.success) {
+          setActionError(data.message ?? `Xoá thất bại (HTTP ${res.status})`);
+          return;
+        }
+        setEditingTest(null);
+        await loadReview(selected.submissionId);
+      } catch (e) {
+        setActionError(e instanceof Error ? e.message : "Lỗi không xác định");
+      }
+    },
+    [meetingCode, loadReview, selected],
+  );
 
   return (
     <div className="flex h-full">
@@ -345,12 +517,29 @@ export default function AIReviewList({ meetingCode }: Props) {
                 <ReviewContent
                   review={reviewData.review}
                   tests={reviewData.tests}
+                  isRecruiter={isRecruiter}
+                  runningTestIds={runningTestIds}
+                  actionError={actionError}
+                  dismissActionError={() => setActionError(null)}
+                  onEdit={(t) => setEditingTest(t)}
+                  onRun={(testIds) => runTests(selected.submissionId, testIds)}
                 />
               )}
             </div>
           </>
         )}
       </div>
+
+      {editingTest && selected && (
+        <TestCaseEditorModal
+          meetingCode={meetingCode}
+          submissionId={selected.submissionId}
+          test={editingTest}
+          onClose={() => setEditingTest(null)}
+          onSave={handleEditorSave}
+          onDelete={handleEditorDelete}
+        />
+      )}
     </div>
   );
 }
@@ -358,12 +547,83 @@ export default function AIReviewList({ meetingCode }: Props) {
 function ReviewContent({
   review,
   tests,
+  isRecruiter,
+  runningTestIds,
+  actionError,
+  dismissActionError,
+  onEdit,
+  onRun,
 }: {
   review: Review;
   tests: { total: number; passed: number; items: AITestCase[] };
+  isRecruiter: boolean;
+  runningTestIds: Set<string>;
+  actionError: string | null;
+  dismissActionError: () => void;
+  onEdit: (t: AITestCase) => void;
+  onRun: (testIds: string[]) => void;
 }) {
+  const mode = review.executionMode ?? "unknown";
+  const canAutoRun = review.canAutoRun ?? mode === "stdin";
+  const showCannotRunBanner = !canAutoRun;
+
   return (
     <>
+      {/* Execution-mode banner */}
+      <div className="flex items-center justify-between gap-2 bg-white/5 rounded-lg px-3 py-2 border border-white/10">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-[10.5px] text-[#9a9a9a] uppercase tracking-wider shrink-0">
+            Execution mode
+          </span>
+          <span
+            className={`text-[11px] px-1.5 py-0.5 rounded border ${
+              mode === "stdin"
+                ? "border-green-500/40 text-green-300 bg-green-500/10"
+                : mode === "hardcoded"
+                  ? "border-orange-500/40 text-orange-300 bg-orange-500/10"
+                  : mode === "function"
+                    ? "border-purple-500/40 text-purple-300 bg-purple-500/10"
+                    : "border-gray-500/40 text-gray-300 bg-gray-500/10"
+            }`}
+          >
+            {MODE_LABEL[mode] ?? mode}
+          </span>
+        </div>
+        <span className="text-[10.5px] text-[#6e6e6e] shrink-0">
+          {review.analysisConfidence != null
+            ? `confidence ${Math.round(review.analysisConfidence * 100)}%`
+            : ""}
+        </span>
+      </div>
+
+      {showCannotRunBanner && (
+        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-2.5 text-[11.5px] text-yellow-200 leading-relaxed">
+          <p className="font-medium mb-1">Không thể tự động chạy chương trình</p>
+          <p className="text-yellow-200/80">
+            {review.analysisReason ||
+              "AI không xác định được giao diện đầu vào của source code."}
+            {review.analysisEntryPoint ? (
+              <>
+                {" "}
+                <span className="opacity-80">Entry point: {review.analysisEntryPoint}</span>
+              </>
+            ) : null}
+          </p>
+        </div>
+      )}
+
+      {actionError && (
+        <div className="px-2.5 py-1.5 rounded bg-red-900/40 border border-red-800 text-[11px] text-red-300 flex items-start justify-between gap-2">
+          <span>{actionError}</span>
+          <button
+            onClick={dismissActionError}
+            className="text-red-300/80 hover:text-red-200 underline shrink-0"
+          >
+            đóng
+          </button>
+        </div>
+      )}
+
       {/* Overall */}
       <div className="bg-gradient-to-br from-cyan-500/10 to-purple-500/10 border border-cyan-500/20 rounded-lg p-3">
         <div className="flex items-center justify-between">
@@ -374,26 +634,19 @@ function ReviewContent({
               <span className="text-sm text-[#6e6e6e]">/10</span>
             </p>
           </div>
-          <div className="text-right text-[10.5px] space-y-0.5">
-            <p className="text-[#9a9a9a]">
-              Correctness:{" "}
-              <span
-                className={
-                  review.correctness === "PASS"
-                    ? "text-green-400"
-                    : review.correctness === "PARTIAL"
-                      ? "text-yellow-400"
-                      : "text-red-400"
-                }
-              >
-                {review.correctness}
-              </span>
-            </p>
+          <div className="text-right text-[10.5px] space-y-1">
+            <div className="flex items-center justify-end gap-1.5">
+              <span className="text-[#9a9a9a]">Correctness:</span>
+              <CorrectnessBadge value={review.correctness} />
+            </div>
             <p className="text-[#9a9a9a]">
               AI Tests:{" "}
               <span className="text-[#e4e4e4]">
                 {tests.passed}/{tests.total}
               </span>
+              {tests.items.some((t) => t.status === "PENDING") && (
+                <span className="ml-1 text-[#9a9a9a]">· {tests.items.filter((t) => t.status === "PENDING").length} chờ chạy</span>
+              )}
             </p>
           </div>
         </div>
@@ -457,7 +710,7 @@ function ReviewContent({
       {review.hint && (
         <div className="bg-purple-500/5 border border-purple-500/20 rounded-lg p-2.5">
           <p className="text-[10.5px] text-purple-300 mb-1">
-            💡 Đề xuất hướng giải
+            Đề xuất hướng giải
           </p>
           <p className="text-[12px] text-[#e4e4e4] leading-5 whitespace-pre-wrap">
             {review.hint}
@@ -468,49 +721,122 @@ function ReviewContent({
       {/* AI test cases */}
       {tests.items.length > 0 && (
         <div>
-          <p className="text-[10.5px] text-[#9a9a9a] uppercase tracking-wider mb-2 mt-2">
-            AI-generated test cases ({tests.passed}/{tests.total} passed)
-          </p>
-          <div className="space-y-1.5">
-            {tests.items.map((t) => (
-              <div
-                key={t.id}
-                className={`rounded border p-2 ${
-                  STATUS_COLORS[t.status] ?? STATUS_COLORS.PENDING
-                }`}
+          <div className="flex items-center justify-between mb-2 mt-2">
+            <p className="text-[10.5px] text-[#9a9a9a] uppercase tracking-wider">
+              AI-generated test cases ({tests.passed}/{tests.total} passed)
+              {!canAutoRun ? " · chờ recruiter chạy" : ""}
+            </p>
+            {isRecruiter && tests.items.length > 0 && (
+              <button
+                onClick={() => onRun(tests.items.map((t) => t.id))}
+                disabled={[...runningTestIds].some((id) =>
+                  tests.items.some((t) => t.id === id),
+                )}
+                className="text-[10.5px] px-2 py-0.5 rounded bg-[#3b82f6] text-white hover:bg-[#2f6fe0] disabled:opacity-50"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-[11.5px] font-medium">
-                    {t.description || `Test ${t.id.slice(0, 6)}`}
-                  </p>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded border border-current shrink-0">
-                    {t.status}
-                  </span>
-                </div>
-                <p className="text-[10px] opacity-70 mt-0.5">
-                  edge: {t.edgeCaseType} · {t.runtimeMs}ms
-                </p>
-                <details className="text-[10.5px] mt-1">
-                  <summary className="cursor-pointer opacity-80 hover:opacity-100">
-                    Show I/O
-                  </summary>
-                  <div className="mt-1 space-y-1 font-mono">
-                    <p>
-                      <span className="opacity-60">Expected:</span>
-                      <pre className="bg-black/30 rounded p-1.5 mt-0.5 overflow-x-auto whitespace-pre-wrap">
-                        {t.expectedOutput || "(empty)"}
-                      </pre>
-                    </p>
-                    <p>
-                      <span className="opacity-60">Actual:</span>
-                      <pre className="bg-black/30 rounded p-1.5 mt-0.5 overflow-x-auto whitespace-pre-wrap">
-                        {t.actualOutput || "(empty)"}
-                      </pre>
-                    </p>
+                Chạy tất cả
+              </button>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            {tests.items.map((t) => {
+              const isRunning = runningTestIds.has(t.id);
+              return (
+                <div
+                  key={t.id}
+                  className={`rounded border p-2 ${
+                    STATUS_COLORS[t.status] ?? STATUS_COLORS.PENDING
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[11.5px] font-medium">
+                        {t.description || `Test ${t.id.slice(0, 6)}`}
+                      </p>
+                      <p className="text-[10px] opacity-70 mt-0.5">
+                        edge: {t.edgeCaseType} ·{" "}
+                        {t.status === "PENDING" ? "chưa chạy" : `${t.runtimeMs}ms`}
+                        {t.source === "MANUAL" ? " · recruiter tạo" : ""}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="text-[10px] px-1.5 py-0.5 rounded border border-current">
+                        {t.status}
+                      </span>
+                      {t.source !== "MANUAL" && (
+                        t.aiVerified === true ? (
+                          <span
+                            title="AI đã tự kiểm: test PASS ngay lần chạy đầu tiên với code ứng viên."
+                            className="text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/60 text-emerald-300 bg-emerald-500/10"
+                          >
+                            AI ✓
+                          </span>
+                        ) : t.aiVerified === false ? (
+                          <span
+                            title="AI không tự kiểm được: test FAILED / RUNTIME_ERROR / TIMEOUT ở lần chạy đầu. Cần recruiter xem lại input hoặc expected output."
+                            className="text-[10px] px-1.5 py-0.5 rounded border border-amber-500/60 text-amber-300 bg-amber-500/10"
+                          >
+                            Cần xem
+                          </span>
+                        ) : (
+                          <span
+                            title="Test chưa được chạy tự động (chế độ không-stdin hoặc chưa auto-run)."
+                            className="text-[10px] px-1.5 py-0.5 rounded border border-current opacity-60"
+                          >
+                            AI —
+                          </span>
+                        )
+                      )}
+                      {isRecruiter && (
+                        <>
+                          <button
+                            onClick={() => onRun([t.id])}
+                            disabled={isRunning}
+                            title="Chạy thử test này"
+                            className="text-[10px] px-1.5 py-0.5 rounded border border-current opacity-80 hover:opacity-100 disabled:opacity-40"
+                          >
+                            {isRunning ? "..." : "Run"}
+                          </button>
+                          <button
+                            onClick={() => onEdit(t)}
+                            title="Chỉnh sửa test"
+                            className="text-[10px] px-1.5 py-0.5 rounded border border-current opacity-80 hover:opacity-100"
+                          >
+                            Edit
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </details>
-              </div>
-            ))}
+                  <details className="text-[10.5px] mt-1">
+                    <summary className="cursor-pointer opacity-80 hover:opacity-100">
+                      Show I/O
+                    </summary>
+                    <div className="mt-1 space-y-1 font-mono">
+                      <p>
+                        <span className="opacity-60">Input:</span>
+                        <pre className="bg-black/30 rounded p-1.5 mt-0.5 overflow-x-auto whitespace-pre-wrap">
+                          {/* AITestCase doesn't carry input in this list; we render Expected/Actual only. */}
+                          {"(xem editor)"}
+                        </pre>
+                      </p>
+                      <p>
+                        <span className="opacity-60">Expected:</span>
+                        <pre className="bg-black/30 rounded p-1.5 mt-0.5 overflow-x-auto whitespace-pre-wrap">
+                          {t.expectedOutput || "(empty)"}
+                        </pre>
+                      </p>
+                      <p>
+                        <span className="opacity-60">Actual:</span>
+                        <pre className="bg-black/30 rounded p-1.5 mt-0.5 overflow-x-auto whitespace-pre-wrap">
+                          {t.actualOutput || "(empty)"}
+                        </pre>
+                      </p>
+                    </div>
+                  </details>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
