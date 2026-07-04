@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
+import AIReviewList from "./coding/AIReviewList";
 
 type Props = {
   open: boolean;
   onClose: () => void;
+  meetingCode?: string;
 };
 
 type Message = {
@@ -348,7 +350,8 @@ function useVoiceInput(
 
 // ─── Main component ─────────────────────────────────────────────────────────────
 
-export default function AIDrawer({ open, onClose }: Props) {
+export default function AIDrawer({ open, onClose, meetingCode }: Props) {
+  const [tab, setTab] = useState<"chat" | "review">("chat");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -669,6 +672,33 @@ export default function AIDrawer({ open, onClose }: Props) {
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex border-b border-[#2a2a2a] shrink-0">
+        <button
+          onClick={() => setTab("chat")}
+          className={`flex-1 py-2 text-[12px] transition-colors ${
+            tab === "chat"
+              ? "text-[#e4e4e4] border-b-2 border-[#3b82f6]"
+              : "text-[#6e6e6e] border-b-2 border-transparent hover:text-[#9a9a9a]"
+          }`}
+        >
+          💬 Chat AI
+        </button>
+        <button
+          onClick={() => setTab("review")}
+          className={`flex-1 py-2 text-[12px] transition-colors ${
+            tab === "review"
+              ? "text-[#e4e4e4] border-b-2 border-[#3b82f6]"
+              : "text-[#6e6e6e] border-b-2 border-transparent hover:text-[#9a9a9a]"
+          }`}
+        >
+          🤖 Code Review
+        </button>
+      </div>
+
+      {/* Body */}
+      {tab === "chat" ? (
+        <>
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 bg-[#181818]">
         {messagesList.length === 0 && (
@@ -844,6 +874,18 @@ export default function AIDrawer({ open, onClose }: Props) {
           className="hidden"
         />
       </div>
+        </>
+      ) : (
+        meetingCode ? (
+          <div className="flex-1 min-h-0 bg-[#181818]">
+            <AIReviewList meetingCode={meetingCode} />
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-[11.5px] text-[#6e6e6e] p-4 text-center">
+            Không tìm thấy meetingCode.
+          </div>
+        )
+      )}
     </div>
   );
 }

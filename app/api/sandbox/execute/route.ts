@@ -14,6 +14,12 @@ interface ExecuteRequest {
   stdin?: string;
   meetingCode: string;
   questionId?: string;
+  /**
+   * Optional pre-existing execution row id. When provided, the route UPDATEs
+   * that row instead of INSERTing a new one — prevents duplicate execution
+   * records when called from /api/interviews/[meetingCode]/submissions.
+   */
+  executionId?: string;
 }
 
 interface SandboxResult {
@@ -66,32 +72,44 @@ export async function POST(request: NextRequest) {
 
     const interviewId = interviewResult.rows[0].id;
 
-    // Create execution record with PENDING status
-    const execResult = await pool.query(
-      `INSERT INTO code_executions 
-        (interview_id, question_id, language, source_code, stdin_data, status)
-       VALUES ($1, $2, $3, $4, $5, 'PENDING')
-       RETURNING id`,
-      [
-        interviewId,
-        body.questionId || null,
-        body.language,
-        body.code,
-        body.stdin || null,
-      ]
-    );
-
-    const executionId = execResult.rows[0].id;
+    let executionId: string;
+    if (body.executionId) {
+      // Caller already created the execution row (e.g. submissions route).
+      // Mark it RUNNING and reuse it for the result UPDATE.
+      executionId = body.executionId;
+      await pool.query(
+        `UPDATE code_executions SET status = 'RUNNING' WHERE id = $1::uuid`,
+        [executionId]
+      );
+    } else {
+      // Standalone usage — caller didn't pre-create a row, so we create one.
+      const execResult = await pool.query(
+        `INSERT INTO code_executions
+          (interview_id, question_id, language, source_code, stdin_data, status)
+         VALUES ($1, $2, $3, $4, $5, 'PENDING')
+         RETURNING id`,
+        [
+          interviewId,
+          body.questionId || null,
+          body.language,
+          body.code,
+          body.stdin || null,
+        ]
+      );
+      executionId = execResult.rows[0].id;
+    }
 
     // Execute code in sandbox
     let result: SandboxResult;
 
     try {
-      // Update status to RUNNING
-      await pool.query(
-        `UPDATE code_executions SET status = 'RUNNING' WHERE id = $1`,
-        [executionId]
-      );
+      // If we created the row above, transition to RUNNING here.
+      if (!body.executionId) {
+        await pool.query(
+          `UPDATE code_executions SET status = 'RUNNING' WHERE id = $1::uuid`,
+          [executionId]
+        );
+      }
 
       const sandboxResponse = await fetch(`${SANDBOX_URL}/execute`, {
         method: "POST",
@@ -114,11 +132,11 @@ export async function POST(request: NextRequest) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       
       await pool.query(
-        `UPDATE code_executions 
-         SET status = 'SYSTEM_ERROR', 
-             stderr = $1, 
-             completed_at = CURRENT_TIMESTAMP 
-         WHERE id = $2`,
+        `UPDATE code_executions
+         SET status = 'SYSTEM_ERROR',
+             stderr = $1,
+             completed_at = CURRENT_TIMESTAMP
+         WHERE id = $2::uuid`,
         [errorMessage, executionId]
       );
 
@@ -150,14 +168,14 @@ export async function POST(request: NextRequest) {
 
     // Update execution record with results
     await pool.query(
-      `UPDATE code_executions 
+      `UPDATE code_executions
        SET status = $1,
            stdout = $2,
            stderr = $3,
            exit_code = $4,
            runtime_ms = $5,
            completed_at = CURRENT_TIMESTAMP
-       WHERE id = $6`,
+       WHERE id = $6::uuid`,
       [
         status,
         result.stdout || "",

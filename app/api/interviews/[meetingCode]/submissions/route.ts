@@ -2,6 +2,7 @@
 //
 // POST  → Candidate submits code. Runs it via sandbox and stores submission in DB.
 //         Emits `submission:added` to recruiter via Socket.IO.
+//         After successful submit, fire-and-forget triggers the AI code review.
 // GET   → Recruiter fetches all submissions for the interview (ordered by time).
 //
 // Body (POST): { code, language, questionId? }
@@ -12,6 +13,10 @@ import { getAuthUserFromRequest } from "@/lib/auth";
 
 const SANDBOX_URL = process.env.SANDBOX_SERVICE_URL || "http://localhost:3002";
 const SOCKET_URL = process.env.SOCKET_SERVER_URL || "http://localhost:3001";
+const APP_BASE_URL =
+  process.env.APP_BASE_URL ||
+  process.env.NEXT_PUBLIC_APP_URL ||
+  "http://localhost:3000";
 
 const ALLOWED_LANGUAGES = ["python", "javascript", "java", "cpp"];
 
@@ -166,11 +171,11 @@ export async function POST(req: Request, ctx: Params) {
 
     try {
       await pool.query(
-        `UPDATE code_submissions SET status = 'RUNNING' WHERE id = $1`,
+        `UPDATE code_submissions SET status = 'RUNNING' WHERE id = $1::uuid`,
         [submissionId],
       );
       await pool.query(
-        `UPDATE code_executions SET status = 'RUNNING' WHERE id = $1`,
+        `UPDATE code_executions SET status = 'RUNNING' WHERE id = $1::uuid`,
         [executionId],
       );
 
@@ -181,6 +186,9 @@ export async function POST(req: Request, ctx: Params) {
           code: body.code,
           language: body.language,
           stdin: body.stdin || "",
+          // Pass existing execution id so sandbox route UPDATEs instead of
+          // INSERTing a second code_executions row.
+          executionId,
         }),
         signal: AbortSignal.timeout(15000),
       });
@@ -199,7 +207,7 @@ export async function POST(req: Request, ctx: Params) {
         `UPDATE code_submissions
          SET status = 'SYSTEM_ERROR',
              runtime_ms = 0
-         WHERE id = $1`,
+         WHERE id = $1::uuid`,
         [submissionId],
       );
       await pool.query(
@@ -207,7 +215,7 @@ export async function POST(req: Request, ctx: Params) {
          SET status = 'SYSTEM_ERROR',
              stderr = $1,
              completed_at = CURRENT_TIMESTAMP
-         WHERE id = $2`,
+         WHERE id = $2::uuid`,
         [errorMessage, executionId],
       );
 
@@ -263,7 +271,7 @@ export async function POST(req: Request, ctx: Params) {
       `UPDATE code_submissions
        SET status = $1,
            runtime_ms = $2
-       WHERE id = $3`,
+       WHERE id = $3::uuid`,
       [submissionStatus, result.runtimeMs, submissionId],
     );
     await pool.query(
@@ -274,7 +282,7 @@ export async function POST(req: Request, ctx: Params) {
            exit_code = $4,
            runtime_ms = $5,
            completed_at = CURRENT_TIMESTAMP
-       WHERE id = $6`,
+       WHERE id = $6::uuid`,
       [
         status,
         result.stdout || "",
@@ -320,6 +328,24 @@ export async function POST(req: Request, ctx: Params) {
       body: JSON.stringify({ meetingCode, submission: submissionPayload }),
     }).catch((err) =>
       console.warn("[Socket.IO] Emit submission:added failed:", err),
+    );
+
+    // Fire-and-forget AI code review. Failure here must never break the submit
+    // response, so we do not await it.
+    fetch(
+      `${APP_BASE_URL}/api/interviews/${encodeURIComponent(
+        meetingCode,
+      )}/code-review`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          cookie: req.headers.get("cookie") ?? "",
+        },
+        body: JSON.stringify({ submissionId }),
+      },
+    ).catch((err) =>
+      console.warn("[code-review] Auto-trigger failed:", err),
     );
 
     return NextResponse.json(

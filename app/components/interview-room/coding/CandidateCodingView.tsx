@@ -278,7 +278,7 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
           className="h-1 cursor-row-resize bg-cyan-500/20 hover:bg-cyan-400 transition"
         ></div>
 
-        {/* OUTPUT (ONLY) */}
+        {/* OUTPUT */}
         <div
           style={{ height: outputHeight }}
           className="border-t border-cyan-500/10 bg-[#0d1c2d] flex flex-col"
@@ -328,7 +328,7 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
             </div>
           </div>
 
-          <div className="p-4 h-32 overflow-y-auto custom-scrollbar">
+          <div className="p-4 flex-1 overflow-y-auto custom-scrollbar">
             {isRunning ? (
               <div className="flex items-center gap-2 text-blue-400">
                 <span className="animate-spin">⚙</span>

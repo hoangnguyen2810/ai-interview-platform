@@ -249,7 +249,7 @@ export default function FooterControls({
 
       {isRecruiter && (
         <>
-          <AIDrawer open={showAI} onClose={() => setShowAI(false)} />
+          <AIDrawer open={showAI} onClose={() => setShowAI(false)} meetingCode={meetingCode} />
           <QuestionsDrawer
             open={showQuestions}
             onClose={() => setShowQuestions(false)}
