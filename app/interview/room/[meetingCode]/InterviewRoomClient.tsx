@@ -190,6 +190,56 @@ export default function InterviewRoomClient({
     }).catch(console.error);
   }, [isHost, meetingCode]);
 
+  /**
+   * Lắng nghe `call.ended` event từ Stream SDK.
+   *
+   * Khi HOST bấm End Call, server gọi `call.end()` → Stream broadcast
+   * `call.ended` tới tất cả client còn lại → SDK tự gọi `leave()` cho mỗi
+   * client. Nhưng SDK không navigate — vẫn ở nguyên trang React.
+   *
+   * Effect này theo dõi `state.endedAt` / `endedBy` để redirect candidate
+   * về dashboard khi call đã kết thúc bởi host hoặc từ server.
+   */
+  useEffect(() => {
+    if (!call) return;
+
+    const onCallEnded = () => {
+      console.log(
+        "[room] call.ended event — navigating away",
+        call.state.endedBy,
+      );
+      const redirectTo =
+        participantRole === "CANDIDATE"
+          ? "/candidate/dashboard"
+          : "/recruiter/dashboard";
+      // Tránh double-redirect nếu HOST đã tự navigate trong handleEndCall
+      if (
+        typeof window !== "undefined" &&
+        !window.location.pathname.startsWith(redirectTo)
+      ) {
+        window.location.href = redirectTo;
+      }
+    };
+
+    call.on("call.ended", onCallEnded);
+
+    // Fallback: poll state.endedAt để cover case event bị miss (server end).
+    // Chỉ check 1 lần sau khi state đổi, không cần interval dày.
+    let lastEndedAt = call.state.endedAt ?? null;
+    const pollId = window.setInterval(() => {
+      const cur = call.state.endedAt ?? null;
+      if (cur && cur !== lastEndedAt) {
+        lastEndedAt = cur;
+        onCallEnded();
+      }
+    }, 1500);
+
+    return () => {
+      call.off("call.ended", onCallEnded);
+      window.clearInterval(pollId);
+    };
+  }, [call, participantRole]);
+
   // cookie sync
   useEffect(() => {
     if (!streamReady) return;

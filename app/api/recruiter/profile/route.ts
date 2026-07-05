@@ -159,14 +159,27 @@ export async function GET(req: Request) {
       const interviewExists = await pool.query(
         `SELECT to_regclass('interviews') IS NOT NULL AS ok`,
       );
-      if (interviewExists.rows[0]?.ok) {
+      const participantsExists = await pool.query(
+        `SELECT to_regclass('interview_participants') IS NOT NULL AS ok`,
+      );
+      if (
+        interviewExists.rows[0]?.ok &&
+        participantsExists.rows[0]?.ok
+      ) {
+        // Chỉ lấy buổi phỏng vấn do recruiter hiện tại làm HOST,
+        // tránh leak hoạt động của recruiter khác.
         const r = await pool.query(
           `SELECT 'INTERVIEW_CREATED' AS type,
                   'Created interview room #' || i.id::text AS text,
                   i.created_at AS at
              FROM interviews i
+             JOIN interview_participants ip ON ip.interview_id = i.id
+            WHERE i.deleted_at IS NULL
+              AND ip.user_id = $1
+              AND ip.participant_role = 'HOST'
             ORDER BY i.created_at DESC
             LIMIT 10`,
+          [auth.id],
         );
         r.rows.forEach((row) =>
           activities.push({ type: row.type, text: row.text, at: row.at }),
@@ -180,22 +193,46 @@ export async function GET(req: Request) {
       const evalExists = await pool.query(
         `SELECT to_regclass('evaluations') IS NOT NULL AS ok`,
       );
-      const appExists = await pool.query(
-        `SELECT to_regclass('applications') IS NOT NULL AS ok`,
-      );
       const usersExists = await pool.query(
         `SELECT to_regclass('users') IS NOT NULL AS ok`,
       );
-      if (evalExists.rows[0]?.ok && appExists.rows[0]?.ok && usersExists.rows[0]?.ok) {
+      // Lấy interview_candidate.user_id (candidate_id) để hiển thị tên ứng viên.
+      // Cần check sự tồn tại của interview_candidates và interviews
+      // để build join chuẩn – tránh crash nếu DB migration chưa chạy.
+      const intCandExists = await pool.query(
+        `SELECT to_regclass('interview_candidates') IS NOT NULL AS ok`,
+      );
+      const interviewsExists = await pool.query(
+        `SELECT to_regclass('interviews') IS NOT NULL AS ok`,
+      );
+      const ipExists = await pool.query(
+        `SELECT to_regclass('interview_participants') IS NOT NULL AS ok`,
+      );
+      if (
+        evalExists.rows[0]?.ok &&
+        usersExists.rows[0]?.ok &&
+        intCandExists.rows[0]?.ok &&
+        interviewsExists.rows[0]?.ok &&
+        ipExists.rows[0]?.ok
+      ) {
+        // e.evaluator_id = recruiter hiện tại để tránh leak evaluation
+        // của recruiter khác.
         const r = await pool.query(
           `SELECT 'EVALUATION' AS type,
                   'Evaluated candidate ' || COALESCE(c.full_name, 'Unknown') AS text,
                   e.created_at AS at
              FROM evaluations e
-             JOIN applications a ON a.id = e.application_id
-             LEFT JOIN users c ON c.id = a.candidate_id
+             JOIN interview_candidates ic ON ic.id = e.interview_candidate_id
+             LEFT JOIN users c ON c.id = ic.candidate_id
+             JOIN interviews i ON i.id = e.interview_id
+             JOIN interview_participants ip
+               ON ip.interview_id = i.id
+              AND ip.user_id = $1
+              AND ip.participant_role = 'HOST'
+            WHERE e.evaluator_id = $1
             ORDER BY e.created_at DESC
             LIMIT 10`,
+          [auth.id],
         );
         r.rows.forEach((row) =>
           activities.push({ type: row.type, text: row.text, at: row.at }),

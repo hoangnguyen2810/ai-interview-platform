@@ -1,19 +1,25 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRecruiterDashboard } from "./DashboardContext";
 import { useCountdown } from "@/hooks/useCountdown";
+import { CreateInterviewModal, type CreatedInterview } from "./CreateInterviewModal";
 import Link from "next/link";
 
 type Interview = {
   id: string;
   title: string;
+  description: string | null;
   meetingCode: string;
   scheduledAt: string;
   scheduledTime: string;
   maxInterviewers: string;
-  status: "SCHEDULED" | "ONGOING";
+  maxParticipants: number;
+  durationMinutes: number;
+  allowGuest: boolean;
+  enableRecording: boolean;
+  status: "SCHEDULED" | "ONGOING" | "FINISHED";
   avatar: string;
 };
 
@@ -22,16 +28,27 @@ const DEFAULT_AVATAR = "https://i.pravatar.cc/150";
 function toCard(i: {
   id: string;
   title: string;
+  description: string | null;
   meetingCode: string;
   scheduledAt: string;
   maxInterviewers: number;
+  maxParticipants: number;
+  durationMinutes: number;
+  allowGuest: boolean;
+  enableRecording: boolean;
   status: "SCHEDULED" | "ONGOING" | "FINISHED" | "CANCELLED";
   avatar?: string | null;
 }): Interview {
   const date = new Date(i.scheduledAt);
+  const status: Interview["status"] =
+    i.status === "ONGOING" ||
+    i.status === "FINISHED"
+      ? i.status
+      : "SCHEDULED";
   return {
     id: i.id,
     title: i.title,
+    description: i.description ?? null,
     meetingCode: i.meetingCode,
     scheduledAt: i.scheduledAt,
     scheduledTime: date.toLocaleTimeString("vi-VN", {
@@ -39,7 +56,11 @@ function toCard(i: {
       minute: "2-digit",
     }),
     maxInterviewers: String(i.maxInterviewers),
-    status: i.status === "ONGOING" ? "ONGOING" : "SCHEDULED",
+    maxParticipants: i.maxParticipants ?? 10,
+    durationMinutes: i.durationMinutes ?? 60,
+    allowGuest: i.allowGuest ?? false,
+    enableRecording: i.enableRecording ?? false,
+    status,
     avatar: i.avatar && i.avatar.trim() !== "" ? i.avatar : DEFAULT_AVATAR,
   };
 }
@@ -56,7 +77,13 @@ function isToday(iso: string): boolean {
 }
 
 /* ================= CARD ================= */
-function InterviewCard({ interview }: { interview: Interview }) {
+function InterviewCard({
+  interview,
+  onShowDetail,
+}: {
+  interview: Interview;
+  onShowDetail: (interview: Interview) => void;
+}) {
   const router = useRouter();
   const countdown = useCountdown(interview.scheduledAt);
 
@@ -65,7 +92,13 @@ function InterviewCard({ interview }: { interview: Interview }) {
   const status = isStarted ? "ONGOING" : "SCHEDULED";
 
   const handleEnter = () => {
-    router.push(`/interview/room/${encodeURIComponent(interview.meetingCode)}`);
+    // ONGOING (đã tới giờ) → vào thẳng phòng.
+    // SCHEDULED (chưa tới giờ) → mở modal chi tiết.
+    if (status === "ONGOING") {
+      router.push(`/interview/room/${encodeURIComponent(interview.meetingCode)}`);
+    } else {
+      onShowDetail(interview);
+    }
   };
 
   return (
@@ -132,7 +165,11 @@ function InterviewCard({ interview }: { interview: Interview }) {
 export function UpcomingInterviews() {
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [loading, setLoading] = useState(true);
-  const { subscribeInterviewCreated } = useRecruiterDashboard();
+  const [detailInterview, setDetailInterview] = useState<CreatedInterview | null>(
+    null,
+  );
+  const { subscribeInterviewCreated, subscribeInterviewFinished } =
+    useRecruiterDashboard();
 
   const fetchData = useCallback(async () => {
     try {
@@ -178,6 +215,43 @@ export function UpcomingInterviews() {
     return unsubscribe;
   }, [subscribeInterviewCreated, fetchData]);
 
+  // Khi HOST bấm End Call → notification broadcast → re-fetch để
+  // FINISHED tự động biến mất khỏi list này và hiện ở RecentInterviews.
+  useEffect(() => {
+    const unsubscribe = subscribeInterviewFinished(() => {
+      fetchData();
+    });
+    return unsubscribe;
+  }, [subscribeInterviewFinished, fetchData]);
+
+  // Chỉ hiển thị các buổi CHƯA kết thúc (SCHEDULED/ONGOING).
+  // FINISHED được UpcomingInterviews filter ra — sẽ hiện ở RecentInterviews.
+  const handleShowDetail = useCallback((interview: Interview) => {
+    // Map shape Interview (từ API /upcoming) → CreatedInterview (của modal).
+    setDetailInterview({
+      id: interview.id,
+      title: interview.title,
+      description: interview.description,
+      meetingCode: interview.meetingCode,
+      roomPassword: null, // API không trả password hash cho client
+      allowGuest: interview.allowGuest,
+      maxParticipants: interview.maxParticipants,
+      maxInterviewers:
+        interview.maxInterviewers === "3" ? 3 : 2,
+      durationMinutes: (interview.durationMinutes as 30 | 60 | 90 | 120) || 60,
+      status: interview.status,
+      enableRecording: interview.enableRecording,
+      scheduledAt: interview.scheduledAt,
+      createdAt: interview.scheduledAt,
+      avatarUrl: interview.avatar,
+    });
+  }, []);
+
+  const visibleInterviews = useMemo(
+    () => interviews.filter((i) => i.status !== "FINISHED"),
+    [interviews],
+  );
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -199,23 +273,34 @@ export function UpcomingInterviews() {
         </h2>
         <Link
           href="/recruiter/interviews"
-          className="text-black bg-cyan-400 px-3 py-1 rounded-md text-sm font-medium transition hover:bg-cyan-300 hover:shadow-lg hover:shadow-cyan-400/30"
+          className="text-black bg-cyan-400 px-3 py-1 rounded-md text-sm font-medium transition hover:bg-cyan-300 hover:shadow-lg hover:cyan-400/30"
         >
           Xem tất cả
         </Link>
       </div>
 
-      {interviews.length === 0 ? (
+      {visibleInterviews.length === 0 ? (
         <div className="glass-card p-6 rounded-2xl text-sm text-on-surface-variant text-center">
-          Hôm nay chưa có buổi phỏng vấn nào.
+          Hôm nay không còn buổi phỏng vấn nào đang chờ.
         </div>
       ) : (
         <div className="space-y-4">
-          {interviews.map((interview) => (
-            <InterviewCard key={interview.id} interview={interview} />
+          {visibleInterviews.map((interview) => (
+            <InterviewCard
+              key={interview.id}
+              interview={interview}
+              onShowDetail={handleShowDetail}
+            />
           ))}
         </div>
       )}
+
+      <CreateInterviewModal
+        mode="detail"
+        open={detailInterview !== null}
+        detailInterview={detailInterview}
+        onClose={() => setDetailInterview(null)}
+      />
     </div>
   );
 }

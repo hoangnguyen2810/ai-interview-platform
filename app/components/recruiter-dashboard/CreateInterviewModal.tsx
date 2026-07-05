@@ -6,6 +6,14 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onCreated?: (interview: CreatedInterview) => void;
+  /**
+   * `create` (mặc định): form tạo + success screen sau khi tạo xong.
+   * `detail`: chỉ hiện success screen với interview có sẵn (readonly).
+   *            Dùng cho nút "Chi tiết" ở UpcomingInterviews khi SCHEDULED.
+   */
+  mode?: "create" | "detail";
+  /** Chỉ dùng ở mode='detail': interview cần hiển thị chi tiết. */
+  detailInterview?: CreatedInterview | null;
 }
 
 export interface CreatedInterview {
@@ -74,7 +82,13 @@ function localToIso(local: string): string | null {
   return d.toISOString();
 }
 
-export function CreateInterviewModal({ open, onClose, onCreated }: Props) {
+export function CreateInterviewModal({
+  open,
+  onClose,
+  onCreated,
+  mode = "create",
+  detailInterview = null,
+}: Props) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,13 +98,18 @@ export function CreateInterviewModal({ open, onClose, onCreated }: Props) {
 
   useEffect(() => {
     if (open) {
-      setForm(EMPTY_FORM);
       setError(null);
       setFieldError(null);
-      setCreated(null);
       setCopied(false);
+      // mode=detail: hiển thị thẳng success screen, không cần reset form.
+      if (mode === "detail" && detailInterview) {
+        setCreated(detailInterview);
+      } else {
+        setForm(EMPTY_FORM);
+        setCreated(null);
+      }
     }
-  }, [open]);
+  }, [open, mode, detailInterview]);
 
   if (!open) return null;
 
@@ -209,7 +228,101 @@ export function CreateInterviewModal({ open, onClose, onCreated }: Props) {
     onClose();
   };
 
-  // ---------- Màn hình thành công ----------
+  // ---------- Chế độ chi tiết: chỉ hiển thị màn hình thành công ----------
+  if (mode === "detail" && created) {
+    const canEnter =
+      created.status !== "FINISHED" &&
+      new Date(created.scheduledAt).getTime() <= Date.now();
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0B1120] p-8 shadow-2xl">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="material-symbols-outlined text-cyan-400 text-3xl">
+              event_note
+            </span>
+            <h2 className="text-xl font-bold">Chi tiết buổi phỏng vấn</h2>
+          </div>
+
+          <p className="text-sm text-gray-300 mb-5">
+            Thông tin phòng phỏng vấn. Chia sẻ mã bên dưới cho ứng viên.
+          </p>
+
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4 mb-4">
+            <p className="text-xs uppercase tracking-widest text-gray-400 mb-1">
+              Meeting code
+            </p>
+            <div className="flex items-center justify-between gap-3">
+              <code className="text-2xl font-mono font-bold text-cyan-300">
+                {created.meetingCode}
+              </code>
+              <button
+                type="button"
+                onClick={handleCopyCode}
+                className="px-3 py-1.5 rounded-lg border border-white/10 text-sm hover:bg-white/5"
+              >
+                {copied ? "Đã copy" : "Copy"}
+              </button>
+            </div>
+          </div>
+
+          <dl className="text-sm space-y-1 text-gray-300 mb-6">
+            <div className="flex justify-between">
+              <dt>Tiêu đề</dt>
+              <dd className="font-medium text-white">{created.title}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>Thời lượng</dt>
+              <dd className="font-medium text-white">
+                {created.durationMinutes} phút
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>Interviewer tối đa</dt>
+              <dd className="font-medium text-white">
+                {created.maxInterviewers}
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>Thời gian</dt>
+              <dd className="font-medium text-white">
+                {new Date(created.scheduledAt).toLocaleString("vi-VN")}
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>Ghi hình</dt>
+              <dd className="font-medium text-white">
+                {created.enableRecording ? "Có" : "Không"}
+              </dd>
+            </div>
+          </dl>
+
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={handleClose}
+              className="px-5 py-2.5 rounded-xl border border-white/10"
+            >
+              Đóng
+            </button>
+            {canEnter && (
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.href = `/interview/room/${encodeURIComponent(created.meetingCode)}`;
+                }}
+                className="px-5 py-2.5 rounded-xl bg-cyan-500 font-semibold hover:bg-cyan-400"
+              >
+                Vào phòng
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ---------- Màn hình thành công (sau khi tạo) ----------
   if (created) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">

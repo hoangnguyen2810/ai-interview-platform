@@ -135,6 +135,25 @@ export default function FooterControls({
           console.warn("[endCall] syncRecordings failed:", err);
         }
       }
+
+      // 5. Thông báo dashboard (nếu recruiter còn mở tab dashboard ở background)
+      //    để Upcoming/Recent refresh data. Dùng CustomEvent để tránh coupling
+      //    giữa InterviewRoom tree và RecruiterDashboard tree.
+      if (
+        isHost &&
+        typeof window !== "undefined" &&
+        meetingCode
+      ) {
+        try {
+          window.dispatchEvent(
+            new CustomEvent("neuralcode:interview-finished", {
+              detail: { meetingCode },
+            }),
+          );
+        } catch (err) {
+          console.warn("[endCall] dispatchEvent failed:", err);
+        }
+      }
     } finally {
       // 5. Redirect theo role
       const redirectTo = isHost
