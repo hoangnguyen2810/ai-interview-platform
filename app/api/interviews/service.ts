@@ -70,9 +70,10 @@ export async function createInterviewForRecruiter(
         max_interviewers,
         duration_minutes,
         status,
+        enable_recording,
         scheduled_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'SCHEDULED', $9)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'SCHEDULED', $9, $10)
       RETURNING
         id,
         title,
@@ -84,6 +85,7 @@ export async function createInterviewForRecruiter(
         max_interviewers,
         duration_minutes,
         status,
+        enable_recording,
         scheduled_at,
         created_at
       `,
@@ -96,6 +98,7 @@ export async function createInterviewForRecruiter(
         input.maxParticipants,
         input.maxInterviewers,
         input.durationMinutes,
+        input.enableRecording,
         input.scheduledAt,
       ],
     );
@@ -130,6 +133,7 @@ export async function createInterviewForRecruiter(
       maxInterviewers: row.max_interviewers,
       durationMinutes: row.duration_minutes,
       status: row.status,
+      enableRecording: row.enable_recording,
       scheduledAt: row.scheduled_at,
       createdAt: row.created_at,
     };

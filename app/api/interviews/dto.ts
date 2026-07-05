@@ -12,6 +12,7 @@ export interface CreateInterviewInput {
   maxParticipants: number;
   maxInterviewers: MaxInterviewers;
   durationMinutes: DurationMinutes;
+  enableRecording: boolean;
   scheduledAt: Date;
 }
 
@@ -26,6 +27,7 @@ export interface CreateInterviewRow {
   maxInterviewers: MaxInterviewers;
   durationMinutes: DurationMinutes;
   status: "SCHEDULED" | "ONGOING" | "FINISHED" | "CANCELLED";
+  enableRecording: boolean;
   scheduledAt: Date;
   createdAt: Date;
 }
@@ -111,13 +113,19 @@ export function validateCreateInterviewPayload(
     }
     const trimmed = s.trim();
     if (trimmed.length > 100) {
-      throw new ValidationError("roomPassword", "Mật khẩu phòng tối đa 100 ký tự");
+      throw new ValidationError(
+        "roomPassword",
+        "Mật khẩu phòng tối đa 100 ký tự",
+      );
     }
     roomPassword = trimmed === "" ? null : trimmed;
   }
 
   // allowGuest: optional, boolean, default true
   const allowGuest = asBool(raw.allowGuest, true);
+
+  // enableRecording: optional, boolean, default false
+  const enableRecording = asBool(raw.enableRecording, false);
 
   // maxParticipants: optional, int, >= 1, default 10
   let maxParticipants = 10;
@@ -134,10 +142,16 @@ export function validateCreateInterviewPayload(
 
   // maxInterviewers: required, must be 2 or 3 (CHECK constraint)
   if (raw.maxInterviewers === undefined || raw.maxInterviewers === null) {
-    throw new ValidationError("maxInterviewers", "Số interviewer tối đa là bắt buộc");
+    throw new ValidationError(
+      "maxInterviewers",
+      "Số interviewer tối đa là bắt buộc",
+    );
   }
   const mi = asInt(raw.maxInterviewers);
-  if (mi === null || !ALLOWED_MAX_INTERVIEWERS.includes(mi as MaxInterviewers)) {
+  if (
+    mi === null ||
+    !ALLOWED_MAX_INTERVIEWERS.includes(mi as MaxInterviewers)
+  ) {
     throw new ValidationError(
       "maxInterviewers",
       "Số interviewer tối đa chỉ chấp nhận 2 hoặc 3",
@@ -146,7 +160,10 @@ export function validateCreateInterviewPayload(
 
   // durationMinutes: required, must be 30/60/90/120 (CHECK constraint)
   if (raw.durationMinutes === undefined || raw.durationMinutes === null) {
-    throw new ValidationError("durationMinutes", "Thời lượng phỏng vấn là bắt buộc");
+    throw new ValidationError(
+      "durationMinutes",
+      "Thời lượng phỏng vấn là bắt buộc",
+    );
   }
   const dm = asInt(raw.durationMinutes);
   if (dm === null || !ALLOWED_DURATIONS.includes(dm as DurationMinutes)) {
@@ -162,7 +179,10 @@ export function validateCreateInterviewPayload(
   }
   const scheduled = asDate(raw.scheduledAt);
   if (scheduled === null) {
-    throw new ValidationError("scheduledAt", "scheduledAt không phải ngày hợp lệ");
+    throw new ValidationError(
+      "scheduledAt",
+      "scheduledAt không phải ngày hợp lệ",
+    );
   }
   if (scheduled.getTime() <= Date.now()) {
     throw new ValidationError(
@@ -179,6 +199,7 @@ export function validateCreateInterviewPayload(
     maxParticipants,
     maxInterviewers: mi as MaxInterviewers,
     durationMinutes: dm as DurationMinutes,
+    enableRecording,
     scheduledAt: scheduled,
   };
 }

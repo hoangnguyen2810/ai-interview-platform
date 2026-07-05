@@ -15,6 +15,7 @@ import {
 import "@stream-io/video-react-sdk/dist/css/styles.css";
 import { ChatProvider } from "@/app/components/interview-room/ChatContext";
 import { QuestionProvider } from "@/app/components/interview-room/QuestionContext";
+import { RecordingProvider } from "@/app/components/interview-room/RecordingContext";
 import { useCamMicSync } from "@/app/components/interview-room/CamMicSyncContext";
 import { useEffect, useRef, useState } from "react";
 import type {
@@ -84,6 +85,8 @@ export default function InterviewRoomClient({
   const [call, setCall] = useState<Call | null>(null);
   const [streamReady, setStreamReady] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
+  const [enableRecording, setEnableRecording] = useState(false);
+  const [recordingConfigLoaded, setRecordingConfigLoaded] = useState(false);
 
   const role: "candidate" | "recruiter" =
     participantRole === "CANDIDATE" ? "candidate" : "recruiter";
@@ -195,6 +198,46 @@ export default function InterviewRoomClient({
     )}; path=/; SameSite=Lax`;
   }, [streamReady, meetingCode]);
 
+  // Fetch recording config (enable_recording) để biết có auto-record không.
+  // Chạy song song với init Stream — không block việc join call.
+  useEffect(() => {
+    let cancelled = false;
+    async function loadRecordingConfig() {
+      try {
+        const res = await fetch(
+          `/api/interviews/${encodeURIComponent(meetingCode)}/recording-config`,
+          { credentials: "include" },
+        );
+        if (!res.ok) {
+          console.warn(
+            "[recording] config fetch failed:",
+            res.status,
+            "— falling back to disabled",
+          );
+          if (!cancelled) {
+            setEnableRecording(false);
+            setRecordingConfigLoaded(true);
+          }
+          return;
+        }
+        const json = await res.json().catch(() => null);
+        if (cancelled) return;
+        setEnableRecording(Boolean(json?.enableRecording));
+        setRecordingConfigLoaded(true);
+      } catch (err) {
+        console.error("[recording] config fetch error:", err);
+        if (!cancelled) {
+          setEnableRecording(false);
+          setRecordingConfigLoaded(true);
+        }
+      }
+    }
+    void loadRecordingConfig();
+    return () => {
+      cancelled = true;
+    };
+  }, [meetingCode]);
+
   // cleanup
   useEffect(() => {
     return () => {
@@ -219,52 +262,59 @@ export default function InterviewRoomClient({
       <QuestionProvider call={call} meetingCode={meetingCode}>
         <StreamVideo client={streamClient}>
           <StreamCall call={call}>
-            <div className="h-screen w-screen bg-[#051424] text-white flex flex-col">
-              <Header title={title} meetingCode={meetingCode} role={role} />
-
-              <main className="flex-1 flex gap-4 p-4 overflow-hidden">
-                {/* VIDEO */}
-                <div className={showLiveCoding ? "w-[30%]" : "w-full"}>
-                  <div className="h-full rounded-3xl border border-[#163149] bg-[#07131f] overflow-hidden">
-                    {streamReady ? (
-                      <MeetingGrid showLiveCoding={showLiveCoding} />
-                    ) : (
-                      <div className="h-full flex items-center justify-center">
-                        Loading...
-                      </div>
-                    )}
-                  </div>
-                </div>
-                {showLiveCoding && (
-                  <div className="w-[70%]">
-                    {role === "candidate" ? (
-                      <CandidateCodingView meetingCode={meetingCode} />
-                    ) : (
-                      <RecruiterCodingView meetingCode={meetingCode} />
-                    )}
-                  </div>
-                )}
-              </main>
-
-              {streamReady && (
-                <FooterControls
+            <RecordingProvider call={call} enabled={enableRecording}>
+              <div className="h-screen w-screen bg-[#051424] text-white flex flex-col">
+                <Header
+                  title={title}
+                  meetingCode={meetingCode}
                   role={role}
-                  onOpenLiveCoding={() => setShowLiveCoding((p) => !p)}
-                  userFullName={userFullName}
-                  otherParticipantName={otherParticipantName}
-                  call={call}
-                  participantRole={participantRole}
+                />
+
+                <main className="flex-1 flex gap-4 p-4 overflow-hidden">
+                  {/* VIDEO */}
+                  <div className={showLiveCoding ? "w-[30%]" : "w-full"}>
+                    <div className="h-full rounded-3xl border border-[#163149] bg-[#07131f] overflow-hidden">
+                      {streamReady ? (
+                        <MeetingGrid showLiveCoding={showLiveCoding} />
+                      ) : (
+                        <div className="h-full flex items-center justify-center">
+                          Loading...
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {showLiveCoding && (
+                    <div className="w-[70%]">
+                      {role === "candidate" ? (
+                        <CandidateCodingView meetingCode={meetingCode} />
+                      ) : (
+                        <RecruiterCodingView meetingCode={meetingCode} />
+                      )}
+                    </div>
+                  )}
+                </main>
+
+                {streamReady && (
+                  <FooterControls
+                    role={role}
+                    onOpenLiveCoding={() => setShowLiveCoding((p) => !p)}
+                    userFullName={userFullName}
+                    otherParticipantName={otherParticipantName}
+                    call={call}
+                    participantRole={participantRole}
+                    meetingCode={meetingCode}
+                    enableRecording={recordingConfigLoaded && enableRecording}
+                  />
+                )}
+
+                <QuestionsDrawer
+                  open={questionOpen}
+                  onClose={() => setQuestionOpen(false)}
+                  role={role}
                   meetingCode={meetingCode}
                 />
-              )}
-
-              <QuestionsDrawer
-                open={questionOpen}
-                onClose={() => setQuestionOpen(false)}
-                role={role}
-                meetingCode={meetingCode}
-              />
-            </div>
+              </div>
+            </RecordingProvider>
           </StreamCall>
         </StreamVideo>
       </QuestionProvider>

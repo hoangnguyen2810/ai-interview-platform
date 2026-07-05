@@ -19,6 +19,7 @@ export interface CreatedInterview {
   maxInterviewers: 2 | 3;
   durationMinutes: 30 | 60 | 90 | 120;
   status: "SCHEDULED" | "ONGOING" | "FINISHED" | "CANCELLED";
+  enableRecording: boolean;
   scheduledAt: string;
   createdAt: string;
   avatarUrl: string | null;
@@ -32,6 +33,7 @@ interface FormState {
   durationMinutes: 30 | 60 | 90 | 120;
   maxInterviewers: 2 | 3;
   allowGuest: boolean;
+  enableRecording: boolean;
 }
 
 const EMPTY_FORM: FormState = {
@@ -42,6 +44,7 @@ const EMPTY_FORM: FormState = {
   durationMinutes: 60,
   maxInterviewers: 2,
   allowGuest: true,
+  enableRecording: false,
 };
 
 function getToken(): string | null {
@@ -152,6 +155,7 @@ export function CreateInterviewModal({ open, onClose, onCreated }: Props) {
       maxParticipants: 10,
       maxInterviewers: form.maxInterviewers,
       durationMinutes: form.durationMinutes,
+      enableRecording: form.enableRecording,
       scheduledAt: scheduledAtIso,
     };
 
@@ -260,6 +264,12 @@ export function CreateInterviewModal({ open, onClose, onCreated }: Props) {
               <dt>Thời gian</dt>
               <dd className="font-medium text-white">
                 {new Date(created.scheduledAt).toLocaleString("vi-VN")}
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>Ghi hình</dt>
+              <dd className="font-medium text-white">
+                {created.enableRecording ? "Có" : "Không"}
               </dd>
             </div>
           </dl>
@@ -411,6 +421,27 @@ export function CreateInterviewModal({ open, onClose, onCreated }: Props) {
               onChange={handleChange}
             />
             <label htmlFor="allowGuest">Cho phép khách tham gia</label>
+          </div>
+
+          <div className="flex items-start gap-3 rounded-xl border border-white/10 p-4">
+            <input
+              id="enableRecording"
+              name="enableRecording"
+              type="checkbox"
+              checked={form.enableRecording}
+              onChange={handleChange}
+              className="mt-1"
+            />
+            <label htmlFor="enableRecording" className="flex-1 cursor-pointer">
+              <span className="block font-medium">
+                Ghi hình buổi phỏng vấn (Call Recording)
+              </span>
+              <span className="block text-xs text-gray-400 mt-1">
+                Khi bật, buổi phỏng vấn sẽ được tự động ghi hình ngay khi cuộc
+                gọi bắt đầu và dừng khi kết thúc. File ghi hình sẽ hiển thị
+                trong trang Recordings.
+              </span>
+            </label>
           </div>
 
           {error && (

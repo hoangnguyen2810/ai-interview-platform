@@ -86,10 +86,56 @@ CREATE TABLE interviews (
     started_at TIMESTAMP,
     ended_at TIMESTAMP,
 
+    enable_recording BOOLEAN NOT NULL DEFAULT FALSE,
+
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     deleted_at TIMESTAMP
 );
+
+CREATE TABLE recordings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    interview_id UUID NOT NULL
+        REFERENCES interviews(id)
+        ON DELETE CASCADE,
+
+    meeting_code VARCHAR(50) NOT NULL,
+
+    title VARCHAR(255) NOT NULL,
+
+    file_name VARCHAR(255) NOT NULL,
+    file_url TEXT NOT NULL,
+
+    mime_type VARCHAR(100) NOT NULL DEFAULT 'video/webm',
+    size_bytes BIGINT NOT NULL DEFAULT 0,
+
+    duration_seconds INT NOT NULL DEFAULT 0,
+
+    status VARCHAR(20) NOT NULL DEFAULT 'AVAILABLE'
+        CHECK (
+            status IN (
+                'PROCESSING',
+                'AVAILABLE',
+                'FAILED'
+            )
+        ),
+
+    recorded_by UUID REFERENCES users(id) ON DELETE SET NULL,
+
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    deleted_at TIMESTAMP
+);
+
+CREATE INDEX idx_recordings_interview_id
+    ON recordings(interview_id);
+CREATE INDEX idx_recordings_meeting_code
+    ON recordings(meeting_code);
+CREATE INDEX idx_recordings_status
+    ON recordings(status)
+    WHERE deleted_at IS NULL;
 
 CREATE TABLE interview_participants (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

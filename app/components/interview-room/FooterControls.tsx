@@ -8,6 +8,7 @@ import AIDrawer from "./AIDrawer";
 import { useCallStateHooks } from "@stream-io/video-react-sdk";
 import type { Call } from "@stream-io/video-react-sdk";
 import { useChat } from "./ChatContext";
+import { useRecording, type RecordingStatus } from "./RecordingContext";
 
 const SESSION_CAM = "meeting_cam";
 const SESSION_MIC = "meeting_mic";
@@ -20,6 +21,7 @@ export default function FooterControls({
   otherParticipantName,
   call,
   meetingCode,
+  enableRecording = false,
 }: {
   role: "candidate" | "recruiter";
   participantRole: "CANDIDATE" | "HOST" | "CO_HOST";
@@ -28,6 +30,7 @@ export default function FooterControls({
   otherParticipantName: string | null;
   call: Call | null;
   meetingCode: string;
+  enableRecording?: boolean;
 }) {
   const { useMicrophoneState, useCameraState, useScreenShareState } =
     useCallStateHooks();
@@ -59,6 +62,87 @@ export default function FooterControls({
 
   const [showChat, setShowChat] = useState(false);
   const { unreadCount, markRead } = useChat();
+
+  // RecordingProvider luôn wrap FooterControls trong InterviewRoomClient,
+  // nên useRecording() luôn hợp lệ trong runtime thật.
+  // Hook được gọi không điều kiện để tuân thủ React rules of hooks;
+  // nếu `enableRecording=false` thì chỉ đơn giản là không render indicator.
+  const recording = useOptionalRecording();
+  const [isEnding, setIsEnding] = useState(false);
+
+  /**
+   * Xử lý End Call theo role:
+   *  - HOST/CO_HOST: stop recording → set interview FINISHED → end call trên
+   *    Stream → leave → sync recordings → redirect /dashboard.
+   *  - CANDIDATE: chỉ leave call, KHÔNG stop recording (HOST sẽ quyết định),
+   *    KHÔNG set FINISHED. Redirect về /candidate/dashboard.
+   */
+  const handleEndCall = async () => {
+    if (isEnding) return; // chống double-click
+    setIsEnding(true);
+
+    const isHost = participantRole === "HOST" || participantRole === "CO_HOST";
+
+    try {
+      if (isHost) {
+        // 1. Stop recording nếu đang chạy (đợi server xác nhận)
+        if (
+          recording &&
+          (recording.status === "recording" || recording.status === "starting")
+        ) {
+          try {
+            await recording.stop();
+          } catch (err) {
+            console.warn("[endCall] recording.stop() failed:", err);
+          }
+        }
+
+        // 2. Set interview FINISHED + end call trên Stream (server-side)
+        try {
+          const token =
+            typeof window !== "undefined"
+              ? window.localStorage.getItem("token")
+              : null;
+          const headers: HeadersInit = { "Content-Type": "application/json" };
+          if (token) headers["Authorization"] = `Bearer ${token}`;
+          await fetch(
+            `/api/interviews/${encodeURIComponent(meetingCode)}/end`,
+            {
+              method: "POST",
+              headers,
+              credentials: "include",
+            },
+          );
+        } catch (err) {
+          console.warn("[endCall] POST /end failed:", err);
+        }
+      }
+
+      // 3. Leave call (cả HOST và CANDIDATE đều cần)
+      if (call) {
+        try {
+          await call.leave();
+        } catch (err) {
+          console.warn("[endCall] call.leave() failed:", err);
+        }
+      }
+
+      // 4. Sync recordings từ Stream (chỉ HOST — vì interview đã FINISHED)
+      if (isHost && recording?.enabled) {
+        try {
+          await recording.syncRecordings();
+        } catch (err) {
+          console.warn("[endCall] syncRecordings failed:", err);
+        }
+      }
+    } finally {
+      // 5. Redirect theo role
+      const redirectTo = isHost
+        ? "/recruiter/dashboard"
+        : "/candidate/dashboard";
+      window.location.href = redirectTo;
+    }
+  };
 
   const handleOpenChat = () => {
     setShowChat(true);
@@ -175,12 +259,24 @@ export default function FooterControls({
 
           {/* END CALL */}
           <button
-            onClick={() => (window.location.href = "/dashboard")}
-            className="w-14 h-14 rounded-full flex items-center justify-center border border-red-500 bg-red-600 text-white cursor-pointer"
+            onClick={handleEndCall}
+            disabled={isEnding}
+            title={
+              participantRole === "HOST" || participantRole === "CO_HOST"
+                ? "Kết thúc buổi phỏng vấn (toàn bộ phòng sẽ rời đi)"
+                : "Rời khỏi phòng"
+            }
+            className="w-14 h-14 rounded-full flex items-center justify-center border border-red-500 bg-red-600 text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span className="material-symbols-outlined rotate-[135deg]">
-              call_end
-            </span>
+            {isEnding ? (
+              <span className="material-symbols-outlined animate-spin">
+                progress_activity
+              </span>
+            ) : (
+              <span className="material-symbols-outlined rotate-[135deg]">
+                call_end
+              </span>
+            )}
           </button>
 
           {/* LIVE CODING */}
@@ -234,6 +330,11 @@ export default function FooterControls({
             </button>
           )}
         </div>
+        {enableRecording && recording && (
+          <div className="mt-2 flex justify-center">
+            <RecordingIndicator status={recording.status} />
+          </div>
+        )}
       </footer>
 
       <ChatDrawer open={showChat} onClose={() => setShowChat(false)} />
@@ -249,7 +350,11 @@ export default function FooterControls({
 
       {isRecruiter && (
         <>
-          <AIDrawer open={showAI} onClose={() => setShowAI(false)} meetingCode={meetingCode} />
+          <AIDrawer
+            open={showAI}
+            onClose={() => setShowAI(false)}
+            meetingCode={meetingCode}
+          />
           <QuestionsDrawer
             open={showQuestions}
             onClose={() => setShowQuestions(false)}
@@ -259,5 +364,71 @@ export default function FooterControls({
         </>
       )}
     </>
+  );
+}
+
+/**
+ * Wrapper an toàn cho useRecording: trả về null nếu component bị render
+ * ngoài <RecordingProvider>. Trong runtime thật Provider luôn wrap, nhưng
+ * helper này giúp tránh throw error nếu footer bị mount riêng lẻ.
+ */
+function useOptionalRecording(): ReturnType<typeof useRecording> | null {
+  try {
+    return useRecording();
+  } catch {
+    return null;
+  }
+}
+
+function RecordingIndicator({ status }: { status: RecordingStatus }) {
+  let label = "";
+  let className =
+    "ml-3 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium";
+
+  switch (status) {
+    case "recording":
+      label = "Đang ghi hình";
+      className += " border-red-500/40 bg-red-500/10 text-red-300";
+      break;
+    case "starting":
+      label = "Đang bật ghi hình...";
+      className += " border-amber-500/40 bg-amber-500/10 text-amber-300";
+      break;
+    case "stopping":
+      label = "Đang dừng ghi hình...";
+      className += " border-amber-500/40 bg-amber-500/10 text-amber-300";
+      break;
+    case "stopped":
+      label = "Đã lưu bản ghi";
+      className += " border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
+      break;
+    case "error":
+      label = "Lỗi ghi hình";
+      className += " border-red-500/40 bg-red-500/10 text-red-300";
+      break;
+    case "idle":
+    default:
+      return null;
+  }
+
+  const isPulse = status === "recording";
+
+  return (
+    <div
+      className={className}
+      title={`Trạng thái ghi hình: ${label}`}
+      aria-live="polite"
+    >
+      <span
+        className={
+          isPulse
+            ? "material-symbols-outlined text-[14px] animate-pulse"
+            : "material-symbols-outlined text-[14px]"
+        }
+      >
+        fiber_manual_record
+      </span>
+      <span>{label}</span>
+    </div>
   );
 }
