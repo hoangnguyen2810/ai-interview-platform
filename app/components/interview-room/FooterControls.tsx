@@ -8,7 +8,7 @@ import AIDrawer from "./AIDrawer";
 import { useCallStateHooks } from "@stream-io/video-react-sdk";
 import type { Call } from "@stream-io/video-react-sdk";
 import { useChat } from "./ChatContext";
-import { useRecording, type RecordingStatus } from "./RecordingContext";
+import { useRecording } from "./RecordingContext";
 
 const SESSION_CAM = "meeting_cam";
 const SESSION_MIC = "meeting_mic";
@@ -69,6 +69,13 @@ export default function FooterControls({
   // nếu `enableRecording=false` thì chỉ đơn giản là không render indicator.
   const recording = useOptionalRecording();
   const [isEnding, setIsEnding] = useState(false);
+  function useOptionalRecording() {
+    try {
+      return useRecording();
+    } catch {
+      return null;
+    }
+  }
 
   /**
    * Xử lý End Call theo role:
@@ -139,11 +146,7 @@ export default function FooterControls({
       // 5. Thông báo dashboard (nếu recruiter còn mở tab dashboard ở background)
       //    để Upcoming/Recent refresh data. Dùng CustomEvent để tránh coupling
       //    giữa InterviewRoom tree và RecruiterDashboard tree.
-      if (
-        isHost &&
-        typeof window !== "undefined" &&
-        meetingCode
-      ) {
+      if (isHost && typeof window !== "undefined" && meetingCode) {
         try {
           window.dispatchEvent(
             new CustomEvent("neuralcode:interview-finished", {
@@ -301,7 +304,7 @@ export default function FooterControls({
           {/* LIVE CODING */}
           <button
             onClick={onOpenLiveCoding}
-            className="w-14 h-14 rounded-full flex items-center justify-center border border-cyan-400 text-cyan-300 cursor-pointer"
+            className="w-14 h-14 rounded-full flex items-center justify-center border bg-[#122131] border-[#3b494b] hover:border-cyan-400 cursor-pointer"
           >
             <span className="material-symbols-outlined">terminal</span>
           </button>
@@ -309,7 +312,7 @@ export default function FooterControls({
           {/* PARTICIPANTS */}
           <button
             onClick={() => setShowParticipants(true)}
-            className="w-14 h-14 rounded-full flex items-center justify-center border cursor-pointer"
+            className="w-14 h-14 rounded-full flex items-center justify-center border bg-[#122131] border-[#3b494b] hover:border-cyan-400 cursor-pointer"
           >
             <span className="material-symbols-outlined">groups</span>
           </button>
@@ -317,7 +320,7 @@ export default function FooterControls({
           {/* CHAT */}
           <button
             onClick={handleOpenChat}
-            className="w-14 h-14 rounded-full flex items-center justify-center border border-[#3b494b] cursor-pointer relative"
+            className="w-14 h-14 rounded-full flex items-center justify-center border bg-[#122131] border-[#3b494b] hover:border-cyan-400 cursor-pointer"
           >
             <span className="material-symbols-outlined">chat</span>
             {unreadCount > 0 && (
@@ -349,11 +352,6 @@ export default function FooterControls({
             </button>
           )}
         </div>
-        {enableRecording && recording && (
-          <div className="mt-2 flex justify-center">
-            <RecordingIndicator status={recording.status} />
-          </div>
-        )}
       </footer>
 
       <ChatDrawer open={showChat} onClose={() => setShowChat(false)} />
@@ -391,63 +389,3 @@ export default function FooterControls({
  * ngoài <RecordingProvider>. Trong runtime thật Provider luôn wrap, nhưng
  * helper này giúp tránh throw error nếu footer bị mount riêng lẻ.
  */
-function useOptionalRecording(): ReturnType<typeof useRecording> | null {
-  try {
-    return useRecording();
-  } catch {
-    return null;
-  }
-}
-
-function RecordingIndicator({ status }: { status: RecordingStatus }) {
-  let label = "";
-  let className =
-    "ml-3 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium";
-
-  switch (status) {
-    case "recording":
-      label = "Đang ghi hình";
-      className += " border-red-500/40 bg-red-500/10 text-red-300";
-      break;
-    case "starting":
-      label = "Đang bật ghi hình...";
-      className += " border-amber-500/40 bg-amber-500/10 text-amber-300";
-      break;
-    case "stopping":
-      label = "Đang dừng ghi hình...";
-      className += " border-amber-500/40 bg-amber-500/10 text-amber-300";
-      break;
-    case "stopped":
-      label = "Đã lưu bản ghi";
-      className += " border-emerald-500/40 bg-emerald-500/10 text-emerald-300";
-      break;
-    case "error":
-      label = "Lỗi ghi hình";
-      className += " border-red-500/40 bg-red-500/10 text-red-300";
-      break;
-    case "idle":
-    default:
-      return null;
-  }
-
-  const isPulse = status === "recording";
-
-  return (
-    <div
-      className={className}
-      title={`Trạng thái ghi hình: ${label}`}
-      aria-live="polite"
-    >
-      <span
-        className={
-          isPulse
-            ? "material-symbols-outlined text-[14px] animate-pulse"
-            : "material-symbols-outlined text-[14px]"
-        }
-      >
-        fiber_manual_record
-      </span>
-      <span>{label}</span>
-    </div>
-  );
-}

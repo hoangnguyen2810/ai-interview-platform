@@ -43,27 +43,55 @@ function MeetingGrid({ showLiveCoding }: { showLiveCoding: boolean }) {
 
   let cols = "grid-cols-1";
 
-  if (showLiveCoding) {
-    cols = "grid-cols-1";
-  } else {
+  if (!showLiveCoding) {
     if (count === 2) cols = "grid-cols-2";
     else if (count >= 3 && count <= 4) cols = "grid-cols-2";
     else if (count > 4) cols = "grid-cols-3";
   }
 
-  return (
-    <div className={`grid ${cols} gap-4 w-full h-full p-2`}>
-      {participants.map((p) => (
-        <div
-          key={p.sessionId}
-          className="w-full h-full rounded-3xl overflow-hidden bg-black"
-        >
+  // Chỉ có 1 người trong phòng
+  if (count === 1) {
+    return (
+      <div className="flex items-center justify-center w-full h-full p-2">
+        <div className="w-full h-full max-w-[1100px] rounded-3xl overflow-hidden bg-black">
           <ParticipantView
-            participant={p}
-            trackType={hasScreenShare(p) ? "screenShareTrack" : "videoTrack"}
+            participant={participants[0]}
+            trackType={
+              hasScreenShare(participants[0])
+                ? "screenShareTrack"
+                : "videoTrack"
+            }
           />
         </div>
-      ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`grid ${cols} gap-4 w-full h-full p-2`}>
+      {participants.map((p) => {
+        const isSpeaking = (p.audioLevel ?? 0) > 0.03;
+
+        return (
+          <div
+            key={p.sessionId}
+            className={`
+        w-full h-full rounded-3xl overflow-hidden bg-black
+        border-4 transition-all duration-200
+        ${
+          isSpeaking
+            ? "border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.8)]"
+            : "border-transparent"
+        }
+      `}
+          >
+            <ParticipantView
+              participant={p}
+              trackType={hasScreenShare(p) ? "screenShareTrack" : "videoTrack"}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -131,6 +159,7 @@ export default function InterviewRoomClient({
         const streamCall = client.call("default", meetingCode);
 
         await streamCall.join({ create: true });
+        console.log(streamCall.state);
 
         // allow SDK to stabilize
         await new Promise((r) => setTimeout(r, 300));
@@ -144,6 +173,7 @@ export default function InterviewRoomClient({
         if (camOn) {
           try {
             await streamCall.camera.enable();
+            console.log(streamCall.state.ownCapabilities);
           } catch (e) {
             console.warn("Camera retry...", e);
             setTimeout(() => {
@@ -318,6 +348,7 @@ export default function InterviewRoomClient({
                   title={title}
                   meetingCode={meetingCode}
                   role={role}
+                  enableRecording={recordingConfigLoaded && enableRecording}
                 />
 
                 <main className="flex-1 flex gap-4 p-4 overflow-hidden">

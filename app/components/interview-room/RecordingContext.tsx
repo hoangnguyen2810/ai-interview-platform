@@ -81,11 +81,7 @@ function getErrorMessage(err: unknown): string {
   }
 }
 
-export function RecordingProvider({
-  children,
-  call,
-  enabled,
-}: ProviderProps) {
+export function RecordingProvider({ children, call, enabled }: ProviderProps) {
   const [status, setStatus] = useState<RecordingStatus>("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -447,9 +443,7 @@ async function persistReadyRecording(
   };
 
   const token =
-    typeof window !== "undefined"
-      ? window.localStorage.getItem("token")
-      : null;
+    typeof window !== "undefined" ? window.localStorage.getItem("token") : null;
   const headers: HeadersInit = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 

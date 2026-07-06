@@ -4,7 +4,10 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRecruiterDashboard } from "./DashboardContext";
 import { useCountdown } from "@/hooks/useCountdown";
-import { CreateInterviewModal, type CreatedInterview } from "./CreateInterviewModal";
+import {
+  CreateInterviewModal,
+  type CreatedInterview,
+} from "./CreateInterviewModal";
 import Link from "next/link";
 
 type Interview = {
@@ -41,10 +44,7 @@ function toCard(i: {
 }): Interview {
   const date = new Date(i.scheduledAt);
   const status: Interview["status"] =
-    i.status === "ONGOING" ||
-    i.status === "FINISHED"
-      ? i.status
-      : "SCHEDULED";
+    i.status === "ONGOING" || i.status === "FINISHED" ? i.status : "SCHEDULED";
   return {
     id: i.id,
     title: i.title,
@@ -95,7 +95,9 @@ function InterviewCard({
     // ONGOING (đã tới giờ) → vào thẳng phòng.
     // SCHEDULED (chưa tới giờ) → mở modal chi tiết.
     if (status === "ONGOING") {
-      router.push(`/interview/room/${encodeURIComponent(interview.meetingCode)}`);
+      router.push(
+        `/interview/room/${encodeURIComponent(interview.meetingCode)}`,
+      );
     } else {
       onShowDetail(interview);
     }
@@ -165,9 +167,8 @@ function InterviewCard({
 export function UpcomingInterviews() {
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [loading, setLoading] = useState(true);
-  const [detailInterview, setDetailInterview] = useState<CreatedInterview | null>(
-    null,
-  );
+  const [detailInterview, setDetailInterview] =
+    useState<CreatedInterview | null>(null);
   const { subscribeInterviewCreated, subscribeInterviewFinished } =
     useRecruiterDashboard();
 
@@ -236,8 +237,7 @@ export function UpcomingInterviews() {
       roomPassword: null, // API không trả password hash cho client
       allowGuest: interview.allowGuest,
       maxParticipants: interview.maxParticipants,
-      maxInterviewers:
-        interview.maxInterviewers === "3" ? 3 : 2,
+      maxInterviewers: interview.maxInterviewers === "3" ? 3 : 2,
       durationMinutes: (interview.durationMinutes as 30 | 60 | 90 | 120) || 60,
       status: interview.status,
       enableRecording: interview.enableRecording,
@@ -248,7 +248,7 @@ export function UpcomingInterviews() {
   }, []);
 
   const visibleInterviews = useMemo(
-    () => interviews.filter((i) => i.status !== "FINISHED"),
+    () => interviews.filter((i) => i.status !== "FINISHED").slice(0, 2),
     [interviews],
   );
 

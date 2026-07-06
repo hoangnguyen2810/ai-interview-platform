@@ -682,7 +682,7 @@ export default function AIDrawer({ open, onClose, meetingCode }: Props) {
               : "text-[#6e6e6e] border-b-2 border-transparent hover:text-[#9a9a9a]"
           }`}
         >
-          💬 Chat AI
+          Chat
         </button>
         <button
           onClick={() => setTab("review")}
@@ -692,7 +692,7 @@ export default function AIDrawer({ open, onClose, meetingCode }: Props) {
               : "text-[#6e6e6e] border-b-2 border-transparent hover:text-[#9a9a9a]"
           }`}
         >
-          🤖 Code Review
+          Code Review
         </button>
       </div>
 
