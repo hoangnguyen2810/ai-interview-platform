@@ -28,6 +28,10 @@ export interface QuestionContextValue {
   error: string | null;
   setActiveQuestion: (question: CodingQuestion) => void;
   refreshQuestions: () => void;
+  /** Trả về success boolean; caller tự gọi nếu cần refresh lại từ server */
+  removeQuestion: (questionId: string) => Promise<boolean>;
+  /** Cập nhật nội dung 1 câu hỏi (cần revalidate với server). Trả về success */
+  updateQuestionLocal: (question: CodingQuestion) => void;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -92,6 +96,30 @@ export function QuestionProvider({
         if (prev.some((q) => q.id === question.id)) return prev;
         return [...prev, question];
       });
+    });
+
+    // ── question:updated ───────────────────────────────────────────────────────
+    // Recruiter vừa sửa câu hỏi → cập nhật nội dung trong danh sách.
+    // Nếu câu hỏi đang active thì cũng refresh activeQuestion.
+    socket.on("question:updated", (question: CodingQuestion) => {
+      console.log(`[Socket.IO] question:updated received:`, question);
+      setQuestions((prev) =>
+        prev.map((q) => (q.id === question.id ? { ...q, ...question } : q)),
+      );
+      setActiveQuestionState((prev) =>
+        prev && prev.id === question.id ? { ...prev, ...question } : prev,
+      );
+    });
+
+    // ── question:removed ───────────────────────────────────────────────────────
+    // Recruiter xoá câu hỏi khỏi buổi phỏng vấn → remove khỏi danh sách
+    // và clear activeQuestion nếu trùng.
+    socket.on("question:removed", (payload: { questionId: string }) => {
+      const qid = payload?.questionId;
+      if (!qid) return;
+      console.log(`[Socket.IO] question:removed received:`, qid);
+      setQuestions((prev) => prev.filter((q) => q.id !== qid));
+      setActiveQuestionState((prev) => (prev?.id === qid ? null : prev));
     });
 
     // ── question:activated ──────────────────────────────────────────────────────
@@ -216,6 +244,47 @@ export function QuestionProvider({
     [call, meetingCode],
   );
 
+  // ─── Xoá câu hỏi khỏi buổi phỏng vấn (recruiter action) ──────────────────
+  const removeQuestion = useCallback(
+    async (questionId: string): Promise<boolean> => {
+      try {
+        const res = await fetch(
+          `/api/interviews/${encodeURIComponent(meetingCode)}/questions/${encodeURIComponent(questionId)}`,
+          {
+            method: "DELETE",
+            credentials: "include",
+          },
+        );
+        const data = await res.json().catch(() => ({ success: false }));
+        if (!res.ok || !data.success) {
+          console.error("[removeQuestion]", data.message ?? res.statusText);
+          return false;
+        }
+        // Optimistic local update — backend đã emit socket event rồi,
+        // nhưng cập nhật ngay để UI không phải chờ round-trip.
+        setQuestions((prev) => prev.filter((q) => q.id !== questionId));
+        setActiveQuestionState((prev) =>
+          prev?.id === questionId ? null : prev,
+        );
+        return true;
+      } catch (err) {
+        console.error("[removeQuestion]", err);
+        return false;
+      }
+    },
+    [meetingCode],
+  );
+
+  // ─── Update local state khi nhận socket event (hoặc sau PATCH) ─────────────
+  const updateQuestionLocal = useCallback((question: CodingQuestion) => {
+    setQuestions((prev) =>
+      prev.map((q) => (q.id === question.id ? { ...q, ...question } : q)),
+    );
+    setActiveQuestionState((prev) =>
+      prev && prev.id === question.id ? { ...prev, ...question } : prev,
+    );
+  }, []);
+
   return (
     <QuestionContext.Provider
       value={{
@@ -225,6 +294,8 @@ export function QuestionProvider({
         error,
         setActiveQuestion,
         refreshQuestions,
+        removeQuestion,
+        updateQuestionLocal,
       }}
     >
       {children}

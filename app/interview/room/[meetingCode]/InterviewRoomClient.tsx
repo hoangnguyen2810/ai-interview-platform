@@ -403,6 +403,7 @@ export default function InterviewRoomClient({
                   onClose={() => setQuestionOpen(false)}
                   role={role}
                   meetingCode={meetingCode}
+                  currentUserId={userId}
                 />
               </div>
             </RecordingProvider>

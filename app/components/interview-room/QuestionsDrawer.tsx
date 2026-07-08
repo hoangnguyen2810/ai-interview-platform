@@ -8,9 +8,17 @@ type Props = {
   onClose: () => void;
   role: "recruiter" | "candidate";
   meetingCode: string;
+  /** UUID của user hiện tại (cần cho chức năng edit — chỉ author mới được sửa) */
+  currentUserId?: string;
 };
 
-export default function QuestionsDrawer({ open, onClose, role, meetingCode }: Props) {
+export default function QuestionsDrawer({
+  open,
+  onClose,
+  role,
+  meetingCode,
+  currentUserId,
+}: Props) {
   const { questions, activeQuestion, isLoading, error } = useQuestions();
 
   return (
@@ -45,7 +53,10 @@ export default function QuestionsDrawer({ open, onClose, role, meetingCode }: Pr
 
         <div className="p-6 overflow-y-auto h-[calc(100vh-64px)]">
           {role === "recruiter" ? (
-            <RecruiterQuestionsPanel meetingCode={meetingCode} />
+            <RecruiterQuestionsPanel
+              meetingCode={meetingCode}
+              currentUserId={currentUserId}
+            />
           ) : (
             /* ── Candidate view ── */
             <div className="flex flex-col gap-4">

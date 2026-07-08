@@ -230,15 +230,23 @@ export default function ParticipantsDrawer({
     (p) => p.roleLabel === "CANDIDATE",
   ).length;
 
-  // Tìm remote candidate (cho HOST thao tác mute/cam) — HOST/INTERVIEWER chỉ
-  // có quyền điều khiển candidate, không điều khiển lẫn nhau.
-  const remoteCandidate = participants.find(
-    (p) => !p.isYou && p.roleLabel === "CANDIDATE",
+  // Phân quyền hiển thị footer hint:
+  //   HOST: hiển thị nếu còn ít nhất 1 người khác trong phòng (điều khiển được)
+  //   INTERVIEWER: chỉ hiển thị nếu có candidate trong phòng
+  const hasControllableRemote = participants.some(
+    (p) =>
+      !p.isYou &&
+      ((participantRole === "HOST") ||
+        (participantRole === "INTERVIEWER" && p.roleLabel === "CANDIDATE")),
   );
 
   const isHost = participantRole === "HOST" || participantRole === "INTERVIEWER";
 
-  async function handleToggleMic(sessionId: string, disable: boolean) {
+  async function handleToggleMic(
+    sessionId: string,
+    targetDbUserId: string | null,
+    disable: boolean,
+  ) {
     if (mutingBySession[sessionId]) return;
     setMutingBySession((s) => ({ ...s, [sessionId]: true }));
     try {
@@ -247,7 +255,12 @@ export default function ParticipantsDrawer({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId, action: "mute", disabled: disable }),
+          body: JSON.stringify({
+            sessionId,
+            userId: targetDbUserId ?? undefined,
+            action: "mute",
+            disabled: disable,
+          }),
         },
       );
       const data = await res.json();
@@ -259,7 +272,11 @@ export default function ParticipantsDrawer({
     }
   }
 
-  async function handleToggleCamera(sessionId: string, disable: boolean) {
+  async function handleToggleCamera(
+    sessionId: string,
+    targetDbUserId: string | null,
+    disable: boolean,
+  ) {
     if (togglingCamBySession[sessionId]) return;
     setTogglingCamBySession((s) => ({ ...s, [sessionId]: true }));
     try {
@@ -268,7 +285,12 @@ export default function ParticipantsDrawer({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId, action: "camera", disabled: disable }),
+          body: JSON.stringify({
+            sessionId,
+            userId: targetDbUserId ?? undefined,
+            action: "camera",
+            disabled: disable,
+          }),
         },
       );
       const data = await res.json();
@@ -321,7 +343,10 @@ export default function ParticipantsDrawer({
         <div className="overflow-y-auto h-[calc(100vh-64px)]">
           {participants.map((user) => {
             const canControl =
-              isHost && !user.isYou && user.roleLabel === "CANDIDATE";
+              isHost &&
+              !user.isYou &&
+              (participantRole === "HOST" ||
+                user.roleLabel === "CANDIDATE");
             return (
               <div
                 key={user.sessionId}
@@ -392,7 +417,7 @@ export default function ParticipantsDrawer({
                   ) : canControl ? (
                     <>
                       <button
-                        onClick={() => handleToggleMic(user.sessionId, user.micOn)}
+                        onClick={() => handleToggleMic(user.sessionId, user.dbUserId, user.micOn)}
                         disabled={mutingBySession[user.sessionId]}
                         className={`w-8 h-8 rounded-full flex items-center justify-center transition ${
                           user.micOn
@@ -406,7 +431,11 @@ export default function ParticipantsDrawer({
                       </button>
                       <button
                         onClick={() =>
-                          handleToggleCamera(user.sessionId, user.cameraOn)
+                          handleToggleCamera(
+                            user.sessionId,
+                            user.dbUserId,
+                            user.cameraOn,
+                          )
                         }
                         disabled={togglingCamBySession[user.sessionId]}
                         className={`w-8 h-8 rounded-full flex items-center justify-center transition ${
@@ -453,10 +482,12 @@ export default function ParticipantsDrawer({
             </div>
           )}
 
-          {isHost && remoteCandidate && (
+          {isHost && hasControllableRemote && (
             <div className="px-5 py-3">
               <p className="text-[11px] text-gray-500 text-center">
-                Host / Interviewer có thể tắt mic / cam của ứng viên
+                {participantRole === "HOST"
+                  ? "Host có thể tắt mic / cam của mọi người trong phòng"
+                  : "Interviewer có thể tắt mic / cam của ứng viên"}
               </p>
             </div>
           )}

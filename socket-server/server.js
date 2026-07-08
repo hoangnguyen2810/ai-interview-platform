@@ -5,6 +5,8 @@
  * Events:
  *  - question:added   {id, title, description, difficulty}
  *  - question:activated {id, title, description, difficulty}
+ *  - question:updated  {id, title, description, difficulty}
+ *  - question:removed  {questionId}
  *  - code:update       {code, language, cursorLine, cursorColumn}
  *  - submission:added  {submissionId, questionId, language, sourceCode, stdout, stderr, runtimeMs, status, success, createdAt, candidateName, ...}
  *
@@ -74,6 +76,16 @@ function emitQuestionAdded(meetingCode, question) {
 function emitQuestionActivated(meetingCode, question) {
   io.to(meetingCode).emit("question:activated", question);
   console.log(`[Socket.IO] → question:activated | room: ${meetingCode} | q: ${question.title}`);
+}
+
+function emitQuestionUpdated(meetingCode, question) {
+  io.to(meetingCode).emit("question:updated", question);
+  console.log(`[Socket.IO] → question:updated | room: ${meetingCode} | q: ${question.title}`);
+}
+
+function emitQuestionRemoved(meetingCode, questionId) {
+  io.to(meetingCode).emit("question:removed", { questionId });
+  console.log(`[Socket.IO] → question:removed | room: ${meetingCode} | qid: ${questionId}`);
 }
 
 function emitCodeUpdate(meetingCode, payload) {
@@ -154,6 +166,18 @@ httpServer.on("request", (req, res) => {
     return;
   }
 
+  // ── POST /emit/question-updated ─────────────────────────────────────────────
+  if (pathname === "/emit/question-updated" && method === "POST") {
+    handleQuestionUpdated(req, res);
+    return;
+  }
+
+  // ── POST /emit/question-removed ─────────────────────────────────────────────
+  if (pathname === "/emit/question-removed" && method === "POST") {
+    handleQuestionRemoved(req, res);
+    return;
+  }
+
   // ── POST /emit/code-update ─────────────────────────────────────────────────
   if (pathname === "/emit/code-update" && method === "POST") {
     let body = "";
@@ -211,6 +235,50 @@ httpServer.on("request", (req, res) => {
   res.writeHead(404);
   res.end();
 });
+
+// ─── question-updated ─────────────────────────────────────────────────────────
+function handleQuestionUpdated(req, res) {
+  let body = "";
+  req.on("data", (c) => (body += c));
+  req.on("end", () => {
+    try {
+      const { meetingCode, question } = JSON.parse(body);
+      if (!meetingCode || !question) {
+        res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+        res.end(JSON.stringify({ error: "missing meetingCode or question" }));
+        return;
+      }
+      emitQuestionUpdated(meetingCode, question);
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+      res.end(JSON.stringify({ success: true }));
+    } catch {
+      res.writeHead(500, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+      res.end(JSON.stringify({ error: "parse error" }));
+    }
+  });
+}
+
+// ─── question-removed ─────────────────────────────────────────────────────────
+function handleQuestionRemoved(req, res) {
+  let body = "";
+  req.on("data", (c) => (body += c));
+  req.on("end", () => {
+    try {
+      const { meetingCode, questionId } = JSON.parse(body);
+      if (!meetingCode || !questionId) {
+        res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+        res.end(JSON.stringify({ error: "missing meetingCode or questionId" }));
+        return;
+      }
+      emitQuestionRemoved(meetingCode, questionId);
+      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+      res.end(JSON.stringify({ success: true }));
+    } catch {
+      res.writeHead(500, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+      res.end(JSON.stringify({ error: "parse error" }));
+    }
+  });
+}
 
 // ─── Start ─────────────────────────────────────────────────────────────────────
 

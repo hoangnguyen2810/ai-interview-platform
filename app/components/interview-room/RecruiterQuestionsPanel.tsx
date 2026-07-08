@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useQuestions, type CodingQuestion } from "./QuestionContext";
 
 type AvailableQuestion = {
@@ -14,25 +14,38 @@ type AvailableQuestion = {
 
 interface Props {
   meetingCode: string;
+  /** UUID của recruiter hiện tại — để check quyền sửa câu hỏi */
+  currentUserId?: string;
 }
 
-// ─── Create Question Form ──────────────────────────────────────────────────────
+// ─── Shared Question Form (create + edit) ─────────────────────────────────────
 
-function CreateQuestionForm({
-  meetingCode,
-  onSuccess,
+function QuestionForm({
+  initial,
+  submitLabel,
+  onSubmit,
   onCancel,
+  onDelete,
 }: {
-  meetingCode: string;
-  onSuccess: (q: CodingQuestion) => void;
+  initial?: {
+    title: string;
+    description: string;
+    difficulty: "EASY" | "MEDIUM" | "HARD" | null;
+  };
+  submitLabel: string;
+  onSubmit: (data: {
+    title: string;
+    description: string;
+    difficulty: "EASY" | "MEDIUM" | "HARD" | null;
+  }) => Promise<void>;
   onCancel: () => void;
+  onDelete?: () => void;
 }) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
   const [difficulty, setDifficulty] = useState<"" | "EASY" | "MEDIUM" | "HARD">(
-    "",
+    initial?.difficulty ?? "",
   );
-  const [assignToInterview, setAssignToInterview] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -46,28 +59,13 @@ function CreateQuestionForm({
     setSubmitting(true);
     setError("");
     try {
-      const res = await fetch(
-        `/api/interviews/${encodeURIComponent(meetingCode)}/questions/create`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title,
-            description,
-            difficulty: difficulty || null,
-            assignToInterview,
-          }),
-        },
-      );
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.message ?? "Lỗi khi tạo câu hỏi.");
-        return;
-      }
-      onSuccess(data.question);
-    } catch {
-      setError("Lỗi kết nối.");
+      await onSubmit({
+        title: title.trim(),
+        description: description.trim(),
+        difficulty: difficulty === "" ? null : difficulty,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Lỗi không xác định");
     } finally {
       setSubmitting(false);
     }
@@ -81,9 +79,9 @@ function CreateQuestionForm({
       <div className="flex items-center justify-between">
         <h4 className="text-cyan-400 font-semibold text-sm flex items-center gap-2">
           <span className="material-symbols-outlined text-base">
-            add_circle
+            {initial ? "edit" : "add_circle"}
           </span>
-          Tạo câu hỏi mới
+          {initial ? "Sửa câu hỏi" : "Tạo câu hỏi mới"}
         </h4>
         <button
           type="button"
@@ -150,48 +148,213 @@ function CreateQuestionForm({
         </div>
       </div>
 
-      <label className="flex items-center gap-2 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={assignToInterview}
-          onChange={(e) => setAssignToInterview(e.target.checked)}
-          className="accent-cyan-500"
-        />
-        <span className="text-gray-300 text-xs">
-          Thêm ngay vào danh sách câu hỏi phỏng vấn
-        </span>
-      </label>
-
       {error && (
         <p className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded px-3 py-2">
           {error}
         </p>
       )}
 
-      <button
-        type="submit"
-        disabled={submitting}
-        className="w-full py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-[#051424] font-semibold text-sm transition-colors disabled:opacity-50"
-      >
-        {submitting ? "Đang tạo..." : "Tạo câu hỏi"}
-      </button>
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={submitting}
+          className="flex-1 py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-[#051424] font-semibold text-sm transition-colors disabled:opacity-50"
+        >
+          {submitting ? "Đang lưu..." : submitLabel}
+        </button>
+        {onDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="px-4 py-2.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 font-semibold text-sm transition-colors"
+          >
+            Xoá
+          </button>
+        )}
+      </div>
     </form>
   );
 }
 
-// ─── Main Panel ───────────────────────────────────────────────────────────────
+// ─── Create Question wrapper ──────────────────────────────────────────────────
 
-export default function RecruiterQuestionsPanel({ meetingCode }: Props) {
-  const { questions, activeQuestion, setActiveQuestion, refreshQuestions } =
-    useQuestions();
+function CreateQuestionForm({
+  meetingCode,
+  onSuccess,
+  onCancel,
+}: {
+  meetingCode: string;
+  onSuccess: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <QuestionForm
+      submitLabel="Tạo câu hỏi"
+      onSubmit={async ({ title, description, difficulty }) => {
+        const res = await fetch(
+          `/api/interviews/${encodeURIComponent(meetingCode)}/questions/create`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title,
+              description,
+              difficulty,
+              assignToInterview: true,
+            }),
+          },
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message ?? "Lỗi khi tạo câu hỏi.");
+        }
+        onSuccess();
+      }}
+      onCancel={onCancel}
+    />
+  );
+}
+
+// ─── Edit Question wrapper ───────────────────────────────────────────────────
+
+function EditQuestionForm({
+  meetingCode,
+  question,
+  onSuccess,
+  onCancel,
+  onDelete,
+}: {
+  meetingCode: string;
+  question: CodingQuestion;
+  onSuccess: () => void;
+  onCancel: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <QuestionForm
+      initial={{
+        title: question.title,
+        description: question.description,
+        difficulty: question.difficulty ?? null,
+      }}
+      submitLabel="Lưu thay đổi"
+      onSubmit={async ({ title, description, difficulty }) => {
+        const res = await fetch(
+          `/api/interviews/${encodeURIComponent(meetingCode)}/questions/${encodeURIComponent(question.id)}`,
+          {
+            method: "PATCH",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title, description, difficulty }),
+          },
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message ?? "Lỗi khi sửa câu hỏi.");
+        }
+        onSuccess();
+      }}
+      onCancel={onCancel}
+      onDelete={onDelete}
+    />
+  );
+}
+
+// ─── Delete confirm modal ────────────────────────────────────────────────────
+
+function DeleteConfirm({
+  question,
+  deleting,
+  onConfirm,
+  onCancel,
+}: {
+  question: CodingQuestion;
+  deleting: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+      <div className="bg-[#0d2035] border border-red-500/40 rounded-xl p-5 max-w-sm w-full shadow-2xl">
+        <div className="flex items-start gap-3 mb-3">
+          <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-red-400">
+              warning
+            </span>
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-white font-semibold text-base">
+              Xoá câu hỏi khỏi buổi phỏng vấn?
+            </h3>
+            <p className="text-gray-400 text-xs mt-1">
+              Câu hỏi sẽ bị gỡ khỏi buổi phỏng vấn này nhưng vẫn còn trong thư
+              viện để dùng lại sau.
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-[#122131] border border-[#1e3a50] rounded-lg p-3 mb-4">
+          <p className="text-white text-sm font-medium truncate">
+            {question.title}
+          </p>
+          <p className="text-gray-500 text-xs mt-1 line-clamp-2">
+            {question.description}
+          </p>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={deleting}
+            className="flex-1 py-2 rounded-lg bg-[#122131] hover:bg-[#1a3147] text-gray-300 border border-[#3b494b] font-semibold text-sm transition-colors disabled:opacity-50"
+          >
+            Huỷ
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={deleting}
+            className="flex-1 py-2 rounded-lg bg-red-500 hover:bg-red-400 text-white font-semibold text-sm transition-colors disabled:opacity-50"
+          >
+            {deleting ? "Đang xoá..." : "Xoá"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Panel ──────────────────────────────────────────────────────────────
+
+export default function RecruiterQuestionsPanel({
+  meetingCode,
+  currentUserId,
+}: Props) {
+  // currentUserId reserved for future client-side ownership checks; backend
+  // currently enforces edit permission via `created_by` check in the PATCH route.
+  void currentUserId;
+  const {
+    questions,
+    activeQuestion,
+    setActiveQuestion,
+    refreshQuestions,
+    removeQuestion,
+    updateQuestionLocal,
+  } = useQuestions();
 
   const [available, setAvailable] = useState<AvailableQuestion[]>([]);
   const [loadingAvailable, setLoadingAvailable] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [settingId, setSettingId] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState<CodingQuestion | null>(
+    null,
+  );
+  const [deleting, setDeleting] = useState<CodingQuestion | null>(null);
 
-  // Load available questions from system library
+  // ─── Load available questions from system library ────────────────────────
   const loadAvailable = useCallback(async () => {
     setLoadingAvailable(true);
     try {
@@ -213,7 +376,7 @@ export default function RecruiterQuestionsPanel({ meetingCode }: Props) {
     loadAvailable();
   }, [loadAvailable]);
 
-  // Add existing question from library to interview
+  // ─── Add existing question from library to interview ──────────────────────
   const handleAddQuestion = async (questionId: string) => {
     setAddingId(questionId);
     try {
@@ -234,7 +397,7 @@ export default function RecruiterQuestionsPanel({ meetingCode }: Props) {
     }
   };
 
-  // Set active question for candidate
+  // ─── Set active question for candidate ───────────────────────────────────
   const handleSetActive = async (question: CodingQuestion) => {
     setSettingId(question.id);
     try {
@@ -244,13 +407,40 @@ export default function RecruiterQuestionsPanel({ meetingCode }: Props) {
     }
   };
 
-  // Called when a new question is created
-  const handleQuestionCreated = (q: CodingQuestion) => {
+  // ─── Called when a new question is created ──────────────────────────────
+  const handleQuestionCreated = () => {
     setShowCreateForm(false);
     refreshQuestions();
     loadAvailable();
   };
 
+  // ─── Called when a question is updated ──────────────────────────────────
+  const handleQuestionUpdated = () => {
+    setEditingQuestion(null);
+    // refresh từ server để chắc chắn đồng bộ
+    refreshQuestions();
+    loadAvailable();
+  };
+
+  // ─── Confirm delete ─────────────────────────────────────────────────────
+  const [deletingInProgress, setDeletingInProgress] = useState(false);
+
+  const handleConfirmDelete = async () => {
+    if (!deleting || deletingInProgress) return;
+    setDeletingInProgress(true);
+    try {
+      const ok = await removeQuestion(deleting.id);
+      if (ok) {
+        setDeleting(null);
+        // refresh available để cập nhật trạng thái "Đã thêm"
+        loadAvailable();
+      }
+    } finally {
+      setDeletingInProgress(false);
+    }
+  };
+
+  // ─── Style helpers ──────────────────────────────────────────────────────
   const difficultyColor = (d: string | null) => {
     if (d === "EASY")
       return "text-green-400 bg-green-400/10 border-green-400/20";
@@ -270,22 +460,34 @@ export default function RecruiterQuestionsPanel({ meetingCode }: Props) {
 
   return (
     <div className="flex flex-col gap-5">
-      {/* ── Create form ── */}
-      {showCreateForm ? (
-        <CreateQuestionForm
+      {/* ── Edit form (thay thế card khi đang sửa) ── */}
+      {editingQuestion && (
+        <EditQuestionForm
           meetingCode={meetingCode}
-          onSuccess={handleQuestionCreated}
-          onCancel={() => setShowCreateForm(false)}
+          question={editingQuestion}
+          onSuccess={handleQuestionUpdated}
+          onCancel={() => setEditingQuestion(null)}
+          onDelete={() => setDeleting(editingQuestion)}
         />
-      ) : (
-        <button
-          onClick={() => setShowCreateForm(true)}
-          className="flex items-center justify-center gap-2 py-3 rounded-lg border-2 border-dashed border-[#1e3a50] text-cyan-400 hover:border-cyan-500 hover:bg-cyan-500/5 transition-all text-sm font-medium"
-        >
-          <span className="material-symbols-outlined text-lg">add</span>
-          Tạo câu hỏi mới
-        </button>
       )}
+
+      {/* ── Create form ── */}
+      {!editingQuestion &&
+        (showCreateForm ? (
+          <CreateQuestionForm
+            meetingCode={meetingCode}
+            onSuccess={handleQuestionCreated}
+            onCancel={() => setShowCreateForm(false)}
+          />
+        ) : (
+          <button
+            onClick={() => setShowCreateForm(true)}
+            className="flex items-center justify-center gap-2 py-3 rounded-lg border-2 border-dashed border-[#1e3a50] text-cyan-400 hover:border-cyan-500 hover:bg-cyan-500/5 transition-all text-sm font-medium"
+          >
+            <span className="material-symbols-outlined text-lg">add</span>
+            Tạo câu hỏi mới
+          </button>
+        ))}
 
       {/* ── Assigned questions ── */}
       <section>
@@ -309,18 +511,19 @@ export default function RecruiterQuestionsPanel({ meetingCode }: Props) {
           <div className="space-y-2">
             {questions.map((q) => {
               const isActive = activeQuestion?.id === q.id;
+              const isEditing = editingQuestion?.id === q.id;
               return (
                 <div
                   key={q.id}
                   className={`
-                    flex items-start gap-3 p-3 rounded-lg border transition-all cursor-pointer group
+                    flex items-start gap-3 p-3 rounded-lg border transition-all group
                     ${
                       isActive
                         ? "border-cyan-500 bg-cyan-500/10"
                         : "border-[#1e3a50] bg-[#0d2035] hover:border-cyan-500/50"
                     }
                   `}
-                  onClick={() => handleSetActive(q)}
+                  onClick={() => !isEditing && handleSetActive(q)}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -338,27 +541,61 @@ export default function RecruiterQuestionsPanel({ meetingCode }: Props) {
                       {q.description}
                     </p>
                   </div>
-                  <button
-                    className={`
-                      shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors
-                      ${
-                        isActive
-                          ? "bg-cyan-500 text-[#051424]"
-                          : "bg-[#16304b] text-cyan-400 hover:bg-cyan-500 hover:text-[#051424]"
-                      }
-                    `}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleSetActive(q);
-                    }}
-                    disabled={settingId === q.id}
-                  >
-                    {settingId === q.id
-                      ? "..."
-                      : isActive
-                        ? "Đang chọn"
-                        : "Chọn"}
-                  </button>
+
+                  <div className="flex flex-col gap-1.5 shrink-0">
+                    <button
+                      className={`
+                        px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors
+                        ${
+                          isActive
+                            ? "bg-cyan-500 text-[#051424]"
+                            : "bg-[#16304b] text-cyan-400 hover:bg-cyan-500 hover:text-[#051424]"
+                        }
+                      `}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSetActive(q);
+                      }}
+                      disabled={settingId === q.id}
+                    >
+                      {settingId === q.id
+                        ? "..."
+                        : isActive
+                          ? "Đang chọn"
+                          : "Chọn"}
+                    </button>
+
+                    {/* Action group: Edit / Delete */}
+                    <div
+                      className="flex gap-1 opacity-60 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        title="Sửa câu hỏi"
+                        className="flex-1 px-2 py-1 rounded-md bg-[#122131] hover:bg-[#1a3147] text-gray-400 hover:text-cyan-400 transition-colors border border-[#3b494b]"
+                        onClick={() => {
+                          updateQuestionLocal(q);
+                          setEditingQuestion(q);
+                          setShowCreateForm(false);
+                        }}
+                      >
+                        <span className="material-symbols-outlined text-xs leading-none align-middle">
+                          edit
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        title="Xoá khỏi buổi phỏng vấn"
+                        className="flex-1 px-2 py-1 rounded-md bg-[#122131] hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors border border-[#3b494b]"
+                        onClick={() => setDeleting(q)}
+                      >
+                        <span className="material-symbols-outlined text-xs leading-none align-middle">
+                          delete
+                        </span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               );
             })}
@@ -418,6 +655,16 @@ export default function RecruiterQuestionsPanel({ meetingCode }: Props) {
           </div>
         )}
       </section>
+
+      {/* ── Delete confirm modal ── */}
+      {deleting && (
+        <DeleteConfirm
+          question={deleting}
+          deleting={deletingInProgress}
+          onConfirm={handleConfirmDelete}
+          onCancel={() => !deletingInProgress && setDeleting(null)}
+        />
+      )}
     </div>
   );
 }
