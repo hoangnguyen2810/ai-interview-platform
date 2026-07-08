@@ -36,22 +36,37 @@ export async function GET(req: NextRequest) {
     const interviewId = interviewRes.rows[0].id;
 
     if (roleParam === "INTERVIEWER") {
-      const row = await pool.query<{ full_name: string }>(
-        `SELECT u.full_name
-         FROM interview_participants ip
-         JOIN users u ON u.id = ip.user_id
-         WHERE ip.interview_id = $1 AND ip.participant_role = 'HOST'
-         LIMIT 1`,
+      const rows = await pool.query<{
+        full_name: string;
+        participant_role: string;
+      }>(
+        `SELECT
+      u.full_name,
+      ip.participant_role
+   FROM interview_participants ip
+   JOIN users u ON u.id = ip.user_id
+   WHERE ip.interview_id = $1
+     AND ip.participant_role IN ('HOST', 'INTERVIEWER')
+   ORDER BY
+     CASE
+       WHEN ip.participant_role = 'HOST' THEN 0
+       ELSE 1
+     END,
+     u.full_name`,
         [interviewId],
       );
+
       return NextResponse.json({
         success: true,
-        participant: row.rows[0] ?? null,
+        participants: rows.rows,
       });
     }
 
     if (roleParam === "CANDIDATE") {
-      const row = await pool.query<{ candidate_name: string | null; full_name: string | null }>(
+      const row = await pool.query<{
+        candidate_name: string | null;
+        full_name: string | null;
+      }>(
         `SELECT ic.candidate_name, u.full_name
          FROM interview_candidates ic
          LEFT JOIN users u ON u.id = ic.user_id

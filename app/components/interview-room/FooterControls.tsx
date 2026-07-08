@@ -21,15 +21,17 @@ export default function FooterControls({
   otherParticipantName,
   call,
   meetingCode,
+  userId,
   enableRecording = false,
 }: {
   role: "candidate" | "recruiter";
-  participantRole: "CANDIDATE" | "HOST" | "CO_HOST";
+  participantRole: "CANDIDATE" | "HOST" | "INTERVIEWER";
   onOpenLiveCoding: () => void;
   userFullName: string;
   otherParticipantName: string | null;
   call: Call | null;
   meetingCode: string;
+  userId: string;
   enableRecording?: boolean;
 }) {
   const { useMicrophoneState, useCameraState, useScreenShareState } =
@@ -88,7 +90,8 @@ export default function FooterControls({
     if (isEnding) return; // chống double-click
     setIsEnding(true);
 
-    const isHost = participantRole === "HOST" || participantRole === "CO_HOST";
+    const isHost =
+      participantRole === "HOST" || participantRole === "INTERVIEWER";
 
     try {
       if (isHost) {
@@ -284,7 +287,7 @@ export default function FooterControls({
             onClick={handleEndCall}
             disabled={isEnding}
             title={
-              participantRole === "HOST" || participantRole === "CO_HOST"
+              participantRole === "HOST" || participantRole === "INTERVIEWER"
                 ? "Kết thúc buổi phỏng vấn (toàn bộ phòng sẽ rời đi)"
                 : "Rời khỏi phòng"
             }
@@ -363,6 +366,7 @@ export default function FooterControls({
         currentUserRole={role}
         participantRole={participantRole}
         meetingCode={meetingCode}
+        userId={userId}
       />
 
       {isRecruiter && (

@@ -138,22 +138,31 @@ export default function InterviewRoomClient({
           return;
         }
 
-        const userId = `${role}-${meetingCode}`;
+        // Dùng UUID thật làm GetStream userId để:
+        //  1. Mỗi user (HOST/INTERVIEWER/CANDIDATE) có id duy nhất trong call.
+        //     Nếu 2 recruiter cùng vào phòng, không bị trùng userId.
+        //  2. Map được sang DB (users.id) để tra cứu tên/role.
+        // customData.role giúp GetStream phân biệt role, dùng cho UI/log.
+        const streamUserId = userId;
 
         const res = await fetch("/api/stream/token", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userId }),
+          body: JSON.stringify({ userId: streamUserId }),
         });
 
         if (!res.ok) throw new Error("Failed to fetch Stream token");
         const { token } = await res.json();
 
-        const user: UserResponse = {
-          id: userId,
+        const user = {
+          id: streamUserId,
           name: userFullName,
           role,
-        };
+          custom: {
+            dbUserId: userId,
+            participantRole,
+          },
+        } as unknown as UserResponse;
 
         const client = createStreamClient(apiKey, user, token);
         const streamCall = client.call("default", meetingCode);
@@ -196,7 +205,7 @@ export default function InterviewRoomClient({
     }
 
     initStream();
-  }, [meetingCode, role, userFullName, readPersisted]);
+  }, [meetingCode, role, userFullName, userId, readPersisted, participantRole]);
 
   // Sync SDK cam/mic track state → sessionStorage so waiting room reflects changes
   useEffect(() => {
@@ -384,6 +393,7 @@ export default function InterviewRoomClient({
                     call={call}
                     participantRole={participantRole}
                     meetingCode={meetingCode}
+                    userId={userId}
                     enableRecording={recordingConfigLoaded && enableRecording}
                   />
                 )}
