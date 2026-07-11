@@ -30,6 +30,26 @@ interface ApiResponse {
   success: boolean;
   recordings?: RecordingDto[];
   total?: number;
+  inserted?: number;
+  skipped?: number;
+  message?: string;
+}
+
+interface LatestInterview {
+  callCid: string;
+  meetingCode: string;
+  title: string;
+  status: string;
+  createdAt: string;
+}
+
+interface LatestResponse {
+  success: boolean;
+  callCid: string | null;
+  meetingCode?: string | null;
+  title?: string | null;
+  status?: string | null;
+  createdAt?: string | null;
   message?: string;
 }
 
@@ -78,10 +98,16 @@ export default function RecordingsPage() {
   const [search, setSearch] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isLoadingLatest, setIsLoadingLatest] = useState(false);
   const [syncInput, setSyncInput] = useState("");
+  const [latest, setLatest] = useState<LatestInterview | null>(null);
   const [syncMessage, setSyncMessage] = useState<{
     type: "success" | "error" | "info";
     text: string;
+    /** Số recording MỚI được insert vào DB */
+    inserted?: number;
+    /** Số recording đã có sẵn, được skip để tránh trùng */
+    skipped?: number;
   } | null>(null);
 
   const loadRecordings = useCallback(async () => {
@@ -120,6 +146,78 @@ export default function RecordingsPage() {
   }, [loadRecordings]);
 
   /**
+   * Helper gọi GET /api/recordings/:callCid. Trả { ok, json } để caller
+   * tự xử lý message — dùng chung cho cả flow nhập tay và flow "mới nhất".
+   */
+  const syncByCallCid = useCallback(
+    async (callCid: string): Promise<ApiResponse | null> => {
+      const token =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem("token")
+          : null;
+      const headers: HeadersInit = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch(`/api/recordings/${encodeURIComponent(callCid)}`, {
+        method: "GET",
+        headers,
+        credentials: "include",
+      });
+      const json = (await res.json().catch(() => null)) as ApiResponse | null;
+      return res.ok ? json : json ?? { success: false, message: `HTTP ${res.status}` };
+    },
+    [],
+  );
+
+  /**
+   * Lấy callCid của interview mới nhất từ server (recruiter không cần nhập
+   * tay). Endpoint: GET /api/recordings/latest.
+   */
+  const loadLatest = useCallback(async (): Promise<LatestInterview | null> => {
+    setIsLoadingLatest(true);
+    try {
+      const token =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem("token")
+          : null;
+      const headers: HeadersInit = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch("/api/recordings/latest", {
+        method: "GET",
+        headers,
+        credentials: "include",
+      });
+      const json = (await res.json().catch(() => null)) as LatestResponse | null;
+
+      if (!res.ok || !json?.success || !json.callCid) {
+        setLatest(null);
+        return null;
+      }
+      const info: LatestInterview = {
+        callCid: json.callCid,
+        meetingCode: json.meetingCode ?? "",
+        title: json.title ?? "",
+        status: json.status ?? "",
+        createdAt: json.createdAt ?? "",
+      };
+      setLatest(info);
+      return info;
+    } catch {
+      setLatest(null);
+      return null;
+    } finally {
+      setIsLoadingLatest(false);
+    }
+  }, []);
+
+  // Tự động load preview "interview mới nhất" khi mở trang để recruiter
+  // thấy ngay callCid sẽ được sync — không cần đợi bấm nút mới biết.
+  useEffect(() => {
+    void loadLatest();
+  }, [loadLatest]);
+
+  /**
    * Gọi GET /api/recordings/:callCid để server fetch từ GetStream rồi
    * INSERT vào DB. User nhập callCid (vd "default:NC-ABC123") vào ô input,
    * bấm nút → endpoint chạy → reload list.
@@ -131,36 +229,30 @@ export default function RecordingsPage() {
     setIsSyncing(true);
     setSyncMessage(null);
     try {
-      const token =
-        typeof window !== "undefined"
-          ? window.localStorage.getItem("token")
-          : null;
-      const headers: HeadersInit = {};
-      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const json = await syncByCallCid(callCid);
 
-      const res = await fetch(
-        `/api/recordings/${encodeURIComponent(callCid)}`,
-        { method: "GET", headers, credentials: "include" },
-      );
-      const json = (await res.json().catch(() => null)) as ApiResponse | null;
-
-      if (!res.ok || !json?.success) {
+      if (!json?.success) {
         setSyncMessage({
           type: "error",
-          text: json?.message ?? `Lỗi ${res.status}`,
+          text: json?.message ?? "Đồng bộ thất bại",
         });
         return;
       }
 
-      const inserted = json.total ?? 0;
+      const inserted = json.inserted ?? 0;
+      const skipped = json.skipped ?? 0;
       setSyncMessage({
         type:
           inserted > 0
             ? "success"
-            : (json.message?.includes("đang") ? "info" : "success"),
+            : skipped > 0
+              ? "info"
+              : "info",
         text:
           json.message ??
-          `Đồng bộ xong: ${inserted} recording đã được lưu`,
+          `Đồng bộ xong: ${inserted} mới, ${skipped} đã có`,
+        inserted,
+        skipped,
       });
       await loadRecordings();
     } catch (err) {
@@ -174,7 +266,67 @@ export default function RecordingsPage() {
     } finally {
       setIsSyncing(false);
     }
-  }, [syncInput, isSyncing, loadRecordings]);
+  }, [syncInput, isSyncing, syncByCallCid, loadRecordings]);
+
+  /**
+   * Sync recording của interview MỚI NHẤT user từng host:
+   *   1. Gọi /api/recordings/latest để lấy callCid.
+   *   2. Gọi /api/recordings/:callCid để server fetch từ GetStream → DB.
+   *
+   * Flow 1 lần duy nhất, không cần nhập tay.
+   */
+  const handleSyncLatest = useCallback(async () => {
+    if (isSyncing) return;
+    setSyncMessage(null);
+
+    const info = await loadLatest();
+    if (!info) {
+      setSyncMessage({
+        type: "error",
+        text: "Không tìm thấy interview nào để đồng bộ",
+      });
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      const json = await syncByCallCid(info.callCid);
+      if (!json?.success) {
+        setSyncMessage({
+          type: "error",
+          text: json?.message ?? "Đồng bộ thất bại",
+        });
+        return;
+      }
+
+      const inserted = json.inserted ?? 0;
+      const skipped = json.skipped ?? 0;
+      const tail =
+        inserted > 0
+          ? ` — ${inserted} mới, ${skipped} đã có`
+          : skipped > 0
+            ? ` — ${skipped} đã có sẵn (skip trùng)`
+            : "";
+
+      setSyncMessage({
+        type: inserted > 0 ? "success" : "info",
+        text: `Đồng bộ "${info.title}" (${info.meetingCode})${tail}`,
+        inserted,
+        skipped,
+      });
+      await loadRecordings();
+    } catch (err) {
+      setSyncMessage({
+        type: "error",
+        text:
+          err instanceof Error
+            ? `Lỗi: ${err.message}`
+            : "Đồng bộ thất bại",
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [isSyncing, loadLatest, syncByCallCid, loadRecordings]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -202,11 +354,11 @@ export default function RecordingsPage() {
             Quản lý Recordings
           </h1>
           <p className="text-slate-400 mt-2">
-            Recordings được lưu từ GetStream khi host End Call. Nhập
-            <code className="mx-1 px-1.5 py-0.5 bg-slate-800 rounded text-cyan-400 text-sm">
-              default:&lt;meetingCode&gt;
-            </code>
-            để đồng bộ recording cho 1 cuộc phỏng vấn.
+            Recordings được lưu từ GetStream khi host End Call. Bấm
+            <span className="mx-1 px-1.5 py-0.5 bg-cyan-500/10 border border-cyan-500/30 rounded text-cyan-400 text-sm font-medium">
+              Đồng bộ interview mới nhất
+            </span>
+            để fetch recording của cuộc phỏng vấn gần nhất bạn host.
           </p>
         </div>
 
@@ -216,30 +368,78 @@ export default function RecordingsPage() {
             <RefreshCw size={18} className="text-cyan-400" />
             Đồng bộ recording từ GetStream
           </h2>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <input
-              type="text"
-              value={syncInput}
-              onChange={(e) => setSyncInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void handleSyncCallCid();
-              }}
-              placeholder="default:NC-XXXXXX"
-              className="flex-1 bg-[#071524] border border-slate-700 rounded-xl px-4 py-3 outline-none focus:border-cyan-500 font-mono text-sm"
-              disabled={isSyncing}
-            />
-            <button
-              type="button"
-              onClick={() => void handleSyncCallCid()}
-              disabled={!syncInput.trim() || isSyncing}
-              className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed text-[#071524] font-semibold transition shadow-lg shadow-cyan-500/20 min-w-[180px]"
-            >
-              <RefreshCw
-                size={18}
-                className={isSyncing ? "animate-spin" : ""}
+
+          {/* NÚT CHÍNH — sync interview mới nhất */}
+          <div className="mb-5 p-4 bg-cyan-500/5 border border-cyan-500/20 rounded-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="text-sm text-slate-300 mb-1">
+                  <span className="text-cyan-400 font-semibold">
+                    Nhanh:
+                  </span>{" "}
+                  đồng bộ recording của interview mới nhất bạn host.
+                </div>
+                {latest ? (
+                  <div className="text-xs text-slate-400 font-mono truncate">
+                    {latest.callCid} ·{" "}
+                    <span className="text-slate-200">{latest.title}</span>{" "}
+                    · {latest.status}
+                  </div>
+                ) : isLoadingLatest ? (
+                  <div className="text-xs text-slate-500">Đang tải…</div>
+                ) : (
+                  <div className="text-xs text-slate-500">
+                    (chưa có dữ liệu — sẽ fetch khi bấm nút)
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleSyncLatest()}
+                disabled={isSyncing}
+                className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 disabled:from-slate-700 disabled:to-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-semibold transition shadow-lg shadow-cyan-500/20 min-w-[220px] whitespace-nowrap"
+              >
+                <RefreshCw
+                  size={18}
+                  className={isSyncing ? "animate-spin" : ""}
+                />
+                {isSyncing
+                  ? "Đang đồng bộ…"
+                  : "Đồng bộ interview mới nhất"}
+              </button>
+            </div>
+          </div>
+
+          {/* FALLBACK — nhập callCid tay */}
+          <div className="border-t border-slate-700/50 pt-4">
+            <div className="text-xs text-slate-500 mb-2">
+              Hoặc nhập callCid cụ thể:
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <input
+                type="text"
+                value={syncInput}
+                onChange={(e) => setSyncInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void handleSyncCallCid();
+                }}
+                placeholder="default:NC-XXXXXX"
+                className="flex-1 bg-[#071524] border border-slate-700 rounded-xl px-4 py-3 outline-none focus:border-cyan-500 font-mono text-sm"
+                disabled={isSyncing}
               />
-              {isSyncing ? "Đang đồng bộ..." : "Đồng bộ"}
-            </button>
+              <button
+                type="button"
+                onClick={() => void handleSyncCallCid()}
+                disabled={!syncInput.trim() || isSyncing}
+                className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-semibold transition min-w-[180px]"
+              >
+                <RefreshCw
+                  size={18}
+                  className={isSyncing ? "animate-spin" : ""}
+                />
+                {isSyncing ? "Đang đồng bộ..." : "Đồng bộ"}
+              </button>
+            </div>
           </div>
 
           {syncMessage && (
@@ -257,7 +457,37 @@ export default function RecordingsPage() {
               ) : (
                 <AlertCircle size={18} className="mt-0.5 shrink-0" />
               )}
-              <span className="text-sm flex-1">{syncMessage.text}</span>
+              <div className="text-sm flex-1">
+                <div>{syncMessage.text}</div>
+                {(syncMessage.inserted !== undefined ||
+                  syncMessage.skipped !== undefined) && (
+                  <div className="flex flex-wrap gap-2 mt-2 text-xs">
+                    {typeof syncMessage.inserted === "number" && (
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${
+                          syncMessage.inserted > 0
+                            ? "bg-green-500/20 border-green-500/40 text-green-200"
+                            : "bg-slate-700/50 border-slate-600 text-slate-400"
+                        }`}
+                      >
+                        <span className="font-mono font-bold">
+                          +{syncMessage.inserted}
+                        </span>
+                        <span>mới</span>
+                      </span>
+                    )}
+                    {typeof syncMessage.skipped === "number" &&
+                      syncMessage.skipped > 0 && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border bg-amber-500/15 border-amber-500/30 text-amber-200">
+                          <span className="font-mono font-bold">
+                            ={syncMessage.skipped}
+                          </span>
+                          <span>đã có (skip trùng)</span>
+                        </span>
+                      )}
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => setSyncMessage(null)}

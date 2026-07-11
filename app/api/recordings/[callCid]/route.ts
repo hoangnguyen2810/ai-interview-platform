@@ -144,16 +144,57 @@ export async function GET(_req: Request, ctx: Params) {
       );
     }
 
-    // 4. INSERT từng recording. ON CONFLICT (url) DO NOTHING nhờ partial
-    //    unique index `uq_recordings_url` (migration 010) → idempotent.
+    // 4. DEDUPE trước khi insert.
     //
-    //    Trả về id khi INSERT thật sự xảy ra. Khi conflict (đã có row)
-    //    RETURNING rỗng → caller đếm là `skipped`.
+    // Lý do: GetStream rotate URL CDN nhưng giữ nguyên `filename` cho cùng
+    // file ghi. Nếu chỉ insert theo `url` thì sẽ tạo row mới mỗi lần URL
+    // xoay vòng → DB phình to với duplicate rows.
+    //
+    // Dedup key:
+    //   - Row có `filename` (preferred): unique (call_cid, filename).
+    //   - Row fallback khi filename IS NULL (GetStream không trả): unique
+    //     (call_cid, url) — vẫn chống trùng tuyệt đối với cùng 1 url.
+    //
+    // Bước thực hiện:
+    //   - Query DB lấy existing rows match (call_cid, filename) HOẶC
+    //     (call_cid, url) để biết cần SKIP những row nào.
+    //   - Lọc streamRecordings → chỉ insert những recording CHƯA có.
+    //   - Insert có ON CONFLICT (call_cid, filename) DO NOTHING.
     let insertedCount = 0;
     let skippedCount = 0;
     const persistedIds: string[] = [];
 
-    for (const r of streamRecordings) {
+    // 4a. Lấy các key đã tồn tại trong DB để so khớp.
+    const existingRes = await pool.query<{
+      filename: string | null;
+      url: string;
+    }>(
+      `SELECT filename, url FROM recordings WHERE call_cid = $1`,
+      [callCid],
+    );
+
+    const existingFilenames = new Set<string>();
+    const existingUrls = new Set<string>();
+    for (const e of existingRes.rows) {
+      if (e.filename) existingFilenames.add(e.filename);
+      existingUrls.add(e.url);
+    }
+
+    // 4b. Lọc ra những recording thật sự MỚI.
+    const toInsert = streamRecordings.filter((r) => {
+      if (r.filename) {
+        if (existingFilenames.has(r.filename)) return false;
+      } else {
+        if (existingUrls.has(r.url)) return false;
+      }
+      return true;
+    });
+
+    // 4c. Tính skipped cho phần response (bao gồm cả filename/url match).
+    skippedCount = streamRecordings.length - toInsert.length;
+
+    // 4d. INSERT + ON CONFLICT (đề phòng race condition giữa 2 request).
+    for (const r of toInsert) {
       const res = await pool.query<{ id: string }>(
         `
         INSERT INTO recordings (
@@ -165,7 +206,9 @@ export async function GET(_req: Request, ctx: Params) {
           created_at
         )
         VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, CURRENT_TIMESTAMP))
-        ON CONFLICT (url) DO NOTHING
+        ON CONFLICT (call_cid, filename)
+          WHERE filename IS NOT NULL
+          DO NOTHING
         RETURNING id
         `,
         [
@@ -177,21 +220,56 @@ export async function GET(_req: Request, ctx: Params) {
           r.created_at ? r.created_at.toISOString() : null,
         ],
       );
-      const row = res.rows[0];
+      let row = res.rows[0];
+
+      // Fallback: row có filename = NULL, ON CONFLICT filename không
+      // trigger (vì partial index yêu cầu filename NOT NULL). Insert lần 2
+      // với ON CONFLICT url — vẫn idempotent, không bao giờ trùng URL.
+      if (!row && !r.filename) {
+        const res2 = await pool.query<{ id: string }>(
+          `INSERT INTO recordings (
+              call_cid, url, filename, duration, recording_type, created_at
+            ) VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, CURRENT_TIMESTAMP))
+            ON CONFLICT (url) DO NOTHING
+            RETURNING id`,
+          [
+            callCid,
+            r.url,
+            r.filename,
+            r.duration,
+            r.recording_type,
+            r.created_at ? r.created_at.toISOString() : null,
+          ],
+        );
+        row = res2.rows[0];
+      }
+
       if (row) {
         insertedCount += 1;
         persistedIds.push(row.id);
       } else {
+        // Race với request khác vừa INSERT cùng key → coi như skipped.
         skippedCount += 1;
       }
     }
 
     // 5. Lấy lại rows vừa lưu (cả mới + cũ) để trả về chi tiết cho client.
+    //    Dùng (call_cid, filename) hoặc (call_cid, url) làm lookup.
     const lookup = await pool.query<RecordingRow>(
       `SELECT id, call_cid, url, filename, duration, recording_type, created_at
        FROM recordings
-       WHERE url = ANY($1::text[])`,
-      [streamRecordings.map((r) => r.url)],
+       WHERE call_cid = $1
+         AND (
+           filename = ANY($2::text[])
+           OR url = ANY($3::text[])
+         )`,
+      [
+        callCid,
+        streamRecordings
+          .map((r) => r.filename)
+          .filter((f): f is string => Boolean(f)),
+        streamRecordings.map((r) => r.url),
+      ],
     );
 
     const recordings = lookup.rows.map((row) => ({
@@ -218,7 +296,9 @@ export async function GET(_req: Request, ctx: Params) {
         message:
           insertedCount > 0
             ? `Đã đồng bộ: ${insertedCount} mới, ${skippedCount} đã có`
-            : "Tất cả recording đã có trong DB",
+            : skippedCount > 0
+              ? `Tất cả ${skippedCount} recording đã có trong DB (skip trùng)`
+              : "Không tìm thấy recording mới",
       },
       { status: 200 },
     );
