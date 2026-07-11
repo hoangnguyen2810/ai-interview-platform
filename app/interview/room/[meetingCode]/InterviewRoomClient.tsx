@@ -351,7 +351,11 @@ export default function InterviewRoomClient({
       <QuestionProvider call={call} meetingCode={meetingCode}>
         <StreamVideo client={streamClient}>
           <StreamCall call={call}>
-            <RecordingProvider call={call} enabled={enableRecording}>
+            <RecordingProvider
+              call={call}
+              enabled={enableRecording}
+              isHost={isHost}
+            >
               <div className="h-screen w-screen bg-[#051424] text-white flex flex-col">
                 <Header
                   title={title}

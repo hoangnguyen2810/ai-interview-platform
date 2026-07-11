@@ -69,6 +69,13 @@ interface ProviderProps {
   call: Call | null;
   /** Cờ server báo buổi phỏng vấn có enable recording */
   enabled: boolean;
+  /**
+   * Cờ đánh dấu user hiện tại là HOST (hoặc CO_HOST/INTERVIEWER) — người sở
+   * hữu vòng đời của recording. Auto-stop trong beforeunload / unmount chỉ
+   * được phép chạy khi `isHost=true`. Nếu false (candidate), recording sẽ
+   * được host chủ động stop qua FooterControls → POST /api/.../end.
+   */
+  isHost?: boolean;
 }
 
 function getErrorMessage(err: unknown): string {
@@ -81,7 +88,12 @@ function getErrorMessage(err: unknown): string {
   }
 }
 
-export function RecordingProvider({ children, call, enabled }: ProviderProps) {
+export function RecordingProvider({
+  children,
+  call,
+  enabled,
+  isHost = false,
+}: ProviderProps) {
   const [status, setStatus] = useState<RecordingStatus>("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -309,8 +321,11 @@ export function RecordingProvider({ children, call, enabled }: ProviderProps) {
   }, [call, enabled, start]);
 
   // Auto-stop khi tab đóng hoặc user rời trang.
+  // CHỈ HOST mới stop trong beforeunload — candidate rời tab/close browser
+  // không được stop recording của host (host mới là người sở hữu phiên ghi hình).
   useEffect(() => {
     if (!call || !enabled) return;
+    if (!isHost) return;
 
     const handleBeforeUnload = () => {
       if (stoppingRef.current) return;
@@ -327,14 +342,16 @@ export function RecordingProvider({ children, call, enabled }: ProviderProps) {
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [call, enabled]);
+  }, [call, enabled, isHost]);
 
   // Auto-stop khi Provider unmount (ví dụ user navigate sang /dashboard
-  // hoặc component InterviewRoomClient cleanup). Đảm bảo server không giữ
-  // recording "kẹt" nếu user quên tắt.
+  // hoặc component InterviewRoomClient cleanup). CHỈ HOST mới stop ở đây —
+  // candidate redirect về /candidate/dashboard sẽ unmount provider nhưng
+  // không được stop recording (host quyết định khi nào kết thúc).
   useEffect(() => {
     return () => {
       if (!call) return;
+      if (!isHost) return;
       const c = call;
       // Đọc state.recording (boolean) để biết có đang recording không.
       let isRecording = false;
