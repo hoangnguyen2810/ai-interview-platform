@@ -33,12 +33,11 @@ export type RecordingStatus =
   | "stopped"
   | "error";
 
-interface ReadyRecordingInfo {
+export interface ReadyRecordingInfo {
   url?: string;
   filename?: string;
-  mimeType?: string;
-  durationSeconds?: number;
-  sizeBytes?: number;
+  recordingType?: string;
+  createdAt?: string;
 }
 
 interface RecordingContextValue {
@@ -56,6 +55,7 @@ interface RecordingContextValue {
    * Chủ động gọi API server để sync recordings từ GetStream về DB.
    * Dùng khi: end call, user rời phòng, hoặc sau khi stop recording
    * để chắc chắn DB có row (kể cả khi webhook không được cấu hình).
+   * Endpoint: GET /api/recordings/:callCid (KHÔNG dùng webhook/polling).
    */
   syncRecordings: () => Promise<{ synced: number }>;
   /** Đang đồng bộ recording metadata từ Stream */
@@ -230,15 +230,16 @@ export function RecordingProvider({
       const headers: HeadersInit = { "Content-Type": "application/json" };
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const res = await fetch(
-        `/api/interviews/${encodeURIComponent(meetingCode)}/recordings`,
-        {
-          method: "POST",
-          headers,
-          credentials: "include",
-          body: JSON.stringify({ forceSync: true }),
-        },
-      );
+      // call.id là meetingCode; callCid theo convention "default:<code>"
+      // (xem lib/streamClient.ts và app/interview/room).
+      const callCid = `default:${meetingCode}`;
+      const encoded = encodeURIComponent(callCid);
+
+      const res = await fetch(`/api/recordings/${encoded}`, {
+        method: "GET",
+        headers,
+        credentials: "include",
+      });
 
       if (!res.ok) {
         const text = await res.text().catch(() => "");
@@ -248,10 +249,10 @@ export function RecordingProvider({
       }
 
       const json = (await res.json().catch(() => ({}))) as {
-        synced?: number;
+        inserted?: number;
       };
-      const synced = typeof json.synced === "number" ? json.synced : 0;
-      console.log("[recording] syncRecordings done, synced=", synced);
+      const synced = typeof json.inserted === "number" ? json.inserted : 0;
+      console.log("[recording] syncRecordings done, inserted=", synced);
       return { synced };
     } catch (err) {
       console.warn("[recording] syncRecordings error:", err);
@@ -284,25 +285,18 @@ export function RecordingProvider({
       setError(reason || "Recording failed");
       setStatus("error");
     };
-    const onReady = (event: unknown) => {
-      console.log("[recording] SDK event: call.recording_ready", event);
-      // Lưu metadata vào DB ngay khi file ready để hiển thị ở /recruiter/recordings.
-      const info = extractReadyInfo(event);
-      void persistReadyRecording(call, info).catch((err) => {
-        console.warn("[recording] persist metadata failed:", err);
-      });
-    };
 
     call.on("call.recording_started", onStarted);
     call.on("call.recording_stopped", onStopped);
     call.on("call.recording_failed", onFailed);
-    call.on("call.recording_ready", onReady);
+    // Lưu ý: KHÔNG lắng nghe `call.recording_ready` ở client — server sẽ
+    // tự fetch từ GetStream khi host gọi syncRecordings(). Tránh duplicate
+    // persist cùng 1 URL → trùng row.
 
     return () => {
       call.off("call.recording_started", onStarted);
       call.off("call.recording_stopped", onStopped);
       call.off("call.recording_failed", onFailed);
-      call.off("call.recording_ready", onReady);
     };
   }, [call]);
 
@@ -398,89 +392,4 @@ export function useRecording(): RecordingContextValue {
     throw new Error("useRecording must be used inside <RecordingProvider>");
   }
   return ctx;
-}
-
-/**
- * Trích thông tin recording từ event payload của GetStream SDK.
- * Tùy phiên bản SDK, payload có thể nằm trong `event.call_recording` hoặc
- * trực tiếp trên event. Hàm này cố gắng đọc cả 2 dạng.
- */
-function extractReadyInfo(event: unknown): ReadyRecordingInfo {
-  if (!event || typeof event !== "object") return {};
-  const ev = event as Record<string, unknown>;
-  const out: ReadyRecordingInfo = {};
-
-  // Một số SDK versions wrap bên trong call_recording
-  const inner = ev.call_recording;
-  if (inner && typeof inner === "object") {
-    const rec = inner as Record<string, unknown>;
-    if (typeof rec.url === "string") out.url = rec.url;
-    if (typeof rec.filename === "string") out.filename = rec.filename;
-    if (typeof rec.mime_type === "string") out.mimeType = rec.mime_type;
-    if (typeof rec.duration === "number") out.durationSeconds = rec.duration;
-    if (typeof rec.size === "number") out.sizeBytes = rec.size;
-  }
-  // Flat shape fallback
-  if (!out.url && typeof ev.url === "string") out.url = ev.url;
-  if (!out.filename && typeof ev.filename === "string")
-    out.filename = ev.filename;
-  if (!out.mimeType && typeof ev.mime_type === "string")
-    out.mimeType = ev.mime_type;
-  if (out.durationSeconds == null && typeof ev.duration === "number")
-    out.durationSeconds = ev.duration;
-
-  return out;
-}
-
-async function persistReadyRecording(
-  call: Call,
-  info: ReadyRecordingInfo,
-): Promise<void> {
-  const url = info.url;
-  if (!url) {
-    console.warn(
-      "[recording] recording_ready event không có URL, bỏ qua persist",
-      info,
-    );
-    return;
-  }
-
-  const meetingCode = call.id; // call.id = meetingCode (xem InterviewRoomClient)
-  if (!meetingCode) {
-    console.warn("[recording] missing meeting code, skip persist");
-    return;
-  }
-
-  const payload = {
-    fileName: info.filename ?? undefined,
-    fileUrl: url,
-    mimeType: info.mimeType ?? "video/webm",
-    durationSeconds: info.durationSeconds ?? 0,
-    sizeBytes: info.sizeBytes ?? 0,
-  };
-
-  const token =
-    typeof window !== "undefined" ? window.localStorage.getItem("token") : null;
-  const headers: HeadersInit = { "Content-Type": "application/json" };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-
-  const res = await fetch(
-    `/api/interviews/${encodeURIComponent(meetingCode)}/recordings`,
-    {
-      method: "POST",
-      headers,
-      credentials: "include",
-      body: JSON.stringify(payload),
-    },
-  );
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(
-      `POST recordings failed (${res.status}): ${text.slice(0, 200)}`,
-    );
-  }
-
-  const json = await res.json().catch(() => null);
-  console.log("[recording] metadata persisted:", json);
 }

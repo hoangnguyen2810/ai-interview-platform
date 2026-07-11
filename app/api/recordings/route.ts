@@ -1,55 +1,44 @@
 // GET /api/recordings
-// Trả về danh sách các recording của các interview mà recruiter hiện tại
-// đang là HOST hoặc INTERVIEWER. Mỗi recording gồm metadata + URL playback.
+//
+// Trả về danh sách recordings trong DB. UI "/recruiter/recordings" dùng
+// endpoint này để list tất cả các recording đã được sync từ GetStream.
 //
 // Query params:
-//   - status: lọc theo status (PROCESSING / AVAILABLE / FAILED). Mặc định: tất cả.
-//   - limit: số bản ghi trả về (mặc định 50, tối đa 200).
+//   - callCid: lọc theo callCid (optional).
+//   - limit:   số bản ghi trả về (mặc định 100, tối đa 500).
 //
-// Chỉ RECRUITER (host của recording) hoặc ADMIN được phép xem.
+// Auth:
+//   - RECRUITER/ADMIN: xem tất cả.
+//   - CANDIDATE:        chỉ xem recordings của callCid mà mình tham gia.
 
 import { NextResponse } from "next/server";
 import { pool } from "@/lib/db";
 import { getAuthUserFromRequest, unauthorized, forbidden } from "@/lib/auth";
 
 export const runtime = "nodejs";
-
-const DEFAULT_LIMIT = 50;
-const MAX_LIMIT = 200;
+export const dynamic = "force-dynamic";
 
 interface RecordingRow {
   id: string;
-  interview_id: string;
-  meeting_code: string;
-  title: string;
-  file_name: string;
-  file_url: string;
-  mime_type: string;
-  size_bytes: string | number;
-  duration_seconds: number;
-  status: "PROCESSING" | "AVAILABLE" | "FAILED";
-  recorded_by: string | null;
+  call_cid: string;
+  url: string;
+  filename: string | null;
+  duration: number;
+  recording_type: string | null;
   created_at: Date | string;
-  updated_at: Date | string;
 }
 
-const ALLOWED_STATUSES = new Set(["PROCESSING", "AVAILABLE", "FAILED"]);
+const DEFAULT_LIMIT = 100;
+const MAX_LIMIT = 500;
 
 export async function GET(req: Request) {
   try {
     const auth = getAuthUserFromRequest(req);
     if (!auth) return unauthorized();
-    if (auth.role !== "RECRUITER" && auth.role !== "ADMIN") {
-      return forbidden("Chỉ recruiter mới xem được recordings");
-    }
 
     const url = new URL(req.url);
-    const statusParam = url.searchParams.get("status");
+    const callCid = url.searchParams.get("callCid");
     const limitParam = url.searchParams.get("limit");
-
-    const status = statusParam && ALLOWED_STATUSES.has(statusParam)
-      ? statusParam
-      : null;
 
     let limit = DEFAULT_LIMIT;
     if (limitParam) {
@@ -59,74 +48,50 @@ export async function GET(req: Request) {
       }
     }
 
-    // Recruiter chỉ xem được recordings của các interview mình là HOST/INTERVIEWER.
-    // Admin xem tất cả.
     const params: unknown[] = [];
-    let where = "rec.deleted_at IS NULL";
-    if (auth.role === "RECRUITER") {
-      where = `
-        rec.deleted_at IS NULL
-        AND rec.interview_id IN (
-          SELECT interview_id
-          FROM interview_participants
-          WHERE user_id = $1 AND participant_role IN ('HOST', 'INTERVIEWER')
-        )
-      `;
+    let where = "1 = 1";
+
+    // Candidate chỉ thấy recording của meeting mình tham gia.
+    if (auth.role === "CANDIDATE") {
       params.push(auth.id);
+      where = `rec.call_cid IN (
+        SELECT ('default:' || i.meeting_code)
+        FROM interview_participants ip
+        JOIN interviews i ON i.id = ip.interview_id
+        WHERE ip.user_id = $1 AND i.deleted_at IS NULL
+      )`;
+    } else if (auth.role !== "RECRUITER" && auth.role !== "ADMIN") {
+      return forbidden("Không có quyền xem recordings");
     }
-    if (status) {
-      params.push(status);
-      where += ` AND rec.status = $${params.length}`;
+
+    if (callCid) {
+      params.push(callCid);
+      where += ` AND rec.call_cid = $${params.length}`;
     }
     params.push(limit);
     const limitIdx = params.length;
 
-    const sql = `
-      SELECT
-        rec.id,
-        rec.interview_id,
-        rec.meeting_code,
-        rec.title,
-        rec.file_name,
-        rec.file_url,
-        rec.mime_type,
-        rec.size_bytes,
-        rec.duration_seconds,
-        rec.status,
-        rec.recorded_by,
-        rec.created_at,
-        rec.updated_at
-      FROM recordings rec
-      WHERE ${where}
-      ORDER BY rec.created_at DESC
-      LIMIT $${limitIdx}
-    `;
+    const result = await pool.query<RecordingRow>(
+      `SELECT rec.id, rec.call_cid, rec.url, rec.filename,
+              rec.duration, rec.recording_type, rec.created_at
+       FROM recordings rec
+       WHERE ${where}
+       ORDER BY rec.created_at DESC
+       LIMIT $${limitIdx}`,
+      params,
+    );
 
-    const result = await pool.query<RecordingRow>(sql, params);
-
-    const recordings = result.rows.map((r) => ({
-      id: r.id,
-      interviewId: r.interview_id,
-      meetingCode: r.meeting_code,
-      title: r.title,
-      fileName: r.file_name,
-      fileUrl: r.file_url,
-      mimeType: r.mime_type,
-      sizeBytes:
-        typeof r.size_bytes === "string"
-          ? Number(r.size_bytes)
-          : r.size_bytes,
-      durationSeconds: r.duration_seconds,
-      status: r.status,
-      recordedBy: r.recorded_by,
+    const recordings = result.rows.map((row) => ({
+      id: row.id,
+      callCid: row.call_cid,
+      url: row.url,
+      filename: row.filename,
+      duration: row.duration,
+      recordingType: row.recording_type,
       createdAt:
-        r.created_at instanceof Date
-          ? r.created_at.toISOString()
-          : r.created_at,
-      updatedAt:
-        r.updated_at instanceof Date
-          ? r.updated_at.toISOString()
-          : r.updated_at,
+        row.created_at instanceof Date
+          ? row.created_at.toISOString()
+          : row.created_at,
     }));
 
     return NextResponse.json({
