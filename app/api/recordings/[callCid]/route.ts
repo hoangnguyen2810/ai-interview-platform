@@ -47,6 +47,8 @@ interface RecordingRow {
   duration: number;
   recording_type: string | null;
   created_at: Date | string;
+  interview_id: string | null;
+  interview_title: string | null;
 }
 
 /**
@@ -164,6 +166,29 @@ export async function GET(_req: Request, ctx: Params) {
     let skippedCount = 0;
     const persistedIds: string[] = [];
 
+    // 4a'. Resolve interview_id + interview_title từ interviews theo
+    //      meeting_code (parse ra từ callCid "default:NC-XXX" → "NC-XXX").
+    //
+    //      Snapshot title tại thời điểm sync → nếu user đổi title interview
+    //      sau này, recording vẫn hiển thị tên gốc.
+    //
+    //      KHÔNG BLOCK INSERT nếu không match — 2 cột có thể NULL (vd
+    //      call do test/spam không có interview tương ứng).
+    const meetingCode = callCid.includes(":")
+      ? callCid.split(":").slice(1).join(":")
+      : callCid;
+
+    const interviewRes = await pool.query<{
+      id: string;
+      title: string;
+    }>(
+      `SELECT id, title FROM interviews
+       WHERE meeting_code = $1 AND deleted_at IS NULL
+       LIMIT 1`,
+      [meetingCode],
+    );
+    const interview = interviewRes.rows[0]; // null nếu không tìm thấy
+
     // 4a. Lấy các key đã tồn tại trong DB để so khớp.
     const existingRes = await pool.query<{
       filename: string | null;
@@ -203,9 +228,15 @@ export async function GET(_req: Request, ctx: Params) {
           filename,
           duration,
           recording_type,
-          created_at
+          created_at,
+          interview_id,
+          interview_title
         )
-        VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, CURRENT_TIMESTAMP))
+        VALUES (
+          $1, $2, $3, $4, $5,
+          COALESCE($6::timestamptz, CURRENT_TIMESTAMP),
+          $7, $8
+        )
         ON CONFLICT (call_cid, filename)
           WHERE filename IS NOT NULL
           DO NOTHING
@@ -218,6 +249,8 @@ export async function GET(_req: Request, ctx: Params) {
           r.duration,
           r.recording_type,
           r.created_at ? r.created_at.toISOString() : null,
+          interview?.id ?? null,
+          interview?.title ?? null,
         ],
       );
       let row = res.rows[0];
@@ -228,8 +261,13 @@ export async function GET(_req: Request, ctx: Params) {
       if (!row && !r.filename) {
         const res2 = await pool.query<{ id: string }>(
           `INSERT INTO recordings (
-              call_cid, url, filename, duration, recording_type, created_at
-            ) VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, CURRENT_TIMESTAMP))
+              call_cid, url, filename, duration, recording_type,
+              created_at, interview_id, interview_title
+            ) VALUES (
+              $1, $2, $3, $4, $5,
+              COALESCE($6::timestamptz, CURRENT_TIMESTAMP),
+              $7, $8
+            )
             ON CONFLICT (url) DO NOTHING
             RETURNING id`,
           [
@@ -239,6 +277,8 @@ export async function GET(_req: Request, ctx: Params) {
             r.duration,
             r.recording_type,
             r.created_at ? r.created_at.toISOString() : null,
+            interview?.id ?? null,
+            interview?.title ?? null,
           ],
         );
         row = res2.rows[0];
@@ -256,7 +296,8 @@ export async function GET(_req: Request, ctx: Params) {
     // 5. Lấy lại rows vừa lưu (cả mới + cũ) để trả về chi tiết cho client.
     //    Dùng (call_cid, filename) hoặc (call_cid, url) làm lookup.
     const lookup = await pool.query<RecordingRow>(
-      `SELECT id, call_cid, url, filename, duration, recording_type, created_at
+      `SELECT id, call_cid, url, filename, duration, recording_type, created_at,
+             interview_id, interview_title
        FROM recordings
        WHERE call_cid = $1
          AND (
@@ -279,6 +320,8 @@ export async function GET(_req: Request, ctx: Params) {
       filename: row.filename,
       duration: row.duration,
       recordingType: row.recording_type,
+      interviewId: row.interview_id,
+      interviewTitle: row.interview_title,
       createdAt:
         row.created_at instanceof Date
           ? row.created_at.toISOString()

@@ -26,6 +26,8 @@ interface RecordingRow {
   duration: number;
   recording_type: string | null;
   created_at: Date | string;
+  interview_id: string | null;
+  interview_title: string | null;
 }
 
 const DEFAULT_LIMIT = 100;
@@ -73,7 +75,8 @@ export async function GET(req: Request) {
 
     const result = await pool.query<RecordingRow>(
       `SELECT rec.id, rec.call_cid, rec.url, rec.filename,
-              rec.duration, rec.recording_type, rec.created_at
+              rec.duration, rec.recording_type, rec.created_at,
+              rec.interview_id, rec.interview_title
        FROM recordings rec
        WHERE ${where}
        ORDER BY rec.created_at DESC
@@ -88,6 +91,8 @@ export async function GET(req: Request) {
       filename: row.filename,
       duration: row.duration,
       recordingType: row.recording_type,
+      interviewId: row.interview_id,
+      interviewTitle: row.interview_title,
       createdAt:
         row.created_at instanceof Date
           ? row.created_at.toISOString()

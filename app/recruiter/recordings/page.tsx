@@ -12,7 +12,6 @@ import {
   AlertCircle,
   RefreshCw,
   CheckCircle2,
-  Video,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -23,6 +22,8 @@ interface RecordingDto {
   filename: string | null;
   duration: number;
   recordingType: string | null;
+  interviewId?: string | null;
+  interviewTitle?: string | null;
   createdAt: string;
 }
 
@@ -158,13 +159,18 @@ export default function RecordingsPage() {
       const headers: HeadersInit = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const res = await fetch(`/api/recordings/${encodeURIComponent(callCid)}`, {
-        method: "GET",
-        headers,
-        credentials: "include",
-      });
+      const res = await fetch(
+        `/api/recordings/${encodeURIComponent(callCid)}`,
+        {
+          method: "GET",
+          headers,
+          credentials: "include",
+        },
+      );
       const json = (await res.json().catch(() => null)) as ApiResponse | null;
-      return res.ok ? json : json ?? { success: false, message: `HTTP ${res.status}` };
+      return res.ok
+        ? json
+        : (json ?? { success: false, message: `HTTP ${res.status}` });
     },
     [],
   );
@@ -188,7 +194,9 @@ export default function RecordingsPage() {
         headers,
         credentials: "include",
       });
-      const json = (await res.json().catch(() => null)) as LatestResponse | null;
+      const json = (await res
+        .json()
+        .catch(() => null)) as LatestResponse | null;
 
       if (!res.ok || !json?.success || !json.callCid) {
         setLatest(null);
@@ -242,15 +250,8 @@ export default function RecordingsPage() {
       const inserted = json.inserted ?? 0;
       const skipped = json.skipped ?? 0;
       setSyncMessage({
-        type:
-          inserted > 0
-            ? "success"
-            : skipped > 0
-              ? "info"
-              : "info",
-        text:
-          json.message ??
-          `Đồng bộ xong: ${inserted} mới, ${skipped} đã có`,
+        type: inserted > 0 ? "success" : skipped > 0 ? "info" : "info",
+        text: json.message ?? `Đồng bộ xong: ${inserted} mới, ${skipped} đã có`,
         inserted,
         skipped,
       });
@@ -258,10 +259,7 @@ export default function RecordingsPage() {
     } catch (err) {
       setSyncMessage({
         type: "error",
-        text:
-          err instanceof Error
-            ? `Lỗi: ${err.message}`
-            : "Đồng bộ thất bại",
+        text: err instanceof Error ? `Lỗi: ${err.message}` : "Đồng bộ thất bại",
       });
     } finally {
       setIsSyncing(false);
@@ -318,10 +316,7 @@ export default function RecordingsPage() {
     } catch (err) {
       setSyncMessage({
         type: "error",
-        text:
-          err instanceof Error
-            ? `Lỗi: ${err.message}`
-            : "Đồng bộ thất bại",
+        text: err instanceof Error ? `Lỗi: ${err.message}` : "Đồng bộ thất bại",
       });
     } finally {
       setIsSyncing(false);
@@ -337,6 +332,7 @@ export default function RecordingsPage() {
         code.toLowerCase().includes(q) ||
         r.callCid.toLowerCase().includes(q) ||
         (r.filename ?? "").toLowerCase().includes(q) ||
+        (r.interviewTitle ?? "").toLowerCase().includes(q) ||
         (r.recordingType ?? "").toLowerCase().includes(q)
       );
     });
@@ -351,15 +347,8 @@ export default function RecordingsPage() {
         {/* HEADER */}
         <div className="mb-10">
           <h1 className="text-4xl font-bold tracking-tight">
-            Quản lý Recordings
+            Quản lý ghi hình
           </h1>
-          <p className="text-slate-400 mt-2">
-            Recordings được lưu từ GetStream khi host End Call. Bấm
-            <span className="mx-1 px-1.5 py-0.5 bg-cyan-500/10 border border-cyan-500/30 rounded text-cyan-400 text-sm font-medium">
-              Đồng bộ interview mới nhất
-            </span>
-            để fetch recording của cuộc phỏng vấn gần nhất bạn host.
-          </p>
         </div>
 
         {/* SYNC PANEL */}
@@ -374,16 +363,14 @@ export default function RecordingsPage() {
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
               <div className="flex-1 min-w-0">
                 <div className="text-sm text-slate-300 mb-1">
-                  <span className="text-cyan-400 font-semibold">
-                    Nhanh:
-                  </span>{" "}
+                  <span className="text-cyan-400 font-semibold">Nhanh:</span>{" "}
                   đồng bộ recording của interview mới nhất bạn host.
                 </div>
                 {latest ? (
                   <div className="text-xs text-slate-400 font-mono truncate">
                     {latest.callCid} ·{" "}
-                    <span className="text-slate-200">{latest.title}</span>{" "}
-                    · {latest.status}
+                    <span className="text-slate-200">{latest.title}</span> ·{" "}
+                    {latest.status}
                   </div>
                 ) : isLoadingLatest ? (
                   <div className="text-xs text-slate-500">Đang tải…</div>
@@ -403,44 +390,12 @@ export default function RecordingsPage() {
                   size={18}
                   className={isSyncing ? "animate-spin" : ""}
                 />
-                {isSyncing
-                  ? "Đang đồng bộ…"
-                  : "Đồng bộ interview mới nhất"}
+                {isSyncing ? "Đang đồng bộ…" : "Đồng bộ interview mới nhất"}
               </button>
             </div>
           </div>
 
           {/* FALLBACK — nhập callCid tay */}
-          <div className="border-t border-slate-700/50 pt-4">
-            <div className="text-xs text-slate-500 mb-2">
-              Hoặc nhập callCid cụ thể:
-            </div>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <input
-                type="text"
-                value={syncInput}
-                onChange={(e) => setSyncInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void handleSyncCallCid();
-                }}
-                placeholder="default:NC-XXXXXX"
-                className="flex-1 bg-[#071524] border border-slate-700 rounded-xl px-4 py-3 outline-none focus:border-cyan-500 font-mono text-sm"
-                disabled={isSyncing}
-              />
-              <button
-                type="button"
-                onClick={() => void handleSyncCallCid()}
-                disabled={!syncInput.trim() || isSyncing}
-                className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-semibold transition min-w-[180px]"
-              >
-                <RefreshCw
-                  size={18}
-                  className={isSyncing ? "animate-spin" : ""}
-                />
-                {isSyncing ? "Đang đồng bộ..." : "Đồng bộ"}
-              </button>
-            </div>
-          </div>
 
           {syncMessage && (
             <div
@@ -507,7 +462,7 @@ export default function RecordingsPage() {
               className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
             />
             <input
-              placeholder="Tìm theo meeting code, callCid, filename, recording type..."
+              placeholder="Tìm theo tên buổi phỏng vấn, meeting code, callCid, filename..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full bg-[#071524] border border-slate-700 rounded-xl pl-11 pr-4 py-3 outline-none focus:border-cyan-500"
@@ -535,16 +490,14 @@ export default function RecordingsPage() {
                   : "Không tìm thấy recording phù hợp."}
               </div>
             ) : (
-              <table className="w-full">
+              <table className="w-full table-fixed">
                 <thead className="bg-[#13263a] text-sm">
                   <tr className="text-left text-slate-300">
-                    <th className="p-5">Call CID</th>
-                    <th className="p-5">Meeting</th>
-                    <th className="p-5">Filename</th>
-                    <th className="p-5">Type</th>
-                    <th className="p-5">Thời lượng</th>
-                    <th className="p-5">Thời gian</th>
-                    <th className="p-5 text-center">Thao tác</th>
+                    <th className="p-5 w-[34%]">Tên buổi phỏng vấn</th>
+                    <th className="p-5 w-[20%]">Meeting Code</th>
+                    <th className="p-5 w-[14%]">Thời lượng</th>
+                    <th className="p-5 w-[20%]">Thời gian</th>
+                    <th className="p-5 w-[12%] text-center">Thao tác</th>
                   </tr>
                 </thead>
 
@@ -556,28 +509,32 @@ export default function RecordingsPage() {
                         key={item.id}
                         className="border-t border-slate-800 hover:bg-cyan-500/5 transition"
                       >
-                        <td className="p-5 font-mono text-xs text-cyan-400">
-                          {item.callCid}
+                        <td
+                          className="p-5 font-medium text-white truncate"
+                          title={item.interviewTitle ?? ""}
+                        >
+                          {item.interviewTitle ? (
+                            item.interviewTitle
+                          ) : (
+                            <span className="text-slate-500 italic text-xs">
+                              —
+                            </span>
+                          )}
                         </td>
-                        <td className="p-5 font-medium text-white">
+                        <td className="p-5 font-mono text-xs text-cyan-400 truncate">
                           {code}
                         </td>
-                        <td className="p-5 text-slate-300 max-w-xs truncate">
-                          {item.filename ?? "—"}
+                        <td className="p-5">
+                          <div className="flex items-center gap-1">
+                            <Clock3 size={14} />
+                            {formatDuration(item.duration)}
+                          </div>
                         </td>
                         <td className="p-5">
-                          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
-                            <Video size={12} />
-                            {item.recordingType ?? "—"}
-                          </span>
-                        </td>
-                        <td className="p-5 flex items-center gap-1">
-                          <Clock3 size={14} />
-                          {formatDuration(item.duration)}
-                        </td>
-                        <td className="p-5 flex items-center gap-1">
-                          <CalendarDays size={14} />
-                          {formatDate(item.createdAt)}
+                          <div className="flex items-center gap-1">
+                            <CalendarDays size={14} />
+                            {formatDate(item.createdAt)}
+                          </div>
                         </td>
                         <td className="p-5">
                           <div className="flex justify-center gap-2">
