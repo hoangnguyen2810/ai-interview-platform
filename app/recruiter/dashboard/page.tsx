@@ -15,7 +15,7 @@ export default function DashboardPage() {
       <TopNavBar />
       <div className="flex pt-16 h-screen overflow-hidden">
         <SideNavBar />
-        <main className="flex-grow md:ml-sidebar-width overflow-y-auto bg-background p-6 md:p-margin-desktop pb-24 md:pb-margin-desktop">
+        <main className="flex-grow md:ml-sidebar-width overflow-y-auto custom-scrollbar bg-background p-6 md:p-margin-desktop pb-24 md:pb-margin-desktop">
           <HeroSection />
           <QuickStats />
 

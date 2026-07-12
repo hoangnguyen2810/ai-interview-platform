@@ -14,6 +14,12 @@ export default function RegisterForm() {
     role: "CANDIDATE",
   });
 
+  const [errorModal, setErrorModal] = useState({
+    open: false,
+    title: "",
+    message: "",
+  });
+
   const getPasswordStrength = (password: string) => {
     let score = 0;
 
@@ -36,11 +42,19 @@ export default function RegisterForm() {
     "Rất mạnh",
   ];
   const [loading, setLoading] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!acceptTerms) {
-      alert("Vui lòng đồng ý với Điều khoản và Chính sách trước khi đăng ký.");
+      setErrorModal({
+        open: true,
+        title: "Thiếu xác nhận",
+        message:
+          "Vui lòng đồng ý với Điều khoản sử dụng và Chính sách bảo mật trước khi đăng ký.",
+      });
       return;
     }
     try {
@@ -57,16 +71,22 @@ export default function RegisterForm() {
       const data = await res.json();
 
       if (!res.ok) {
-        alert(data.message);
+        setErrorModal({
+          open: true,
+          title: "Đăng ký thất bại",
+          message: data.message,
+        });
         return;
       }
 
-      alert("Đăng ký thành công");
-
-      window.location.href = "/login";
+      setShowSuccessModal(true);
     } catch (error) {
       console.error(error);
-      alert("Có lỗi xảy ra");
+      setErrorModal({
+        open: true,
+        title: "Lỗi hệ thống",
+        message: "Đã xảy ra lỗi trong quá trình đăng ký. Vui lòng thử lại sau.",
+      });
     } finally {
       setLoading(false);
     }
@@ -331,29 +351,21 @@ export default function RegisterForm() {
 
                 <span className="leading-5">
                   Tôi đồng ý với{" "}
-                  <a
-                    href="/terms"
-                    className="
-          text-[#00dbe9]
-          transition-all duration-300
-          hover:text-white
-          hover:drop-shadow-[0_0_8px_rgba(0,240,255,0.8)]
-        "
+                  <button
+                    type="button"
+                    onClick={() => setShowTermsModal(true)}
+                    className="text-[#00dbe9] transition-all duration-300 cursor-pointer hover:text-white  hover:drop-shadow-[0_0_8px_rgba(0,240,255,0.8)]"
                   >
                     Điều khoản sử dụng
-                  </a>{" "}
+                  </button>{" "}
                   và{" "}
-                  <a
-                    href="/privacy"
-                    className="
-          text-[#00dbe9]
-          transition-all duration-300
-          hover:text-white
-          hover:drop-shadow-[0_0_8px_rgba(0,240,255,0.8)]
-        "
+                  <button
+                    type="button"
+                    onClick={() => setShowPrivacyModal(true)}
+                    className="text-[#00dbe9] transition-all duration-300 cursor-pointer hover:text-white hover:drop-shadow-[0_0_8px_rgba(0,240,255,0.8)]"
                   >
                     Chính sách bảo mật
-                  </a>
+                  </button>
                 </span>
               </label>
             </div>
@@ -392,6 +404,292 @@ export default function RegisterForm() {
           </p>
         </div>
       </main>
+      {/* SUCCESS MODAL */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div
+            className="
+      w-[420px]
+      rounded-2xl
+      border border-cyan-500/30
+      bg-[#0d1c2d]
+      p-8
+      text-center
+      shadow-[0_0_40px_rgba(0,240,255,0.15)]
+      animate-in fade-in zoom-in duration-300
+    "
+          >
+            {/* Icon */}
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-cyan-500/15 border border-cyan-400/30">
+              <svg
+                className="h-10 w-10 text-cyan-400"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            </div>
+
+            <h2 className="mt-6 text-2xl font-bold text-white">
+              Đăng ký thành công
+            </h2>
+
+            <p className="mt-3 text-sm leading-6 text-[#b9cacb]">
+              Tài khoản của bạn đã được tạo thành công.
+              <br />
+              Hãy đăng nhập để bắt đầu sử dụng CodePilot AI.
+            </p>
+
+            <button
+              onClick={() => {
+                setShowSuccessModal(false);
+                window.location.href = "/login";
+              }}
+              className="
+          mt-8
+          w-full
+          rounded-xl
+          bg-[#00f0ff]
+          py-3
+          font-semibold
+          text-[#00363a]
+          transition
+          hover:brightness-110
+        "
+            >
+              Đi tới đăng nhập
+            </button>
+          </div>
+        </div>
+      )}
+
+      {errorModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div
+            className="
+      w-[430px]
+      rounded-2xl
+      border border-red-500/30
+      bg-[#0d1c2d]
+      p-8
+      text-center
+      shadow-[0_0_40px_rgba(239,68,68,0.2)]
+      animate-in fade-in zoom-in duration-300
+    "
+          >
+            {/* Icon */}
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-red-500/30 bg-red-500/10">
+              <svg
+                className="h-10 w-10 text-red-400"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 9v4m0 4h.01M12 3C7.03 3 3 7.03 3 12s4.03 9 9 9 9-4.03 9-9-4.03-9-9-9z"
+                />
+              </svg>
+            </div>
+
+            <h2 className="mt-6 text-2xl font-bold text-white">
+              {errorModal.title}
+            </h2>
+
+            <p className="mt-3 text-sm leading-6 text-[#b9cacb]">
+              {errorModal.message}
+            </p>
+
+            <button
+              onClick={() =>
+                setErrorModal({
+                  open: false,
+                  title: "",
+                  message: "",
+                })
+              }
+              className="
+        mt-8
+        w-full
+        rounded-xl
+        bg-red-500
+        py-3
+        font-semibold
+        text-white
+        transition
+        hover:bg-red-400
+      "
+            >
+              Đã hiểu
+            </button>
+          </div>
+        </div>
+      )}
+      {showTermsModal && (
+        <div className="fixed inset-0 z-50 flex items-center custom-scrollbar justify-center bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-2xl border border-cyan-500/20 bg-[#0d1c2d] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#233445] px-6 py-4">
+              <h2 className="text-xl font-bold text-white">
+                Điều khoản sử dụng
+              </h2>
+
+              <button
+                onClick={() => setShowTermsModal(false)}
+                className="text-2xl text-[#b9cacb] hover:text-white"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="max-h-[65vh] overflow-y-auto px-6 py-5 space-y-5 text-sm leading-7 text-[#b9cacb]">
+              <div>
+                <h3 className="mb-2 text-white font-semibold">
+                  1. Chấp nhận điều khoản
+                </h3>
+
+                <p>
+                  Khi đăng ký tài khoản và sử dụng CodePilot AI, bạn đồng ý tuân
+                  thủ toàn bộ điều khoản được quy định trong tài liệu này.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="mb-2 text-white font-semibold">
+                  2. Sử dụng tài khoản
+                </h3>
+
+                <ul className="list-disc pl-6 space-y-2">
+                  <li>Không chia sẻ tài khoản cho người khác.</li>
+                  <li>Không sử dụng hệ thống vào mục đích trái pháp luật.</li>
+                  <li>
+                    Không cố gắng khai thác lỗ hổng hoặc tấn công hệ thống.
+                  </li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="mb-2 text-white font-semibold">
+                  3. Nội dung phỏng vấn
+                </h3>
+
+                <p>
+                  Các buổi phỏng vấn có thể được ghi âm hoặc ghi hình nhằm phục
+                  vụ đánh giá AI và cải thiện chất lượng hệ thống.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="mb-2 text-white font-semibold">
+                  4. Quyền của hệ thống
+                </h3>
+
+                <p>
+                  CodePilot AI có quyền khóa hoặc đình chỉ tài khoản nếu phát
+                  hiện hành vi gian lận hoặc vi phạm điều khoản.
+                </p>
+              </div>
+            </div>
+
+            <div className="border-t border-[#233445] p-5">
+              <button
+                onClick={() => setShowTermsModal(false)}
+                className="w-full rounded-xl bg-cyan-400 py-3 font-semibold text-[#04212d] hover:brightness-110"
+              >
+                Tôi đã hiểu
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPrivacyModal && (
+        <div className="fixed inset-0 z-50 flex items-center custom-scrollbar justify-center bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-2xl border border-cyan-500/20 bg-[#0d1c2d] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[#233445] px-6 py-4">
+              <h2 className="text-xl font-bold text-white">
+                Chính sách bảo mật
+              </h2>
+
+              <button
+                onClick={() => setShowPrivacyModal(false)}
+                className="text-2xl text-[#b9cacb] hover:text-white"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="max-h-[65vh] overflow-y-auto px-6 py-5 space-y-5 text-sm leading-7 text-[#b9cacb]">
+              <div>
+                <h3 className="mb-2 text-white font-semibold">
+                  Thông tin thu thập
+                </h3>
+
+                <ul className="list-disc pl-6 space-y-2">
+                  <li>Họ và tên.</li>
+                  <li>Email.</li>
+                  <li>Vai trò người dùng.</li>
+                  <li>Dữ liệu phỏng vấn.</li>
+                  <li>Video và âm thanh (nếu được ghi).</li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="mb-2 text-white font-semibold">
+                  Mục đích sử dụng
+                </h3>
+
+                <ul className="list-disc pl-6 space-y-2">
+                  <li>Xác thực người dùng.</li>
+                  <li>Đánh giá kết quả phỏng vấn.</li>
+                  <li>Huấn luyện và cải thiện AI.</li>
+                  <li>Nâng cao chất lượng dịch vụ.</li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="mb-2 text-white font-semibold">
+                  Bảo mật dữ liệu
+                </h3>
+
+                <p>
+                  Dữ liệu được lưu trữ an toàn. Chúng tôi không chia sẻ thông
+                  tin cá nhân cho bên thứ ba nếu không có sự đồng ý của bạn, trừ
+                  trường hợp pháp luật yêu cầu.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="mb-2 text-white font-semibold">
+                  Quyền của người dùng
+                </h3>
+
+                <ul className="list-disc pl-6 space-y-2">
+                  <li>Yêu cầu chỉnh sửa thông tin.</li>
+                  <li>Yêu cầu xóa tài khoản.</li>
+                  <li>Yêu cầu xóa dữ liệu phỏng vấn.</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="border-t border-[#233445] p-5">
+              <button
+                onClick={() => setShowPrivacyModal(false)}
+                className="w-full rounded-xl bg-cyan-400 py-3 font-semibold text-[#04212d] hover:brightness-110"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

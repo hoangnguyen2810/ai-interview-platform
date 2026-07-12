@@ -370,7 +370,7 @@ export default function RecordingsPage() {
         <div className="bg-[#0F1E2E] border border-cyan-500/10 rounded-2xl p-6 mb-10">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <RefreshCw size={18} className="text-cyan-400" />
-            Đồng bộ recording từ GetStream
+            Đồng bộ dữ liệu từ GetStream
           </h2>
 
           {/* NÚT CHÍNH — sync interview mới nhất */}
@@ -405,7 +405,7 @@ export default function RecordingsPage() {
                   size={18}
                   className={isSyncing ? "animate-spin" : ""}
                 />
-                {isSyncing ? "Đang đồng bộ…" : "Đồng bộ interview mới nhất"}
+                {isSyncing ? "Đang đồng bộ…" : "Đồng bộ mới nhất"}
               </button>
             </div>
           </div>
@@ -477,7 +477,7 @@ export default function RecordingsPage() {
               className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
             />
             <input
-              placeholder="Tìm theo tên buổi phỏng vấn, meeting code, callCid, filename..."
+              placeholder="Tìm theo tên buổi phỏng vấn, meeting code,..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full bg-[#071524] border border-slate-700 rounded-xl pl-11 pr-4 py-3 outline-none focus:border-cyan-500"
@@ -487,7 +487,7 @@ export default function RecordingsPage() {
 
         {/* TABLE */}
         <div className="bg-[#0F1E2E] border border-cyan-500/10 rounded-2xl overflow-hidden shadow-lg shadow-black/20">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto custom-scrollbar">
             {isLoading ? (
               <div className="p-10 flex items-center justify-center gap-3 text-slate-400">
                 <Loader2 className="animate-spin" size={20} />
@@ -536,7 +536,7 @@ export default function RecordingsPage() {
                             </span>
                           )}
                         </td>
-                        <td className="p-5 font-mono text-xs text-cyan-400 truncate">
+                        <td className="p-5 font-medium text-white truncate">
                           {code}
                         </td>
                         <td className="p-5">

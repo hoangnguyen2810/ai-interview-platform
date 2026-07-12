@@ -213,7 +213,9 @@ export default function InterviewManagementPage() {
     setLoading(true);
     try {
       const token =
-        typeof window !== "undefined" ? window.localStorage.getItem("token") : null;
+        typeof window !== "undefined"
+          ? window.localStorage.getItem("token")
+          : null;
       const headers: HeadersInit = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
@@ -314,7 +316,7 @@ export default function InterviewManagementPage() {
       <TopNavBar />
       <SideNavBar />
 
-      <main className="ml-sidebar-width pt-20 px-10 pb-10 min-h-screen bg-[#071524] text-white">
+      <main className="ml-sidebar-width pt-20 px-10 pb-10 min-h-screen bg-[#071524] text-white overflow-x-auto custom-scrollbar">
         {/* HEADER */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 mb-10">
           <div className="max-w-2xl">
@@ -446,10 +448,7 @@ export default function InterviewManagementPage() {
                   </tr>
                 ) : interviews.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan={6}
-                      className="p-10 text-center text-slate-400"
-                    >
+                    <td colSpan={6} className="p-10 text-center text-slate-400">
                       Chưa có buổi phỏng vấn nào phù hợp.
                     </td>
                   </tr>

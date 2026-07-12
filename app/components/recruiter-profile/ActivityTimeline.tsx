@@ -28,15 +28,17 @@ function timeAgo(value: string | null | undefined): string {
 export default function ActivityTimeline({
   activities,
 }: ActivityTimelineProps) {
+  const recentActivities = activities.slice(0, 4);
+
   return (
     <div className="p-6 rounded-xl border border-outline-variant bg-surface-container space-y-4">
       <h3 className="text-lg font-bold">Hoạt động gần đây</h3>
 
-      {activities.length === 0 ? (
+      {recentActivities.length === 0 ? (
         <p className="text-sm opacity-60">Chưa có hoạt động nào.</p>
       ) : (
         <div className="space-y-4 border-l border-outline-variant pl-4">
-          {activities.map((a, idx) => (
+          {recentActivities.map((a, idx) => (
             <div key={`${a.type}-${idx}`}>
               <p>Đã tạo phòng phỏng vấn #{a.text.split("#")[1]?.slice(0, 8)}</p>
               <p className="text-xs opacity-60">{timeAgo(a.at)}</p>
