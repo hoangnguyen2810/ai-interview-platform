@@ -287,6 +287,103 @@ export default function InterviewRoomClient({
     )}; path=/; SameSite=Lax`;
   }, [streamReady, meetingCode]);
 
+  // Room presence heartbeat — ping server mỗi 20s để biết user còn
+  // "active" trong phòng. Server tự coi user đã out khi last_seen_at
+  // cũ hơn 45s (~2x heartbeat interval).
+  //
+  // Tại sao cần: cho phép candidate khác vào khi slot trống. Logic
+  // check slot dựa vào bảng room_presence (xem lib/interview-guard.ts
+  // attachCandidate CASE 3) → bắt buộc phải có heartbeat từ mọi role.
+  //
+  // Khi unmount (tab close, navigate away) → DELETE row ngay lập tức.
+  useEffect(() => {
+    if (!streamReady) return;
+
+    // sessionId ổn định cho cả vòng đời của component — dùng để
+    // phân biệt các tab/window của cùng 1 user.
+    const sessionId =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `sess_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+    let cancelled = false;
+    const HEARTBEAT_MS = 20_000;
+
+    async function join() {
+      try {
+        await fetch(
+          `/api/interviews/${encodeURIComponent(meetingCode)}/presence`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ sessionId }),
+            keepalive: true,
+          },
+        );
+      } catch (err) {
+        console.warn("[presence] join failed:", err);
+      }
+    }
+
+    async function heartbeat() {
+      if (cancelled) return;
+      try {
+        await fetch(
+          `/api/interviews/${encodeURIComponent(meetingCode)}/presence`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ sessionId }),
+            keepalive: true,
+          },
+        );
+      } catch (err) {
+        console.warn("[presence] heartbeat failed:", err);
+      }
+    }
+
+    function leave() {
+      // Dùng sendBeacon để đảm bảo request đến server dù tab đang đóng.
+      // sendBeacon chỉ hỗ trợ POST, nên dùng POST với action=leave.
+      try {
+        const url = `/api/interviews/${encodeURIComponent(
+          meetingCode,
+        )}/presence?action=leave`;
+        const body = JSON.stringify({ sessionId });
+        if (
+          typeof navigator !== "undefined" &&
+          typeof navigator.sendBeacon === "function"
+        ) {
+          const blob = new Blob([body], { type: "application/json" });
+          navigator.sendBeacon(url, blob);
+        } else {
+          // Fallback: fetch keepalive
+          fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body,
+            keepalive: true,
+          }).catch(() => {});
+        }
+      } catch (err) {
+        console.warn("[presence] leave failed:", err);
+      }
+    }
+
+    void join();
+    const intervalId = window.setInterval(heartbeat, HEARTBEAT_MS);
+
+    // Cleanup: gọi leave khi component unmount (route change, tab close).
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      leave();
+    };
+  }, [streamReady, meetingCode]);
+
   // Fetch recording config (enable_recording) để biết có auto-record không.
   // Chạy song song với init Stream — không block việc join call.
   useEffect(() => {

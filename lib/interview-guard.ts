@@ -160,22 +160,78 @@ async function attachCandidate(
 ): Promise<boolean> {
   const existing = await findCandidateRow(interviewId);
 
-  if (existing && existing.user_id && existing.user_id !== userId) {
-    return false;
-  }
+  // CASE 1: row đã gán cho đúng user này → cho phép, refresh joined_at.
   if (existing && existing.user_id === userId) {
+    await pool.query(
+      `UPDATE interview_candidates
+       SET joined_at = NOW()
+       WHERE id = $1`,
+      [existing.id],
+    );
     return true;
   }
+
+  // CASE 2: row còn trống (user_id NULL) → claim slot.
   if (existing && existing.user_id === null) {
     await pool.query(
       `UPDATE interview_candidates
-       SET user_id = $1, joined_at = COALESCE(joined_at, NOW())
+       SET user_id = $1, joined_at = NOW()
        WHERE id = $2`,
       [userId, existing.id],
     );
     return true;
   }
 
+  // CASE 3: row.user_id trỏ sang candidate khác → check presence.
+  //
+  // Bug đã sửa: trước đây return false vĩnh viễn khi candidate khác
+  // đã gán vào row. Giờ check bảng `room_presence`: nếu KHÔNG còn
+  // candidate ACTIVE nào trong phòng (last_seen_at > 45s) → user mới
+  // được "thế chỗ", UPDATE row.user_id = userId, joined_at = NOW.
+  if (existing && existing.user_id && existing.user_id !== userId) {
+    const presenceRes = await pool.query<{ exists: boolean }>(
+      `SELECT EXISTS(
+         SELECT 1
+         FROM room_presence
+         WHERE interview_id = $1
+           AND participant_role = 'CANDIDATE'
+           AND user_id != $2
+           AND last_seen_at > NOW() - INTERVAL '45 seconds'
+       ) AS exists`,
+      [interviewId, userId],
+    );
+    const otherCandidateActive = Boolean(presenceRes.rows[0]?.exists);
+    if (otherCandidateActive) {
+      console.log("[guard] candidate join blocked", {
+        reason: "another_candidate_active",
+        interviewId,
+        currentCandidate: existing.user_id,
+        incomingCandidate: userId,
+      });
+      return false;
+    }
+
+    // Slot trống (candidate cũ đã out / stale) → takeover.
+    await pool.query(
+      `UPDATE interview_candidates
+       SET user_id = $1,
+           candidate_name = (SELECT full_name FROM users WHERE id = $1),
+           candidate_email = (SELECT email FROM users WHERE id = $1),
+           joined_at = NOW()
+       WHERE id = $2`,
+      [userId, existing.id],
+    );
+    // Xoá luôn presence row cũ của candidate cũ trong interview này
+    // (defensive — thường đã stale 45s+, nhưng chắc chắn).
+    await pool.query(
+      `DELETE FROM room_presence
+       WHERE interview_id = $1 AND participant_role = 'CANDIDATE'`,
+      [interviewId],
+    );
+    return true;
+  }
+
+  // CASE 4: chưa có row nào → INSERT mới.
   const userRes = await pool.query<{ full_name: string; email: string | null }>(
     `SELECT full_name, email FROM users WHERE id = $1 LIMIT 1`,
     [userId],
