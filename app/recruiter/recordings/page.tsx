@@ -111,6 +111,14 @@ export default function RecordingsPage() {
     skipped?: number;
   } | null>(null);
 
+  const ITEMS_PER_PAGE = 5;
+
+  const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
+
   const loadRecordings = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -338,6 +346,13 @@ export default function RecordingsPage() {
     });
   }, [recordings, search]);
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+
+  const paginatedRecordings = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filtered.slice(start, start + ITEMS_PER_PAGE);
+  }, [filtered, currentPage]);
+
   return (
     <>
       <TopNavBar />
@@ -502,7 +517,7 @@ export default function RecordingsPage() {
                 </thead>
 
                 <tbody>
-                  {filtered.map((item) => {
+                  {paginatedRecordings.map((item) => {
                     const code = meetingCodeFromCid(item.callCid);
                     return (
                       <tr
@@ -567,6 +582,54 @@ export default function RecordingsPage() {
             )}
           </div>
         </div>
+        {filtered.length > ITEMS_PER_PAGE && (
+          <div className="flex items-center justify-between mt-6 px-4">
+            <div className="text-sm text-slate-400">
+              Hiển thị {(currentPage - 1) * ITEMS_PER_PAGE + 1}-
+              {Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)}
+              {" / "}
+              {filtered.length} recordings
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-4 py-2 rounded-lg bg-slate-700 disabled:opacity-40 hover:bg-slate-600"
+              >
+                ← Trước
+              </button>
+
+              {Array.from({ length: totalPages }).map((_, index) => {
+                const page = index + 1;
+
+                return (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`w-10 h-10 rounded-lg transition ${
+                      page === currentPage
+                        ? "bg-cyan-500 text-white"
+                        : "bg-slate-700 hover:bg-slate-600"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                );
+              })}
+
+              <button
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                }
+                disabled={currentPage === totalPages}
+                className="px-4 py-2 rounded-lg bg-slate-700 disabled:opacity-40 hover:bg-slate-600"
+              >
+                Sau →
+              </button>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Modal xem trước recording */}

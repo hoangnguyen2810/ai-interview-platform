@@ -135,6 +135,14 @@ export async function POST(req: Request, ctx: Params) {
         // Phòng không tồn tại → idempotent, trả success để client không retry.
         return NextResponse.json({ success: true });
       }
+      // Đóng row log open của candidate (nếu có) trước khi xoá presence.
+      // Idempotent: chỉ 1 row open tại 1 thời điểm (do CASE 1 đã đóng).
+      await pool.query(
+        `UPDATE interview_participation_log
+         SET left_at = NOW(), end_reason = 'LEFT_NORMAL'
+         WHERE interview_id = $1 AND user_id = $2 AND left_at IS NULL`,
+        [interview.id, auth.id],
+      );
       await pool.query(
         `DELETE FROM room_presence
          WHERE interview_id = $1
@@ -294,6 +302,12 @@ export async function DELETE(req: Request, ctx: Params) {
       );
     }
 
+    await pool.query(
+      `UPDATE interview_participation_log
+       SET left_at = NOW(), end_reason = 'LEFT_NORMAL'
+       WHERE interview_id = $1 AND user_id = $2 AND left_at IS NULL`,
+      [interview.id, auth.id],
+    );
     await pool.query(
       `DELETE FROM room_presence
        WHERE interview_id = $1

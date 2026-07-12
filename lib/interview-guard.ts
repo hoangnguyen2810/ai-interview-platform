@@ -160,13 +160,30 @@ async function attachCandidate(
 ): Promise<boolean> {
   const existing = await findCandidateRow(interviewId);
 
-  // CASE 1: row đã gán cho đúng user này → cho phép, refresh joined_at.
+  // CASE 1: row đã gán cho đúng user này → cho phép, refresh joined_at
+  // VÀ mở 1 log row mới (append-only) cho mỗi lượt join, kể cả khi
+  // đã join trước đó rồi ra rồi vào lại.
   if (existing && existing.user_id === userId) {
     await pool.query(
       `UPDATE interview_candidates
        SET joined_at = NOW()
        WHERE id = $1`,
       [existing.id],
+    );
+    // Đóng row log cũ (nếu còn open) rồi mở row mới — đảm bảo mỗi lượt
+    // join là 1 row mới có joined_at chính xác, không cộng dồn.
+    await pool.query(
+      `UPDATE interview_participation_log
+       SET left_at = NOW(), end_reason = 'LEFT_NORMAL'
+       WHERE interview_id = $1 AND user_id = $2 AND left_at IS NULL`,
+      [interviewId, userId],
+    );
+    await pool.query(
+      `INSERT INTO interview_participation_log
+         (interview_id, user_id, candidate_name, joined_at)
+       SELECT $1, $2, candidate_name, NOW()
+       FROM interview_candidates WHERE id = $3`,
+      [interviewId, userId, existing.id],
     );
     return true;
   }
@@ -178,6 +195,13 @@ async function attachCandidate(
        SET user_id = $1, joined_at = NOW()
        WHERE id = $2`,
       [userId, existing.id],
+    );
+    await pool.query(
+      `INSERT INTO interview_participation_log
+         (interview_id, user_id, candidate_name, joined_at)
+       SELECT $1, $2, candidate_name, NOW()
+       FROM interview_candidates WHERE id = $3`,
+      [interviewId, userId, existing.id],
     );
     return true;
   }
@@ -212,6 +236,17 @@ async function attachCandidate(
     }
 
     // Slot trống (candidate cũ đã out / stale) → takeover.
+    //
+    // Log append-only: đóng row open của candidate CŨ (end_reason='TAKEN_OVER')
+    // rồi mở row mới cho candidate MỚI. Nhờ vậy dashboard của cả 2
+    // candidate đều thấy buổi phỏng vấn đã tham gia.
+    const oldUserId = existing.user_id;
+    await pool.query(
+      `UPDATE interview_participation_log
+       SET left_at = NOW(), end_reason = 'TAKEN_OVER'
+       WHERE interview_id = $1 AND user_id = $2 AND left_at IS NULL`,
+      [interviewId, oldUserId],
+    );
     await pool.query(
       `UPDATE interview_candidates
        SET user_id = $1,
@@ -220,6 +255,13 @@ async function attachCandidate(
            joined_at = NOW()
        WHERE id = $2`,
       [userId, existing.id],
+    );
+    await pool.query(
+      `INSERT INTO interview_participation_log
+         (interview_id, user_id, candidate_name, joined_at)
+       SELECT $1, $2, candidate_name, NOW()
+       FROM interview_candidates WHERE id = $3`,
+      [interviewId, userId, existing.id],
     );
     // Xoá luôn presence row cũ của candidate cũ trong interview này
     // (defensive — thường đã stale 45s+, nhưng chắc chắn).
@@ -243,6 +285,12 @@ async function attachCandidate(
     `INSERT INTO interview_candidates (interview_id, user_id, candidate_name, candidate_email, joined_at)
      VALUES ($1, $2, $3, $4, NOW())`,
     [interviewId, userId, userInfo.full_name, userInfo.email],
+  );
+  await pool.query(
+    `INSERT INTO interview_participation_log
+       (interview_id, user_id, candidate_name, joined_at)
+     VALUES ($1, $2, $3, NOW())`,
+    [interviewId, userId, userInfo.full_name],
   );
   return true;
 }
