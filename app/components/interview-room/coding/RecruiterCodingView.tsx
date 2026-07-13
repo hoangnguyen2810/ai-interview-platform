@@ -69,18 +69,136 @@ function statusLabel(status: string): string {
   }
 }
 
+// ─── Code Viewer Modal ────────────────────────────────────────────────────────
+
+function CodeViewerModal({
+  submission,
+  onClose,
+}: {
+  submission: Submission;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
+      onClick={onClose}
+    >
+      <div
+        className="
+    bg-[#0a1929]
+    border border-cyan-500/30
+    rounded-xl
+    w-[95vw]
+    max-w-6xl
+    h-[90vh]
+    flex flex-col
+    shadow-2xl
+    overflow-hidden
+  "
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-cyan-500/20 bg-[#122131] rounded-t-xl">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="material-symbols-outlined text-cyan-400">
+              code
+            </span>
+            <div className="min-w-0">
+              <h3 className="text-white font-semibold text-sm truncate">
+                Source code đã submit
+              </h3>
+              <p className="text-white/40 text-[11px] truncate">
+                Submission #{submission.submissionId.slice(0, 8)} •{" "}
+                {formatLanguage(submission.language)} •{" "}
+                {formatTime(submission.createdAt)}
+                {submission.candidateName &&
+                  ` • by ${submission.candidateName}`}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-white/50 hover:text-white transition-colors p-1"
+            aria-label="Đóng"
+          >
+            <span className="material-symbols-outlined text-xl">close</span>
+          </button>
+        </div>
+
+        {/* Code body */}
+        <div className="flex-1 overflow-hidden bg-[#0d1c2d]">
+          {submission.sourceCode ? (
+            <Editor
+              language={submission.language}
+              height="100%"
+              theme="vs-dark"
+              value={submission.sourceCode}
+              options={{
+                readOnly: true,
+                minimap: { enabled: false },
+                fontSize: 13,
+                automaticLayout: true,
+                scrollBeyondLastLine: false,
+                tabSize: 4,
+                wordWrap: "on",
+                padding: { top: 12, bottom: 12 },
+                lineNumbers: "on",
+                renderLineHighlight: "none",
+              }}
+            />
+          ) : (
+            <div className="h-full flex items-center justify-center text-white/40 text-sm">
+              Submission này không có source code được lưu.
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-4 py-2 border-t border-cyan-500/20 bg-[#122131] text-[11px] text-white/50 rounded-b-xl">
+          <span>{submission.sourceCode?.length ?? 0} ký tự</span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3 py-1 rounded-md bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 transition-colors"
+          >
+            Đóng
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Submission block (formatted as requested) ────────────────────────────────
 
 function SubmissionBlock({
   index,
   submission,
+  onViewCode,
 }: {
   index: number;
   submission: Submission;
+  onViewCode: (submission: Submission) => void;
 }) {
   return (
     <div className="bg-[#0a1929] border border-cyan-500/20 rounded-lg p-4 font-mono text-xs text-white/80 whitespace-pre-wrap leading-relaxed">
-      <div className="text-cyan-400 font-bold text-sm">Submission #{index}</div>
+      <div className="flex items-center justify-between mb-1">
+        <div className="text-cyan-400 font-bold text-sm">
+          Submission #{index}
+        </div>
+        <button
+          type="button"
+          onClick={() => onViewCode(submission)}
+          className="px-2.5 py-1 rounded-md bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 text-[11px] font-semibold transition-colors flex items-center gap-1"
+          title="Xem source code của submission này"
+        >
+          <span className="material-symbols-outlined text-xs leading-none">
+            code
+          </span>
+          Xem code
+        </button>
+      </div>
       <div className="text-white/40">-------------------------</div>
       <div>
         <span className="text-white/50">Time:</span>{" "}
@@ -130,6 +248,9 @@ function RecruiterCodingEditor({ meetingCode }: { meetingCode: string }) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [tab, setTab] = useState<"output" | "history">("output");
   const [outputHeight, setOutputHeight] = useState(288); // 72 = 288px
+  const [viewingSubmission, setViewingSubmission] = useState<Submission | null>(
+    null,
+  );
   const resizing = useRef(false);
 
   const startResize = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -360,6 +481,7 @@ function RecruiterCodingEditor({ meetingCode }: { meetingCode: string }) {
                   key={s.submissionId}
                   index={submissions.length - idx}
                   submission={s}
+                  onViewCode={setViewingSubmission}
                 />
               ))}
             </div>
@@ -382,6 +504,14 @@ function RecruiterCodingEditor({ meetingCode }: { meetingCode: string }) {
 
         <span>Socket.IO</span>
       </div>
+
+      {/* Code viewer modal (mở khi click "Xem code" trên 1 submission) */}
+      {viewingSubmission && (
+        <CodeViewerModal
+          submission={viewingSubmission}
+          onClose={() => setViewingSubmission(null)}
+        />
+      )}
     </div>
   );
 }
