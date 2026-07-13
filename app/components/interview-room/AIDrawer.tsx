@@ -2,6 +2,8 @@
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import AIReviewList from "./coding/AIReviewList";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 type Props = {
   open: boolean;
@@ -700,7 +702,7 @@ export default function AIDrawer({ open, onClose, meetingCode }: Props) {
       {tab === "chat" ? (
         <>
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 bg-[#181818]">
+          <div className="flex-1 overflow-y-auto custom-scrollbar px-3 py-3 space-y-3 bg-[#181818]">
             {messagesList.length === 0 && (
               <div className="text-center text-[12.5px] text-[#6e6e6e] mt-16 px-4">
                 <p className="mb-1.5 text-[#9a9a9a]">Xin chào</p>
@@ -714,7 +716,9 @@ export default function AIDrawer({ open, onClose, meetingCode }: Props) {
               >
                 {m.role === "user" ? (
                   <div className="max-w-[85%] px-3 py-2 rounded-md text-[13px] leading-relaxed whitespace-pre-wrap break-words bg-[#2a2d3a] text-[#e4e4e4] border border-[#343850]">
-                    {m.content}
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {m.content}
+                    </ReactMarkdown>
                   </div>
                 ) : (
                   <div
@@ -724,7 +728,9 @@ export default function AIDrawer({ open, onClose, meetingCode }: Props) {
                         : "bg-[#1f1f1f] border-[#3b82f6] text-[#dcdcdc]"
                     }`}
                   >
-                    {m.content}
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {m.content}
+                    </ReactMarkdown>
                   </div>
                 )}
               </div>
