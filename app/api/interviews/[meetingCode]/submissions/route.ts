@@ -155,12 +155,21 @@ export async function POST(req: Request, ctx: Params) {
     );
     const executionId: string = execRes.rows[0].id;
 
-    const subRes = await pool.query(
+const subRes = await pool.query(
       `INSERT INTO code_submissions
-        (interview_id, interview_candidate_id, question_id, language, source_code, status, execution_id)
-       VALUES ($1, $2, $3, $4, $5, 'PENDING', $6)
-       RETURNING id, created_at`,
-      [interviewId, interviewCandidateId, questionId, body.language, body.code, executionId],
+        (interview_id, interview_candidate_id, question_id, language, source_code, status, execution_id, candidate_name)
+      VALUES ($1, $2, $3, $4, $5, 'PENDING', $6,
+              (SELECT full_name FROM users WHERE id = $7))
+      RETURNING id, created_at`,
+      [
+        interviewId,
+        interviewCandidateId,
+        questionId,
+        body.language,
+        body.code,
+        executionId,
+        auth.id,
+      ],
     );
     const submissionId: string = subRes.rows[0].id;
     const createdAt: string = subRes.rows[0].created_at;
@@ -410,7 +419,11 @@ export async function GET(req: Request, ctx: Params) {
          s.status,
          s.runtime_ms,
          s.created_at,
-         ic.candidate_name,
+         -- Prefer the snapshot taken at submit time (see migration 017).
+         -- Fallback to the joined candidate name for legacy rows that
+         -- pre-date the snapshot column.
+         COALESCE(NULLIF(s.candidate_name, ''), ic.candidate_name)
+                          AS candidate_name,
          ic.user_id        AS candidate_user_id,
          ce.stdout         AS stdout,
          ce.stderr         AS stderr,

@@ -6,6 +6,14 @@ import ReportViewer from "./coding/ReportViewer";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+/**
+ * Bumped whenever the recruiter presses "New AI session". Passed to
+ * AIReviewList so it can remount and forget any cached submissions/reviews
+ * from the previous candidate (since the same meetingCode is reused for
+ * multiple candidates in one room).
+ */
+let reviewReloadCounter = 0;
+
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -356,6 +364,7 @@ function useVoiceInput(
 export default function AIDrawer({ open, onClose, meetingCode }: Props) {
   const [tab, setTab] = useState<"chat" | "review">("chat");
   const [reportOpen, setReportOpen] = useState(false);
+  const [reviewReloadKey, setReviewReloadKey] = useState(0);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -430,8 +439,38 @@ export default function AIDrawer({ open, onClose, meetingCode }: Props) {
     sessionIdRef.current = null;
     setSessionId(null);
     setSessionReady(false);
+    // Force AIReviewList to remount so it drops cached submissions/reviews
+    // from the previous candidate in this same room.
+    reviewReloadCounter += 1;
+    setReviewReloadKey(reviewReloadCounter);
     await ensureSession();
   }, [ensureSession]);
+
+  // Reset everything when meetingCode changes (recruiter moves to a different interview).
+  useEffect(() => {
+    if (!meetingCode) return;
+    // Clear AI session and messages so each candidate gets isolated context.
+    const clear = async () => {
+      const current = sessionIdRef.current;
+      if (current) {
+        try {
+          await fetch(`${AI_BACKEND_URL}/sessions/${current}`, {
+            method: "DELETE",
+          });
+        } catch {
+          // ignore
+        }
+      }
+      setStoredSessionId(null);
+      setMessages([]);
+      setCvFilename(null);
+      setCvContext("");
+      sessionIdRef.current = null;
+      setSessionId(null);
+      setSessionReady(false);
+    };
+    void clear();
+  }, [meetingCode]);
 
   useEffect(() => {
     if (open && !sessionReady) {
@@ -897,7 +936,7 @@ export default function AIDrawer({ open, onClose, meetingCode }: Props) {
           </div>
         </>
       ) : meetingCode ? (
-        <div className="flex-1 min-h-0 bg-[#181818]">
+        <div className="flex-1 min-h-0 bg-[#181818]" key={reviewReloadKey}>
           <AIReviewList meetingCode={meetingCode} />
         </div>
       ) : (
