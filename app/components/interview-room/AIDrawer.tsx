@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import AIReviewList from "./coding/AIReviewList";
+import ReportViewer from "./coding/ReportViewer";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -354,6 +355,7 @@ function useVoiceInput(
 
 export default function AIDrawer({ open, onClose, meetingCode }: Props) {
   const [tab, setTab] = useState<"chat" | "review">("chat");
+  const [reportOpen, setReportOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -658,6 +660,19 @@ export default function AIDrawer({ open, onClose, meetingCode }: Props) {
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <button
+            onClick={() => setReportOpen(true)}
+            title="Tổng hợp báo cáo AI"
+            className="flex items-center justify-center h-6 px-2 rounded text-[#9a9a9a] hover:bg-[#2a2a2a] hover:text-cyan-400 transition-colors text-[11px] gap-1"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <polyline points="10 9 9 9 8 9"/>
+            </svg>
+          </button>
+          <button
             onClick={resetSession}
             title="Bắt đầu session mới"
             className="flex items-center justify-center h-6 w-6 rounded text-[#9a9a9a] hover:bg-[#2a2a2a] hover:text-[#e4e4e4] transition-colors"
@@ -889,6 +904,14 @@ export default function AIDrawer({ open, onClose, meetingCode }: Props) {
         <div className="flex-1 flex items-center justify-center text-[11.5px] text-[#6e6e6e] p-4 text-center">
           Không tìm thấy meetingCode.
         </div>
+      )}
+
+      {/* Report viewer modal — rendered inside the guard so button is accessible */}
+      {meetingCode && reportOpen && (
+        <ReportViewer
+          meetingCode={meetingCode}
+          onClose={() => setReportOpen(false)}
+        />
       )}
     </div>
   );
