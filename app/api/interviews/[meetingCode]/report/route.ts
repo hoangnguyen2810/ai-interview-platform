@@ -403,6 +403,7 @@ export async function PATCH(req: Request, ctx: Params) {
     }
 
     const content = sanitizeContent(body.content);
+    const hasContent = isStringRecord(body.content);
 
     // Status: only allow EDITED/FINAL/DRAFT via PATCH.
     let nextStatus: string | null = null;
@@ -419,18 +420,20 @@ export async function PATCH(req: Request, ctx: Params) {
     }
 
     // Build dynamic SET clause based on which fields are provided.
+    // Important: only overwrite `content` when the client actually sent a
+    // content object — otherwise (e.g. "Đánh dấu hoàn tất" with just
+    // { status: "FINAL" }) we would clobber the existing content with the
+    // empty default and silently wipe the report body.
     const setFragments: string[] = [
-      "content = $2::jsonb",
       "updated_at = CURRENT_TIMESTAMP",
-      "updated_by = $3",
+      "updated_by = $2",
     ];
-    const params: unknown[] = [
-      interview.id,
-      JSON.stringify(content),
-      auth.id,
-      reportId,
-    ];
+    const params: unknown[] = [interview.id, auth.id, reportId];
 
+    if (hasContent) {
+      params.push(JSON.stringify(content));
+      setFragments.push(`content = $${params.length}::jsonb`);
+    }
     if (nextStatus !== null) {
       params.push(nextStatus);
       setFragments.push(`status = $${params.length}`);
@@ -443,7 +446,7 @@ export async function PATCH(req: Request, ctx: Params) {
     const updateRes = await pool.query<ReportRow>(
       `UPDATE interview_reports
        SET ${setFragments.join(", ")}
-       WHERE interview_id = $1 AND id = $4 AND deleted_at IS NULL
+       WHERE interview_id = $1 AND id = $3 AND deleted_at IS NULL
        RETURNING id, content, status, generated_at, updated_at,
                  cv_filename, cv_analysis, coding_analysis_snapshot,
                  ai_overall_score, ai_model`,
