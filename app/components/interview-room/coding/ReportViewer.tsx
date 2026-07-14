@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 
 // 8 sections matching CHAT_PROMPT rule 8 / ai-report.ts.
 interface ReportContent {
@@ -100,6 +100,21 @@ function formatDateTime(iso: string | null): string {
   }
 }
 
+function formatShortDateTime(iso: string | null): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString("en-GB", {
+      hour12: false,
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
 function statusBadgeClass(status: string): string {
   switch (status) {
     case "FINAL":
@@ -129,17 +144,24 @@ export default function ReportViewer({
   onClose,
   onReportChanged,
 }: ReportViewerProps) {
-  const [report, setReport] = useState<ReportPayload | null>(null);
+  const [reports, setReports] = useState<ReportPayload[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<ReportContent | null>(null);
   const [draftScore, setDraftScore] = useState<string>("");
 
-  const loadReport = useCallback(async () => {
+  const report = useMemo(
+    () => reports.find((r) => r.id === selectedId) ?? null,
+    [reports, selectedId],
+  );
+
+  const loadReports = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -155,8 +177,15 @@ export default function ReportViewer({
       if (!res.ok || !data.success) {
         throw new Error(data.message || "Không tải được báo cáo");
       }
-      setReport(data.report ?? null);
-      onReportChanged?.(data.report ?? null);
+      const list: ReportPayload[] = data.reports ?? [];
+      setReports(list);
+      // Default-select the first report so the main panel has content to show.
+      // If the previously selected report still exists, keep it.
+      setSelectedId((prev) => {
+        if (prev && list.some((r) => r.id === prev)) return prev;
+        return list[0]?.id ?? null;
+      });
+      onReportChanged?.(list[0] ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Lỗi tải báo cáo");
     } finally {
@@ -165,8 +194,8 @@ export default function ReportViewer({
   }, [meetingCode, onReportChanged]);
 
   useEffect(() => {
-    loadReport();
-  }, [loadReport]);
+    loadReports();
+  }, [loadReports]);
 
   // Auto-clear transient messages
   useEffect(() => {
@@ -196,14 +225,61 @@ export default function ReportViewer({
       if (!res.ok || !data.success) {
         throw new Error(data.message || "Không tạo được báo cáo");
       }
-      setReport(data.report);
+      // Insert the new report at the top and select it.
+      const newReport: ReportPayload = data.report;
+      setReports((prev) => [newReport, ...prev]);
+      setSelectedId(newReport.id);
       setEditing(false);
       setSuccess("Đã tạo báo cáo AI");
-      onReportChanged?.(data.report);
+      onReportChanged?.(newReport);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Lỗi tạo báo cáo");
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handleSelect = (id: string) => {
+    if (editing) {
+      // Don't allow switching mid-edit to avoid losing draft.
+      return;
+    }
+    setSelectedId(id);
+  };
+
+  const handleDelete = async () => {
+    if (!report) return;
+    if (typeof window !== "undefined") {
+      const ok = window.confirm("Xoá báo cáo này? Hành động không thể hoàn tác.");
+      if (!ok) return;
+    }
+    try {
+      setDeleting(true);
+      setError(null);
+      const res = await fetch(
+        `/api/interviews/${encodeURIComponent(
+          meetingCode,
+        )}/report?reportId=${encodeURIComponent(report.id)}`,
+        {
+          method: "DELETE",
+          headers: getAuthHeaders(),
+          credentials: "include",
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Không xoá được báo cáo");
+      }
+      const remaining = reports.filter((r) => r.id !== report.id);
+      setReports(remaining);
+      const nextSelected = remaining[0]?.id ?? null;
+      setSelectedId(nextSelected);
+      setSuccess("Đã xoá báo cáo");
+      onReportChanged?.(remaining[0] ?? null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Lỗi xoá báo cáo");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -225,7 +301,7 @@ export default function ReportViewer({
   };
 
   const handleSave = async () => {
-    if (!draft) return;
+    if (!draft || !report) return;
     try {
       setSaving(true);
       setError(null);
@@ -241,7 +317,9 @@ export default function ReportViewer({
       }
 
       const res = await fetch(
-        `/api/interviews/${encodeURIComponent(meetingCode)}/report`,
+        `/api/interviews/${encodeURIComponent(
+          meetingCode,
+        )}/report?reportId=${encodeURIComponent(report.id)}`,
         {
           method: "PATCH",
           headers: getAuthHeaders(),
@@ -257,11 +335,12 @@ export default function ReportViewer({
       if (!res.ok || !data.success) {
         throw new Error(data.message || "Không lưu được báo cáo");
       }
-      setReport(data.report);
+      const updated: ReportPayload = data.report;
+      setReports((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
       setEditing(false);
       setDraft(null);
       setSuccess("Đã lưu báo cáo");
-      onReportChanged?.(data.report);
+      onReportChanged?.(updated);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Lỗi lưu báo cáo");
     } finally {
@@ -270,11 +349,14 @@ export default function ReportViewer({
   };
 
   const handleMarkFinal = async () => {
+    if (!report) return;
     try {
       setSaving(true);
       setError(null);
       const res = await fetch(
-        `/api/interviews/${encodeURIComponent(meetingCode)}/report`,
+        `/api/interviews/${encodeURIComponent(
+          meetingCode,
+        )}/report?reportId=${encodeURIComponent(report.id)}`,
         {
           method: "PATCH",
           headers: getAuthHeaders(),
@@ -286,9 +368,10 @@ export default function ReportViewer({
       if (!res.ok || !data.success) {
         throw new Error(data.message || "Không cập nhật được trạng thái");
       }
-      setReport(data.report);
+      const updated: ReportPayload = data.report;
+      setReports((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
       setSuccess("Đã đánh dấu báo cáo là Hoàn tất");
-      onReportChanged?.(data.report);
+      onReportChanged?.(updated);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Lỗi cập nhật trạng thái");
     } finally {
@@ -302,246 +385,344 @@ export default function ReportViewer({
       onClick={onClose}
     >
       <div
-        className="bg-[#0a1929] border border-cyan-500/30 rounded-xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl"
+        className="bg-[#0a1929] border border-cyan-500/30 rounded-xl w-full max-w-5xl max-h-[90vh] flex shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-cyan-500/20 bg-[#122131] rounded-t-xl">
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="material-symbols-outlined text-cyan-400">
-              description
-            </span>
+        {/* Sidebar — list of reports */}
+        <div className="w-64 shrink-0 border-r border-cyan-500/20 bg-[#0d1c2d] rounded-l-xl flex flex-col">
+          <div className="px-3 py-3 border-b border-cyan-500/20 flex items-center justify-between">
             <div className="min-w-0">
-              <h3 className="text-white font-semibold text-sm">
-                Báo cáo phỏng vấn (AI tổng hợp)
-              </h3>
-              <p className="text-white/40 text-[11px] truncate">
-                {report ? (
-                  <>
-                    Tạo: {formatDateTime(report.generated_at)} • Cập nhật:{" "}
-                    {formatDateTime(report.updated_at)}
-                    {report.ai_model && ` • Model: ${report.ai_model}`}
-                  </>
-                ) : (
-                  "Chưa có báo cáo"
-                )}
+              <h4 className="text-white font-semibold text-xs uppercase tracking-wide">
+                Báo cáo ({reports.length})
+              </h4>
+              <p className="text-white/40 text-[10px] mt-0.5">
+                Mỗi lần tạo sẽ thêm bản mới
               </p>
             </div>
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={generating}
+              title="Tạo báo cáo AI mới"
+              className="flex items-center justify-center h-7 w-7 rounded-md bg-cyan-500 hover:bg-cyan-400 text-black transition shadow disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {generating ? (
+                <span className="inline-block w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+              ) : (
+                <span className="material-symbols-outlined text-base">
+                  add
+                </span>
+              )}
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-white/50 hover:text-white transition-colors p-1"
-            aria-label="Đóng"
-          >
-            <span className="material-symbols-outlined text-xl">close</span>
-          </button>
-        </div>
 
-        {/* Status banner */}
-        {(error || success) && (
-          <div
-            className={`px-4 py-2 text-sm border-b border-cyan-500/10 ${
-              error
-                ? "bg-red-500/10 text-red-300"
-                : "bg-green-500/10 text-green-300"
-            }`}
-          >
-            {error || success}
-          </div>
-        )}
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto p-4 text-sm custom-scrollbar">
-          {loading ? (
-            <div className="h-full flex items-center justify-center text-white/50 py-16">
-              Đang tải...
-            </div>
-          ) : !report ? (
-            <div className="h-full flex flex-col items-center justify-center gap-4 text-white/50 py-16">
-              <span className="material-symbols-outlined text-5xl text-white/30">
-                auto_awesome
-              </span>
-              <p>Chưa có báo cáo cho buổi phỏng vấn này.</p>
-              <button
-                type="button"
-                onClick={handleGenerate}
-                disabled={generating}
-                className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-semibold transition shadow-lg shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {generating ? (
-                  <>
-                    <span className="inline-block w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                    Đang tạo báo cáo AI...
-                  </>
-                ) : (
-                  <>
-                    <span className="material-symbols-outlined text-base">
-                      auto_awesome
-                    </span>
-                    Tạo báo cáo AI
-                  </>
-                )}
-              </button>
-              <p className="text-xs text-white/30 max-w-md text-center">
-                AI sẽ tổng hợp thông tin từ CV (nếu có) và các bài coding đã
-                submit, tạo báo cáo 8 phần. Sau đó bạn có thể chỉnh sửa trước
-                khi lưu.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Status row + actions */}
-              <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg bg-[#0d1c2d] border border-cyan-500/10">
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="text-white/50">Trạng thái:</span>
-                  <span
-                    className={`px-2 py-0.5 rounded-md border text-[11px] font-semibold ${statusBadgeClass(report.status)}`}
-                  >
-                    {statusLabel(report.status)}
-                  </span>
-                  {report.ai_overall_score !== null && (
-                    <span className="text-white/60">
-                      • Điểm AI đề xuất:{" "}
-                      <span className="text-cyan-300 font-semibold">
-                        {report.ai_overall_score.toFixed(2)}
-                      </span>{" "}
-                      / 10
-                    </span>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {!editing && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={handleStartEdit}
-                        className="px-3 py-1.5 rounded-md bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-semibold transition-colors flex items-center gap-1"
-                      >
-                        <span className="material-symbols-outlined text-xs">
-                          edit
-                        </span>
-                        Chỉnh sửa
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleGenerate}
-                        disabled={generating}
-                        className="px-3 py-1.5 rounded-md bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 text-xs font-semibold transition-colors flex items-center gap-1 disabled:opacity-50"
-                      >
-                        {generating ? "Đang tạo..." : "Tạo lại"}
-                      </button>
-                      {report.status !== "FINAL" && (
-                        <button
-                          type="button"
-                          onClick={handleMarkFinal}
-                          disabled={saving}
-                          className="px-3 py-1.5 rounded-md bg-green-500/15 hover:bg-green-500/25 text-green-300 border border-green-500/30 text-xs font-semibold transition-colors flex items-center gap-1 disabled:opacity-50"
-                        >
-                          <span className="material-symbols-outlined text-xs">
-                            check_circle
-                          </span>
-                          Đánh dấu hoàn tất
-                        </button>
-                      )}
-                    </>
-                  )}
-                  {editing && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={handleSave}
-                        disabled={saving}
-                        className="px-3 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-400 text-black text-xs font-semibold transition-colors flex items-center gap-1 disabled:opacity-50"
-                      >
-                        {saving ? "Đang lưu..." : "Lưu"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleCancelEdit}
-                        disabled={saving}
-                        className="px-3 py-1.5 rounded-md bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 text-xs font-semibold transition-colors disabled:opacity-50"
-                      >
-                        Hủy
-                      </button>
-                    </>
-                  )}
-                </div>
+          <div className="flex-1 overflow-y-auto custom-scrollbar">
+            {loading ? (
+              <div className="text-white/40 text-xs px-3 py-4">Đang tải...</div>
+            ) : reports.length === 0 ? (
+              <div className="text-white/40 text-xs px-3 py-4 leading-relaxed">
+                Chưa có báo cáo. Bấm nút "+" để tạo báo cáo AI đầu tiên.
               </div>
-
-              {/* Sections */}
-              <div className="space-y-3">
-                {SECTIONS.map((section) => {
-                  const value = editing
-                    ? (draft?.[section.key] ?? "")
-                    : (report.content?.[section.key] ?? "");
+            ) : (
+              <ul className="py-1">
+                {reports.map((r) => {
+                  const isSelected = r.id === selectedId;
                   return (
-                    <div
-                      key={section.key}
-                      className="rounded-lg border border-cyan-500/10 bg-[#0d1c2d] p-3"
-                    >
-                      <label className="block text-cyan-400 font-semibold text-xs mb-1.5 uppercase tracking-wide">
-                        {section.label}
-                      </label>
-                      {editing ? (
-                        <textarea
-                          value={value}
-                          onChange={(e) =>
-                            setDraft((prev) =>
-                              prev
-                                ? { ...prev, [section.key]: e.target.value }
-                                : prev,
-                            )
-                          }
-                          placeholder={section.placeholder}
-                          rows={
-                            section.key === "candidate_name" ||
-                            section.key === "position"
-                              ? 1
-                              : section.key === "hiring_conclusion"
-                                ? 3
-                                : 5
-                          }
-                          className="w-full bg-[#071524] border border-slate-700 rounded-md px-3 py-2 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/10 resize-y"
-                        />
-                      ) : (
-                        <div className="text-white/85 text-sm whitespace-pre-wrap leading-relaxed">
-                          {value?.toString().trim()
-                            ? value
-                            : "—"}
+                    <li key={r.id}>
+                      <button
+                        type="button"
+                        onClick={() => handleSelect(r.id)}
+                        disabled={editing}
+                        className={`w-full text-left px-3 py-2.5 border-l-2 transition-colors ${
+                          isSelected
+                            ? "bg-cyan-500/10 border-cyan-400"
+                            : "border-transparent hover:bg-white/5"
+                        } ${editing && !isSelected ? "opacity-50 cursor-not-allowed" : ""}`}
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className="text-white text-xs font-medium truncate">
+                            {r.content?.candidate_name?.trim() ||
+                              "Chưa đặt tên"}
+                          </span>
+                          <span
+                            className={`shrink-0 px-1.5 py-0.5 rounded border text-[9px] font-semibold ${statusBadgeClass(r.status)}`}
+                          >
+                            {statusLabel(r.status)}
+                          </span>
                         </div>
-                      )}
-                    </div>
+                        <div className="text-white/40 text-[10px] truncate">
+                          {formatShortDateTime(r.generated_at)}
+                          {r.ai_overall_score !== null && (
+                            <>
+                              {" • "}
+                              <span className="text-cyan-300">
+                                {r.ai_overall_score.toFixed(1)}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </button>
+                    </li>
                   );
                 })}
-              </div>
+              </ul>
+            )}
+          </div>
+        </div>
 
-              {/* Score field when editing */}
-              {editing && (
-                <div className="rounded-lg border border-cyan-500/10 bg-[#0d1c2d] p-3">
-                  <label className="block text-cyan-400 font-semibold text-xs mb-1.5 uppercase tracking-wide">
-                    Điểm tổng (0 - 10)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min={0}
-                    max={10}
-                    value={draftScore}
-                    onChange={(e) => setDraftScore(e.target.value)}
-                    placeholder="Để trống nếu chưa có"
-                    className="w-40 bg-[#071524] border border-slate-700 rounded-md px-3 py-2 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/10"
-                  />
-                </div>
-              )}
-
-              {/* Footer info */}
-              <div className="text-xs text-white/40 border-t border-cyan-500/10 pt-3">
-                Mỗi buổi phỏng vấn có tối đa 1 báo cáo. Bấm "Tạo lại" để AI sinh
-                lại từ dữ liệu mới nhất (sẽ ghi đè nội dung hiện tại).
+        {/* Main panel */}
+        <div className="flex-1 flex flex-col min-w-0 rounded-r-xl">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-cyan-500/20 bg-[#122131] rounded-tr-xl">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="material-symbols-outlined text-cyan-400">
+                description
+              </span>
+              <div className="min-w-0">
+                <h3 className="text-white font-semibold text-sm">
+                  Báo cáo phỏng vấn (AI tổng hợp)
+                </h3>
+                <p className="text-white/40 text-[11px] truncate">
+                  {report ? (
+                    <>
+                      Tạo: {formatDateTime(report.generated_at)} • Cập nhật:{" "}
+                      {formatDateTime(report.updated_at)}
+                      {report.ai_model && ` • Model: ${report.ai_model}`}
+                    </>
+                  ) : (
+                    "Chưa có báo cáo"
+                  )}
+                </p>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-white/50 hover:text-white transition-colors p-1"
+              aria-label="Đóng"
+            >
+              <span className="material-symbols-outlined text-xl">close</span>
+            </button>
+          </div>
+
+          {/* Status banner */}
+          {(error || success) && (
+            <div
+              className={`px-4 py-2 text-sm border-b border-cyan-500/10 ${
+                error
+                  ? "bg-red-500/10 text-red-300"
+                  : "bg-green-500/10 text-green-300"
+              }`}
+            >
+              {error || success}
+            </div>
           )}
+
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto p-4 text-sm custom-scrollbar">
+            {loading ? (
+              <div className="h-full flex items-center justify-center text-white/50 py-16">
+                Đang tải...
+              </div>
+            ) : !report ? (
+              <div className="h-full flex flex-col items-center justify-center gap-4 text-white/50 py-16">
+                <span className="material-symbols-outlined text-5xl text-white/30">
+                  auto_awesome
+                </span>
+                <p>Chưa có báo cáo cho buổi phỏng vấn này.</p>
+                <button
+                  type="button"
+                  onClick={handleGenerate}
+                  disabled={generating}
+                  className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-semibold transition shadow-lg shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {generating ? (
+                    <>
+                      <span className="inline-block w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                      Đang tạo báo cáo AI...
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-base">
+                        auto_awesome
+                      </span>
+                      Tạo báo cáo AI
+                    </>
+                  )}
+                </button>
+                <p className="text-xs text-white/30 max-w-md text-center">
+                  AI sẽ tổng hợp thông tin từ CV (nếu có) và các bài coding đã
+                  submit, tạo báo cáo 8 phần. Sau đó bạn có thể chỉnh sửa trước
+                  khi lưu.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Status row + actions */}
+                <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg bg-[#0d1c2d] border border-cyan-500/10">
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-white/50">Trạng thái:</span>
+                    <span
+                      className={`px-2 py-0.5 rounded-md border text-[11px] font-semibold ${statusBadgeClass(report.status)}`}
+                    >
+                      {statusLabel(report.status)}
+                    </span>
+                    {report.ai_overall_score !== null && (
+                      <span className="text-white/60">
+                        • Điểm AI đề xuất:{" "}
+                        <span className="text-cyan-300 font-semibold">
+                          {report.ai_overall_score.toFixed(2)}
+                        </span>{" "}
+                        / 10
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {!editing && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleStartEdit}
+                          className="px-3 py-1.5 rounded-md bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-semibold transition-colors flex items-center gap-1"
+                        >
+                          <span className="material-symbols-outlined text-xs">
+                            edit
+                          </span>
+                          Chỉnh sửa
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleGenerate}
+                          disabled={generating}
+                          className="px-3 py-1.5 rounded-md bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 text-xs font-semibold transition-colors flex items-center gap-1 disabled:opacity-50"
+                        >
+                          {generating ? "Đang tạo..." : "Tạo bản mới"}
+                        </button>
+                        {report.status !== "FINAL" && (
+                          <button
+                            type="button"
+                            onClick={handleMarkFinal}
+                            disabled={saving}
+                            className="px-3 py-1.5 rounded-md bg-green-500/15 hover:bg-green-500/25 text-green-300 border border-green-500/30 text-xs font-semibold transition-colors flex items-center gap-1 disabled:opacity-50"
+                          >
+                            <span className="material-symbols-outlined text-xs">
+                              check_circle
+                            </span>
+                            Đánh dấu hoàn tất
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={handleDelete}
+                          disabled={deleting}
+                          title="Xoá báo cáo này"
+                          className="px-3 py-1.5 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/30 text-xs font-semibold transition-colors flex items-center gap-1 disabled:opacity-50"
+                        >
+                          <span className="material-symbols-outlined text-xs">
+                            delete
+                          </span>
+                          {deleting ? "Đang xoá..." : "Xoá"}
+                        </button>
+                      </>
+                    )}
+                    {editing && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleSave}
+                          disabled={saving}
+                          className="px-3 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-400 text-black text-xs font-semibold transition-colors flex items-center gap-1 disabled:opacity-50"
+                        >
+                          {saving ? "Đang lưu..." : "Lưu"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleCancelEdit}
+                          disabled={saving}
+                          className="px-3 py-1.5 rounded-md bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 text-xs font-semibold transition-colors disabled:opacity-50"
+                        >
+                          Hủy
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Sections */}
+                <div className="space-y-3">
+                  {SECTIONS.map((section) => {
+                    const value = editing
+                      ? (draft?.[section.key] ?? "")
+                      : (report.content?.[section.key] ?? "");
+                    return (
+                      <div
+                        key={section.key}
+                        className="rounded-lg border border-cyan-500/10 bg-[#0d1c2d] p-3"
+                      >
+                        <label className="block text-cyan-400 font-semibold text-xs mb-1.5 uppercase tracking-wide">
+                          {section.label}
+                        </label>
+                        {editing ? (
+                          <textarea
+                            value={value}
+                            onChange={(e) =>
+                              setDraft((prev) =>
+                                prev
+                                  ? { ...prev, [section.key]: e.target.value }
+                                  : prev,
+                              )
+                            }
+                            placeholder={section.placeholder}
+                            rows={
+                              section.key === "candidate_name" ||
+                              section.key === "position"
+                                ? 1
+                                : section.key === "hiring_conclusion"
+                                  ? 3
+                                  : 5
+                            }
+                            className="w-full bg-[#071524] border border-slate-700 rounded-md px-3 py-2 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/10 resize-y"
+                          />
+                        ) : (
+                          <div className="text-white/85 text-sm whitespace-pre-wrap leading-relaxed">
+                            {value?.toString().trim()
+                              ? value
+                              : "—"}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Score field when editing */}
+                {editing && (
+                  <div className="rounded-lg border border-cyan-500/10 bg-[#0d1c2d] p-3">
+                    <label className="block text-cyan-400 font-semibold text-xs mb-1.5 uppercase tracking-wide">
+                      Điểm tổng (0 - 10)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min={0}
+                      max={10}
+                      value={draftScore}
+                      onChange={(e) => setDraftScore(e.target.value)}
+                      placeholder="Để trống nếu chưa có"
+                      className="w-40 bg-[#071524] border border-slate-700 rounded-md px-3 py-2 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/10"
+                    />
+                  </div>
+                )}
+
+                {/* Footer info */}
+                <div className="text-xs text-white/40 border-t border-cyan-500/10 pt-3">
+                  Mỗi buổi phỏng vấn có thể có nhiều báo cáo. Bấm "Tạo bản mới"
+                  để AI sinh thêm một phiên bản độc lập (mỗi lần tạo đều thêm
+                  1 báo cáo mới vào danh sách bên trái).
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

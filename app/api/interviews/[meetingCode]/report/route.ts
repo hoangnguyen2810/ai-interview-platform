@@ -1,10 +1,14 @@
 // API Route: /api/interviews/[meetingCode]/report
 //
-// GET    → Fetch the saved report for an interview (recruiter-only).
+// GET    → List all reports for an interview (recruiter-only), sorted newest
+//          first. Returns `reports: [...]`. Each report still carries its
+//          full content + snapshots, so the UI can render any of them.
 // POST   → Generate a NEW report via AI (calls ai/app/api/report.py), saves
-//          to interview_reports table. If a report already exists, OVERWRITES
-//          (we keep at most 1 report per interview). Status -> DRAFT.
-// PATCH  → Update recruiter edits to the report content + status (FINAL/DRAFT).
+//          to interview_reports table. ALWAYS inserts a new row (interview
+//          can now have multiple reports). Status -> DRAFT.
+// PATCH  → Update recruiter edits for a SPECIFIC report (by ?reportId=...):
+//          content + status (FINAL/DRAFT/EDITED).
+// DELETE → Soft-delete a specific report (by ?reportId=...).
 //
 // Permission: recruiter/admin who is a participant of the interview (matches
 // the same gate used in recordings route.ts).
@@ -134,7 +138,25 @@ async function fetchCodingAnalysisRows(interviewId: string): Promise<
   return res.rows;
 }
 
-// ─── GET — fetch current report ────────────────────────────────────────────────
+function serializeReport(row: ReportRow) {
+  return {
+    id: row.id,
+    content: row.content ?? EMPTY_CONTENT,
+    cv_filename: row.cv_filename,
+    cv_analysis: row.cv_analysis,
+    coding_analysis_snapshot: row.coding_analysis_snapshot,
+    ai_overall_score:
+      row.ai_overall_score !== null && row.ai_overall_score !== undefined
+        ? Number(row.ai_overall_score)
+        : null,
+    ai_model: row.ai_model,
+    status: row.status,
+    generated_at: row.generated_at,
+    updated_at: row.updated_at,
+  };
+}
+
+// ─── GET — list all reports for the interview ─────────────────────────────────
 
 export async function GET(req: Request, ctx: Params) {
   try {
@@ -172,35 +194,13 @@ export async function GET(req: Request, ctx: Params) {
          generated_at, updated_at, created_by, updated_by
        FROM interview_reports
        WHERE interview_id = $1 AND deleted_at IS NULL
-       LIMIT 1`,
+       ORDER BY generated_at DESC, updated_at DESC`,
       [interview.id],
     );
 
-    const row = res.rows[0];
-    if (!row) {
-      return NextResponse.json(
-        { success: true, report: null },
-        { status: 200 },
-      );
-    }
-
     return NextResponse.json({
       success: true,
-      report: {
-        id: row.id,
-        content: row.content ?? EMPTY_CONTENT,
-        cv_filename: row.cv_filename,
-        cv_analysis: row.cv_analysis,
-        coding_analysis_snapshot: row.coding_analysis_snapshot,
-        ai_overall_score:
-          row.ai_overall_score !== null && row.ai_overall_score !== undefined
-            ? Number(row.ai_overall_score)
-            : null,
-        ai_model: row.ai_model,
-        status: row.status,
-        generated_at: row.generated_at,
-        updated_at: row.updated_at,
-      },
+      reports: res.rows.map(serializeReport),
     });
   } catch (error) {
     console.error("GET /report ERROR:", error);
@@ -211,7 +211,7 @@ export async function GET(req: Request, ctx: Params) {
   }
 }
 
-// ─── POST — generate (or regenerate) report via AI ────────────────────────────
+// ─── POST — generate a NEW report (always inserts, never overwrites) ──────────
 
 export async function POST(req: Request, ctx: Params) {
   try {
@@ -284,9 +284,9 @@ export async function POST(req: Request, ctx: Params) {
         ) / 100;
     }
 
-    // Upsert: 1 report / interview. If exists, overwrite content + snapshots,
-    // reset status to DRAFT.
-    const upsertRes = await pool.query<ReportRow>(
+    // Always INSERT a new row. Each AI generation becomes its own report
+    // so the recruiter can compare versions or pick the best one.
+    const insertRes = await pool.query<ReportRow>(
       `INSERT INTO interview_reports (
          interview_id, content,
          cv_filename, cv_markdown, cv_analysis,
@@ -295,18 +295,6 @@ export async function POST(req: Request, ctx: Params) {
          created_by, updated_by
        )
        VALUES ($1, $2::jsonb, $3, $4, $5, $6, $7, $8, 'DRAFT', $9, $9)
-       ON CONFLICT (interview_id) DO UPDATE SET
-         content = EXCLUDED.content,
-         cv_filename = EXCLUDED.cv_filename,
-         cv_markdown = EXCLUDED.cv_markdown,
-         cv_analysis = EXCLUDED.cv_analysis,
-         coding_analysis_snapshot = EXCLUDED.coding_analysis_snapshot,
-         ai_overall_score = EXCLUDED.ai_overall_score,
-         ai_model = EXCLUDED.ai_model,
-         status = 'DRAFT',
-         generated_at = CURRENT_TIMESTAMP,
-         updated_at = CURRENT_TIMESTAMP,
-         updated_by = EXCLUDED.updated_by
        RETURNING id, content, status, generated_at, updated_at,
                  cv_filename, cv_analysis, coding_analysis_snapshot,
                  ai_overall_score, ai_model`,
@@ -323,26 +311,12 @@ export async function POST(req: Request, ctx: Params) {
       ],
     );
 
-    const saved = upsertRes.rows[0];
+    const saved = insertRes.rows[0];
 
     return NextResponse.json(
       {
         success: true,
-        report: {
-          id: saved.id,
-          content: saved.content,
-          cv_filename: saved.cv_filename,
-          cv_analysis: saved.cv_analysis,
-          coding_analysis_snapshot: saved.coding_analysis_snapshot,
-          ai_overall_score:
-            saved.ai_overall_score !== null && saved.ai_overall_score !== undefined
-              ? Number(saved.ai_overall_score)
-              : null,
-          ai_model: saved.ai_model,
-          status: saved.status,
-          generated_at: saved.generated_at,
-          updated_at: saved.updated_at,
-        },
+        report: serializeReport(saved),
       },
       { status: 201 },
     );
@@ -357,7 +331,7 @@ export async function POST(req: Request, ctx: Params) {
   }
 }
 
-// ─── PATCH — recruiter edits ──────────────────────────────────────────────────
+// ─── PATCH — recruiter edits on a specific report ────────────────────────────
 
 const VALID_STATUSES = new Set(["DRAFT", "EDITED", "FINAL"]);
 
@@ -405,6 +379,15 @@ export async function PATCH(req: Request, ctx: Params) {
       );
     }
 
+    const url = new URL(req.url);
+    const reportId = url.searchParams.get("reportId");
+    if (!reportId) {
+      return NextResponse.json(
+        { success: false, message: "Thiếu reportId" },
+        { status: 400 },
+      );
+    }
+
     let body: {
       content?: unknown;
       status?: string;
@@ -421,8 +404,7 @@ export async function PATCH(req: Request, ctx: Params) {
 
     const content = sanitizeContent(body.content);
 
-    // Status: only allow EDITED/FINAL via PATCH. If recruiter wants to
-    // regenerate, they call POST.
+    // Status: only allow EDITED/FINAL/DRAFT via PATCH.
     let nextStatus: string | null = null;
     if (body.status && VALID_STATUSES.has(body.status)) {
       nextStatus = body.status;
@@ -442,7 +424,12 @@ export async function PATCH(req: Request, ctx: Params) {
       "updated_at = CURRENT_TIMESTAMP",
       "updated_by = $3",
     ];
-    const params: unknown[] = [interview.id, JSON.stringify(content), auth.id];
+    const params: unknown[] = [
+      interview.id,
+      JSON.stringify(content),
+      auth.id,
+      reportId,
+    ];
 
     if (nextStatus !== null) {
       params.push(nextStatus);
@@ -456,7 +443,7 @@ export async function PATCH(req: Request, ctx: Params) {
     const updateRes = await pool.query<ReportRow>(
       `UPDATE interview_reports
        SET ${setFragments.join(", ")}
-       WHERE interview_id = $1 AND deleted_at IS NULL
+       WHERE interview_id = $1 AND id = $4 AND deleted_at IS NULL
        RETURNING id, content, status, generated_at, updated_at,
                  cv_filename, cv_analysis, coding_analysis_snapshot,
                  ai_overall_score, ai_model`,
@@ -467,35 +454,83 @@ export async function PATCH(req: Request, ctx: Params) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            "Chưa có báo cáo để chỉnh sửa. Hãy bấm 'Tạo báo cáo AI' trước.",
+          message: "Không tìm thấy báo cáo để chỉnh sửa.",
         },
         { status: 404 },
       );
     }
 
-    const saved = updateRes.rows[0];
-
     return NextResponse.json({
       success: true,
-      report: {
-        id: saved.id,
-        content: saved.content,
-        cv_filename: saved.cv_filename,
-        cv_analysis: saved.cv_analysis,
-        coding_analysis_snapshot: saved.coding_analysis_snapshot,
-        ai_overall_score:
-          saved.ai_overall_score !== null && saved.ai_overall_score !== undefined
-            ? Number(saved.ai_overall_score)
-            : null,
-        ai_model: saved.ai_model,
-        status: saved.status,
-        generated_at: saved.generated_at,
-        updated_at: saved.updated_at,
-      },
+      report: serializeReport(updateRes.rows[0]),
     });
   } catch (error) {
     console.error("PATCH /report ERROR:", error);
+    return NextResponse.json(
+      { success: false, message: "Lỗi máy chủ" },
+      { status: 500 },
+    );
+  }
+}
+
+// ─── DELETE — soft-delete a specific report ──────────────────────────────────
+
+export async function DELETE(req: Request, ctx: Params) {
+  try {
+    const auth = getAuthUserFromRequest(req);
+    if (!auth) {
+      return NextResponse.json(
+        { success: false, message: "Chưa đăng nhập" },
+        { status: 401 },
+      );
+    }
+
+    const { meetingCode } = await ctx.params;
+    const interview = await findInterview(meetingCode);
+    if (!interview) {
+      return NextResponse.json(
+        { success: false, message: "Phòng không tồn tại" },
+        { status: 404 },
+      );
+    }
+
+    const allowed = await verifyRecruiterParticipant(interview.id, auth);
+    if (!allowed) {
+      return NextResponse.json(
+        { success: false, message: "Không có quyền truy cập" },
+        { status: 403 },
+      );
+    }
+
+    const url = new URL(req.url);
+    const reportId = url.searchParams.get("reportId");
+    if (!reportId) {
+      return NextResponse.json(
+        { success: false, message: "Thiếu reportId" },
+        { status: 400 },
+      );
+    }
+
+    const delRes = await pool.query(
+      `UPDATE interview_reports
+       SET deleted_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP,
+           updated_by = $3
+       WHERE interview_id = $1 AND id = $2 AND deleted_at IS NULL
+       RETURNING id`,
+      [interview.id, reportId, auth.id],
+    );
+
+    if (delRes.rows.length === 0) {
+      return NextResponse.json(
+        { success: false, message: "Không tìm thấy báo cáo để xoá." },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("DELETE /report ERROR:", error);
     return NextResponse.json(
       { success: false, message: "Lỗi máy chủ" },
       { status: 500 },
