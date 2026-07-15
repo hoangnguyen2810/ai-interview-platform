@@ -55,7 +55,7 @@ const NAV_GROUPS: NavGroup[] = [
     title: "Lưu trữ",
     items: [
       {
-        label: "Video & Recordings",
+        label: "Các buổi ghi hình",
         icon: "video_library",
         href: "/recruiter/recordings",
       },
@@ -83,6 +83,8 @@ const AVATAR_URL =
 
 export function SideNavBar() {
   const [role, setRole] = useState<string | null>(null);
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
+  const [language, setLanguage] = useState("vi");
 
   const router = useRouter();
   const pathname = usePathname();
@@ -94,7 +96,20 @@ export function SideNavBar() {
       const parsed = JSON.parse(user);
       setRole(parsed?.role);
     }
+    const savedLanguage = localStorage.getItem("language");
+
+    if (savedLanguage) {
+      setLanguage(savedLanguage);
+    }
   }, []);
+
+  const handleChangeLanguage = (lang: "vi" | "en") => {
+    setLanguage(lang);
+    localStorage.setItem("language", lang);
+
+    // reload để các component đọc lại language
+    window.location.reload();
+  };
 
   const handleGoDashboard = () => {
     if (role === "CANDIDATE") {
@@ -159,7 +174,21 @@ export function SideNavBar() {
                     ? pathname.startsWith(item.href)
                     : pathname === item.href;
 
-                return (
+                return item.label === "Cài đặt" ? (
+                  <button
+                    key={item.label}
+                    onClick={() => setShowLanguageModal(true)}
+                    className="flex w-full items-center gap-3 px-4 py-2 text-on-surface-variant hover:text-primary-fixed hover:bg-surface-container-highest rounded-lg transition-all"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">
+                      {item.icon}
+                    </span>
+
+                    <span className="font-label-sm text-label-sm">
+                      {item.label}
+                    </span>
+                  </button>
+                ) : (
                   <Link
                     key={item.label}
                     href={item.href}
@@ -189,7 +218,52 @@ export function SideNavBar() {
           expand_more
         </span>
       </div>
-      /
+      {showLanguageModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60">
+          <div className="w-[360px] rounded-2xl bg-surface-container p-6 shadow-2xl">
+            <h2 className="text-lg font-semibold text-on-surface">
+              Chọn ngôn ngữ
+            </h2>
+
+            <p className="mt-1 text-sm text-on-surface-variant">
+              Language / Ngôn ngữ
+            </p>
+
+            <div className="mt-6 space-y-3">
+              <button
+                onClick={() => handleChangeLanguage("vi")}
+                className={`w-full rounded-lg border px-4 py-3 text-left transition ${
+                  language === "vi"
+                    ? "border-cyan-500 bg-cyan-500/15"
+                    : "border-outline-variant hover:bg-surface-container-high"
+                }`}
+              >
+                🇻🇳 Tiếng Việt
+              </button>
+
+              <button
+                onClick={() => handleChangeLanguage("en")}
+                className={`w-full rounded-lg border px-4 py-3 text-left transition ${
+                  language === "en"
+                    ? "border-cyan-500 bg-cyan-500/15"
+                    : "border-outline-variant hover:bg-surface-container-high"
+                }`}
+              >
+                🇺🇸 English
+              </button>
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setShowLanguageModal(false)}
+                className="rounded-lg px-4 py-2 hover:bg-surface-container-high"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }
