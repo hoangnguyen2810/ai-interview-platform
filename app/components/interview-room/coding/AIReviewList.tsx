@@ -565,7 +565,8 @@ function ReviewContent({
 }) {
   const mode = review.executionMode ?? "unknown";
   const canAutoRun = review.canAutoRun ?? mode === "stdin";
-  const showCannotRunBanner = !canAutoRun;
+  // After removing auto-run, all test cases need recruiter to run manually.
+  const showCannotRunBanner = true;
 
   return (
     <>
@@ -723,8 +724,7 @@ function ReviewContent({
         <div>
           <div className="flex items-center justify-between mb-2 mt-2">
             <p className="text-[10.5px] text-[#9a9a9a] uppercase tracking-wider">
-              AI-generated test cases ({tests.passed}/{tests.total} passed)
-              {!canAutoRun ? " · chờ recruiter chạy" : ""}
+              AI-generated test cases ({tests.total} test{tests.total !== 1 ? "s" : ""} · chờ recruiter chạy)
             </p>
             {isRecruiter && tests.items.length > 0 && (
               <button
