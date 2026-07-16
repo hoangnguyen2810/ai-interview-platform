@@ -14,6 +14,21 @@ interface ReportContent {
   hiring_conclusion: string;
 }
 
+// Safe stringifier: converts any value to a trimmed string, or "" if null/undefined.
+// Guards against array/object/number fields from AI that would otherwise throw
+// e.g. "report.content?.x?.trim is not a function".
+function safeStr(val: unknown): string {
+  if (val == null) return "";
+  if (typeof val === "string") return val.trim();
+  return String(val).trim();
+}
+
+// Strip HTML tags so we can safely render AI output inside whitespace-pre-wrap
+// containers without triggering "cannot nest <pre> in <p>" hydration errors.
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, "");
+}
+
 interface ReportPayload {
   id: string;
   content: ReportContent;
@@ -441,7 +456,7 @@ export default function ReportViewer({
                       >
                         <div className="flex items-center justify-between gap-2 mb-1">
                           <span className="text-white text-xs font-medium truncate">
-                            {r.content?.candidate_name?.trim() ||
+                            {safeStr(r.content?.candidate_name) ||
                               "Chưa đặt tên"}
                           </span>
                           <span
@@ -450,13 +465,19 @@ export default function ReportViewer({
                             {statusLabel(r.status)}
                           </span>
                         </div>
-                        <div className="text-white/40 text-[10px] truncate">
+                        <div className="text-white/70 text-[10px] truncate">
+                          {safeStr(r.content?.candidate_name) || "Chưa đặt tên"}
+                          {safeStr(r.content?.position)
+                            ? ` • ${safeStr(r.content?.position)}`
+                            : ""}
+                        </div>
+                        <div className="text-white/40 text-[10px] truncate mt-0.5">
                           {formatShortDateTime(r.generated_at)}
                           {r.ai_overall_score !== null && (
                             <>
                               {" • "}
                               <span className="text-cyan-300">
-                                {r.ai_overall_score.toFixed(1)}
+                                {r.ai_overall_score.toFixed(1)}/10
                               </span>
                             </>
                           )}
@@ -648,21 +669,124 @@ export default function ReportViewer({
                   </div>
                 </div>
 
-                {/* Sections */}
-                <div className="space-y-3">
-                  {SECTIONS.map((section) => {
-                    const value = editing
-                      ? (draft?.[section.key] ?? "")
-                      : (report.content?.[section.key] ?? "");
-                    return (
-                      <div
-                        key={section.key}
-                        className="rounded-lg border border-cyan-500/10 bg-[#0d1c2d] p-3"
-                      >
-                        <label className="block text-cyan-400 font-semibold text-xs mb-1.5 uppercase tracking-wide">
-                          {section.label}
-                        </label>
-                        {editing ? (
+                {/* ── View mode: unified report format ────────────────────── */}
+                {!editing && (
+                  <div className="space-y-0 rounded-lg border border-cyan-500/10 bg-[#0d1c2d] overflow-hidden">
+                    {/* THÔNG TIN ỨNG VIÊN */}
+                    <div className="p-4 border-b border-cyan-500/10">
+                      <div className="text-cyan-400 font-semibold text-xs mb-1 uppercase tracking-wide">
+                        THÔNG TIN ỨNG VIÊN
+                      </div>
+                      <div className="text-cyan-500/40 text-xs mb-2">────────────────────────</div>
+                      <div className="space-y-0.5 text-sm text-white/85">
+                        <div>
+                          <span className="text-white/50">Tên ứng viên: </span>
+                          <span className="text-white">
+                            {safeStr(report.content?.candidate_name) || "—"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-white/50">Vị trí ứng tuyển: </span>
+                          <span className="text-white">
+                            {safeStr(report.content?.position) || "—"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-white/50">Điểm tổng: </span>
+                          <span className="text-cyan-300 font-semibold">
+                            {report.ai_overall_score != null
+                              ? `${report.ai_overall_score.toFixed(1)} / 10`
+                              : "—"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-cyan-500/40 text-xs mt-2">────────────────────────</div>
+                    </div>
+
+                    {/* TÓM TẮT */}
+                    {safeStr(report.content?.summary) && (
+                      <div className="p-4 border-b border-cyan-500/10">
+                        <div className="text-cyan-400 font-semibold text-xs mb-1 uppercase tracking-wide">
+                          TÓM TẮT
+                        </div>
+                        <div className="text-cyan-500/40 text-xs mb-2">────────────────────────</div>
+                        <div className="text-white/85 text-sm whitespace-pre-wrap leading-relaxed">
+                          {stripHtml(safeStr(report.content?.summary))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ĐÁNH GIÁ KỸ NĂNG */}
+                    {safeStr(report.content?.skill_evaluation) && (
+                      <div className="p-4 border-b border-cyan-500/10">
+                        <div className="text-cyan-400 font-semibold text-xs mb-1 uppercase tracking-wide">
+                          ĐÁNH GIÁ KỸ NĂNG
+                        </div>
+                        <div className="text-cyan-500/40 text-xs mb-2">────────────────────────</div>
+                        <div className="text-white/85 text-sm whitespace-pre-wrap leading-relaxed">
+                          {stripHtml(safeStr(report.content?.skill_evaluation))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ĐIỂM MẠNH */}
+                    {safeStr(report.content?.strengths) && (
+                      <div className="p-4 border-b border-cyan-500/10">
+                        <div className="text-cyan-400 font-semibold text-xs mb-1 uppercase tracking-wide">
+                          ĐIỂM MẠNH
+                        </div>
+                        <div className="text-cyan-500/40 text-xs mb-2">────────────────────────</div>
+                        <div className="text-white/85 text-sm whitespace-pre-wrap leading-relaxed">
+                          {stripHtml(safeStr(report.content?.strengths))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ĐIỂM CẦN CẢI THIỆN */}
+                    {safeStr(report.content?.weaknesses) || safeStr(report.content?.improvement_suggestions) ? (
+                      <div className="p-4 border-b border-cyan-500/10">
+                        <div className="text-cyan-400 font-semibold text-xs mb-1 uppercase tracking-wide">
+                          ĐIỂM CẦN CẢI THIỆN
+                        </div>
+                        <div className="text-cyan-500/40 text-xs mb-2">────────────────────────</div>
+                        <div className="text-white/85 text-sm whitespace-pre-wrap leading-relaxed">
+                          {[safeStr(report.content?.weaknesses), safeStr(report.content?.improvement_suggestions)]
+                            .filter(Boolean)
+                            .map((text, i) => (
+                              <div key={i} className={i > 0 ? "mt-2" : ""}>{stripHtml(text)}</div>
+                            ))}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {/* KẾT LUẬN */}
+                    {safeStr(report.content?.hiring_conclusion) && (
+                      <div className="p-4">
+                        <div className="text-cyan-400 font-semibold text-xs mb-1 uppercase tracking-wide">
+                          KẾT LUẬN
+                        </div>
+                        <div className="text-cyan-500/40 text-xs mb-2">────────────────────────</div>
+                        <div className="text-white/85 text-sm whitespace-pre-wrap leading-relaxed">
+                          {stripHtml(safeStr(report.content?.hiring_conclusion))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── Edit mode: separate textareas per field ────────────── */}
+                {editing && (
+                  <div className="space-y-3">
+                    {SECTIONS.map((section) => {
+                      const value = draft?.[section.key] ?? "";
+                      return (
+                        <div
+                          key={section.key}
+                          className="rounded-lg border border-cyan-500/10 bg-[#0d1c2d] p-3"
+                        >
+                          <label className="block text-cyan-400 font-semibold text-xs mb-1.5 uppercase tracking-wide">
+                            {section.label}
+                          </label>
                           <textarea
                             value={value}
                             onChange={(e) =>
@@ -683,17 +807,11 @@ export default function ReportViewer({
                             }
                             className="w-full bg-[#071524] border border-slate-700 rounded-md px-3 py-2 text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/10 resize-y"
                           />
-                        ) : (
-                          <div className="text-white/85 text-sm whitespace-pre-wrap leading-relaxed">
-                            {value?.toString().trim()
-                              ? value
-                              : "—"}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
 
                 {/* Score field when editing */}
                 {editing && (

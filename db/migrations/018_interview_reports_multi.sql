@@ -9,11 +9,11 @@
 -- interview_id nên giữ nguyên. Thêm generated_at vào index để sắp xếp
 -- theo thời gian tạo (dùng cho list trong UI).
 
-ALTER TABLE interview_reports
-    DROP CONSTRAINT IF EXISTS interview_reports_interview_id_key;
+    ALTER TABLE interview_reports
+        DROP CONSTRAINT IF EXISTS interview_reports_interview_id_key;
 
--- Index hỗ trợ list reports theo interview, sắp xếp theo thời gian tạo mới nhất.
-DROP INDEX IF EXISTS idx_interview_reports_interview;
-CREATE INDEX IF NOT EXISTS idx_interview_reports_interview_generated
-    ON interview_reports(interview_id, generated_at DESC)
-    WHERE deleted_at IS NULL;
+    -- Index hỗ trợ list reports theo interview, sắp xếp theo thời gian tạo mới nhất.
+    DROP INDEX IF EXISTS idx_interview_reports_interview;
+    CREATE INDEX IF NOT EXISTS idx_interview_reports_interview_generated
+        ON interview_reports(interview_id, generated_at DESC)
+        WHERE deleted_at IS NULL;
