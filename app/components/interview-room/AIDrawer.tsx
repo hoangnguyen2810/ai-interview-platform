@@ -673,6 +673,42 @@ export default function AIDrawer({ open, onClose, meetingCode }: Props) {
   // ─── Render helpers ──────────────────────────────────────────────────────
   const messagesList = messages;
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // ─── Drag-to-move (kéo thả cả drawer) ─────────────────────────────────────
+  const draggingRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const offsetStartRef = useRef({ x: 0, y: 0 });
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
+  const handleHeaderMouseDown = (e: React.MouseEvent) => {
+    // Không kéo nếu đang bấm vào nút (đóng, +, report...)
+    const target = e.target as HTMLElement;
+    if (target.closest("button")) return;
+    draggingRef.current = true;
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    offsetStartRef.current = { ...dragOffset };
+    e.preventDefault();
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!draggingRef.current) return;
+      const dx = e.clientX - dragStartRef.current.x;
+      const dy = e.clientY - dragStartRef.current.y;
+      setDragOffset({
+        x: offsetStartRef.current.x + dx,
+        y: offsetStartRef.current.y + dy,
+      });
+    };
+    const handleMouseUp = () => {
+      draggingRef.current = false;
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -683,17 +719,25 @@ export default function AIDrawer({ open, onClose, meetingCode }: Props) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-y-0 right-0 w-[600px] bg-[#181818] shadow-2xl z-50 flex flex-col border-l border-[#2a2a2a] font-sans text-[13px]">
+    <div
+      className="fixed inset-y-0 right-0 w-[600px] bg-[#181818] shadow-2xl z-50 flex flex-col border-l border-[#2a2a2a] font-sans text-[13px]"
+      style={{
+        transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)`,
+      }}
+    >
       {/* Header */}
-      <div className="flex items-center justify-between px-3 h-11 border-b border-[#2a2a2a] bg-[#181818] shrink-0">
+      <div
+        onMouseDown={handleHeaderMouseDown}
+        className="flex items-center justify-between px-3 h-11 border-b border-[#2a2a2a] bg-[#181818] shrink-0 cursor-move select-none"
+      >
         <div className="flex-1 min-w-0 flex items-center gap-2">
           <span className="h-1.5 w-1.5 rounded-full bg-[#3b82f6] shrink-0" />
           <div className="min-w-0">
             <h3 className="font-medium text-[#e4e4e4] text-[12.5px] leading-tight truncate">
-              AI Interview Assistant
+              Trợ lý ảo hỗ trợ phỏng vấn
             </h3>
             <p className="text-[11px] text-[#6e6e6e] truncate leading-tight">
-              {cvFilename ? cvFilename : "Chưa upload CV"}
+              {cvFilename ? cvFilename : "Chưa tải CV"}
             </p>
           </div>
         </div>
@@ -703,12 +747,21 @@ export default function AIDrawer({ open, onClose, meetingCode }: Props) {
             title="Tổng hợp báo cáo AI"
             className="flex items-center justify-center h-6 px-2 rounded text-[#9a9a9a] hover:bg-[#2a2a2a] hover:text-cyan-400 transition-colors text-[11px] gap-1"
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-              <line x1="16" y1="13" x2="8" y2="13"/>
-              <line x1="16" y1="17" x2="8" y2="17"/>
-              <polyline points="10 9 9 9 8 9"/>
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+              <polyline points="10 9 9 9 8 9" />
             </svg>
           </button>
           <button
@@ -748,7 +801,7 @@ export default function AIDrawer({ open, onClose, meetingCode }: Props) {
               : "text-[#6e6e6e] border-b-2 border-transparent hover:text-[#9a9a9a]"
           }`}
         >
-          Code Review
+          Đánh giá Code
         </button>
       </div>
 
@@ -760,7 +813,7 @@ export default function AIDrawer({ open, onClose, meetingCode }: Props) {
             {messagesList.length === 0 && (
               <div className="text-center text-[12.5px] text-[#6e6e6e] mt-16 px-4">
                 <p className="mb-1.5 text-[#9a9a9a]">Xin chào</p>
-                <p>Upload CV hoặc hỏi bất kỳ câu hỏi nào về phỏng vấn IT.</p>
+                <p>Tải lên CV hoặc hỏi bất kỳ câu hỏi nào về phỏng vấn IT.</p>
               </div>
             )}
             {messagesList.map((m, i) => (
@@ -832,13 +885,13 @@ export default function AIDrawer({ open, onClose, meetingCode }: Props) {
               {voiceState === "recording" && (
                 <div className="flex items-center gap-1.5 px-3 pt-2 text-[11px] text-red-400">
                   <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse" />
-                  Recording...
+                  Ghi âm...
                 </div>
               )}
               {voiceState === "transcribing" && (
                 <div className="flex items-center gap-1.5 px-3 pt-2 text-[11px] text-yellow-400">
                   <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
-                  Transcribing...
+                  Đang biên dịch...
                 </div>
               )}
 
@@ -864,13 +917,13 @@ export default function AIDrawer({ open, onClose, meetingCode }: Props) {
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={cvUploading}
-                    title="Upload CV (PDF)"
+                    title="Tải CV (PDF)"
                     className="flex items-center gap-1 text-[11.5px] px-2 py-1 rounded text-[#9a9a9a] hover:bg-[#2a2a2a] hover:text-[#e4e4e4] disabled:opacity-50 transition-colors"
                   >
                     {cvUploading ? (
                       <>
                         <span className="h-1.5 w-1.5 rounded-full bg-[#b8860b] animate-pulse" />
-                        Upload...
+                        Đang tải...
                       </>
                     ) : (
                       <>

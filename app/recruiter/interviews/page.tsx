@@ -313,7 +313,7 @@ export default function InterviewManagementPage() {
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Tìm kiếm buổi phỏng vấn (tiêu đề / mã phòng)..."
+                placeholder="Tìm kiếm buổi phỏng vấn (tên / mã phòng)..."
                 className="w-full bg-[#071524] border border-slate-700 rounded-xl pl-11 pr-4 py-3 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/10 transition"
               />
             </div>
@@ -363,7 +363,7 @@ export default function InterviewManagementPage() {
 
               <thead className="bg-[#13263a] text-sm">
                 <tr className="text-slate-300">
-                  <th className="p-5 text-left">Tiêu đề</th>
+                  <th className="p-5 text-left">Tên buổi phỏng vấn</th>
                   <th className="p-5 text-left">Mã phòng</th>
                   <th className="p-5 text-center">Trạng thái</th>
                   <th className="p-5 text-center">Thời lượng</th>

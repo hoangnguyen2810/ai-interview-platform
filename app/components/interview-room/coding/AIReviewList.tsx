@@ -165,7 +165,9 @@ export default function AIReviewList({ meetingCode }: Props) {
   useEffect(() => {
     let cancelled = false;
     fetch("/api/auth/me", { credentials: "include" })
-      .then((r) => readJson<{ user?: { role?: string } | null }>(r, { user: null }))
+      .then((r) =>
+        readJson<{ user?: { role?: string } | null }>(r, { user: null }),
+      )
       .then((data) => {
         if (cancelled) return;
         const role = data.user?.role ?? "";
@@ -186,16 +188,21 @@ export default function AIReviewList({ meetingCode }: Props) {
         `/api/interviews/${encodeURIComponent(meetingCode)}/submissions`,
         { credentials: "include" },
       );
-      const data = await readJson<{ success?: boolean; submissions?: Submission[]; message?: string }>(
-        res,
-        { success: false, submissions: [] },
-      );
+      const data = await readJson<{
+        success?: boolean;
+        submissions?: Submission[];
+        message?: string;
+      }>(res, { success: false, submissions: [] });
       if (data.success) {
         const list = data.submissions ?? [];
         setSubmissions(list);
         setSelectedId((cur) => cur ?? list[0]?.submissionId ?? null);
       } else {
-        console.warn("[AIReviewList] submissions load non-ok:", res.status, data.message);
+        console.warn(
+          "[AIReviewList] submissions load non-ok:",
+          res.status,
+          data.message,
+        );
       }
     } catch (e) {
       console.warn("[AIReviewList] loadSubmissions failed:", e);
@@ -227,7 +234,10 @@ export default function AIReviewList({ meetingCode }: Props) {
           });
         } else {
           console.warn("[AIReviewList] review load non-ok:", res.status);
-          setReviewData({ review: null, tests: { total: 0, passed: 0, items: [] } });
+          setReviewData({
+            review: null,
+            tests: { total: 0, passed: 0, items: [] },
+          });
         }
       } catch (e) {
         console.warn("[AIReviewList] loadReview failed:", e);
@@ -272,7 +282,9 @@ export default function AIReviewList({ meetingCode }: Props) {
         });
         await loadSubmissions();
       } else {
-        setTriggerError(data?.message ?? `AI review thất bại (HTTP ${res.status})`);
+        setTriggerError(
+          data?.message ?? `AI review thất bại (HTTP ${res.status})`,
+        );
       }
     } catch (e) {
       setTriggerError(e instanceof Error ? e.message : "Lỗi không xác định");
@@ -328,12 +340,15 @@ export default function AIReviewList({ meetingCode }: Props) {
   );
 
   const handleEditorSave = useCallback(
-    async (id: string, patch: {
-      inputData: string;
-      expectedOutput: string;
-      description: string;
-      edgeCaseType: string;
-    }) => {
+    async (
+      id: string,
+      patch: {
+        inputData: string;
+        expectedOutput: string;
+        description: string;
+        edgeCaseType: string;
+      },
+    ) => {
       if (!selected) return;
       setActionError(null);
       try {
@@ -402,7 +417,7 @@ export default function AIReviewList({ meetingCode }: Props) {
       <div className="w-1/3 border-r border-[#2a2a2a] flex flex-col shrink-0">
         <div className="px-3 py-2 border-b border-[#2a2a2a] flex items-center justify-between">
           <span className="text-[11px] text-[#9a9a9a] uppercase tracking-wider">
-            Submissions ({submissions.length})
+            Bài đã nộp ({submissions.length})
           </span>
           <button
             onClick={loadSubmissions}
@@ -419,7 +434,7 @@ export default function AIReviewList({ meetingCode }: Props) {
             </p>
           ) : submissions.length === 0 ? (
             <p className="text-center text-[11px] text-[#6e6e6e] py-4 px-3">
-              Chưa có submission nào
+              Chưa có bài nào
             </p>
           ) : (
             submissions.map((s) => (
@@ -458,7 +473,7 @@ export default function AIReviewList({ meetingCode }: Props) {
       <div className="flex-1 flex flex-col overflow-hidden">
         {!selected ? (
           <div className="flex-1 flex items-center justify-center text-[11.5px] text-[#6e6e6e]">
-            Chọn submission để xem review
+            Chọn bài để đánh giá
           </div>
         ) : (
           <>
@@ -479,7 +494,7 @@ export default function AIReviewList({ meetingCode }: Props) {
                 disabled={triggering}
                 className="text-[11px] px-2.5 py-1 rounded bg-[#3b82f6] text-white hover:bg-[#2f6fe0] disabled:opacity-50 flex items-center gap-1"
               >
-                {triggering ? "..." : "🤖 Review lại"}
+                {triggering ? "..." : "Đánh giá lại"}
               </button>
             </div>
 
@@ -498,12 +513,12 @@ export default function AIReviewList({ meetingCode }: Props) {
             <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 custom-scrollbar">
               {loadingReview ? (
                 <p className="text-center text-[11.5px] text-[#6e6e6e]">
-                  Đang tải review…
+                  Đang tải đánh giá…
                 </p>
               ) : !reviewData?.review ? (
                 <div className="text-center py-8">
                   <p className="text-[12px] text-[#9a9a9a] mb-2">
-                    Chưa có AI review cho submission này
+                    Chưa có AI đánh cho bài này
                   </p>
                   <button
                     onClick={() => triggerReview(selected.submissionId)}
@@ -599,14 +614,18 @@ function ReviewContent({
 
       {showCannotRunBanner && (
         <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-2.5 text-[11.5px] text-yellow-200 leading-relaxed">
-          <p className="font-medium mb-1">Không thể tự động chạy chương trình</p>
+          <p className="font-medium mb-1">
+            Không thể tự động chạy chương trình
+          </p>
           <p className="text-yellow-200/80">
             {review.analysisReason ||
               "AI không xác định được giao diện đầu vào của source code."}
             {review.analysisEntryPoint ? (
               <>
                 {" "}
-                <span className="opacity-80">Entry point: {review.analysisEntryPoint}</span>
+                <span className="opacity-80">
+                  Entry point: {review.analysisEntryPoint}
+                </span>
               </>
             ) : null}
           </p>
@@ -646,7 +665,10 @@ function ReviewContent({
                 {tests.passed}/{tests.total}
               </span>
               {tests.items.some((t) => t.status === "PENDING") && (
-                <span className="ml-1 text-[#9a9a9a]">· {tests.items.filter((t) => t.status === "PENDING").length} chờ chạy</span>
+                <span className="ml-1 text-[#9a9a9a]">
+                  · {tests.items.filter((t) => t.status === "PENDING").length}{" "}
+                  chờ chạy
+                </span>
               )}
             </p>
           </div>
@@ -724,7 +746,8 @@ function ReviewContent({
         <div>
           <div className="flex items-center justify-between mb-2 mt-2">
             <p className="text-[10.5px] text-[#9a9a9a] uppercase tracking-wider">
-              AI-generated test cases ({tests.total} test{tests.total !== 1 ? "s" : ""} · chờ recruiter chạy)
+              AI-generated test cases ({tests.total} test
+              {tests.total !== 1 ? "s" : ""} · chờ recruiter chạy)
             </p>
             {isRecruiter && tests.items.length > 0 && (
               <button
@@ -755,7 +778,9 @@ function ReviewContent({
                       </p>
                       <p className="text-[10px] opacity-70 mt-0.5">
                         edge: {t.edgeCaseType} ·{" "}
-                        {t.status === "PENDING" ? "chưa chạy" : `${t.runtimeMs}ms`}
+                        {t.status === "PENDING"
+                          ? "chưa chạy"
+                          : `${t.runtimeMs}ms`}
                         {t.source === "MANUAL" ? " · recruiter tạo" : ""}
                       </p>
                     </div>
@@ -763,8 +788,8 @@ function ReviewContent({
                       <span className="text-[10px] px-1.5 py-0.5 rounded border border-current">
                         {t.status}
                       </span>
-                      {t.source !== "MANUAL" && (
-                        t.aiVerified === true ? (
+                      {t.source !== "MANUAL" &&
+                        (t.aiVerified === true ? (
                           <span
                             title="AI đã tự kiểm: test PASS ngay lần chạy đầu tiên với code ứng viên."
                             className="text-[10px] px-1.5 py-0.5 rounded border border-emerald-500/60 text-emerald-300 bg-emerald-500/10"
@@ -785,8 +810,7 @@ function ReviewContent({
                           >
                             AI —
                           </span>
-                        )
-                      )}
+                        ))}
                       {isRecruiter && (
                         <>
                           <button

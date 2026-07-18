@@ -326,7 +326,7 @@ export default function RecordingsPage() {
         inserted > 0
           ? ` — ${inserted} mới, ${skipped} đã có`
           : skipped > 0
-            ? ` — ${skipped} đã có sẵn (skip trùng)`
+            ? ` — ${skipped} đã có sẵn`
             : "";
 
       setSyncMessage({
@@ -461,10 +461,6 @@ export default function RecordingsPage() {
           <div className="mb-5 p-4 bg-cyan-500/5 border border-cyan-500/20 rounded-xl">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
               <div className="flex-1 min-w-0">
-                <div className="text-sm text-slate-300 mb-1">
-                  <span className="text-cyan-400 font-semibold">Nhanh:</span>{" "}
-                  đồng bộ recording của interview mới nhất bạn host.
-                </div>
                 {latest ? (
                   <div className="text-xs text-slate-400 font-mono truncate">
                     {latest.callCid} ·{" "}
@@ -536,7 +532,7 @@ export default function RecordingsPage() {
                           <span className="font-mono font-bold">
                             ={syncMessage.skipped}
                           </span>
-                          <span>đã có (skip trùng)</span>
+                          <span>đã có</span>
                         </span>
                       )}
                   </div>

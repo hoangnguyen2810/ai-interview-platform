@@ -116,7 +116,7 @@ export default function EditRecruiterModal({
 
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-surface-container p-6 border border-outline-variant">
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto custom-scrollbar rounded-2xl bg-surface-container p-6 border border-outline-variant">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold">Chỉnh sửa hồ sơ Nhà tuyển dụng</h2>
           <button onClick={onClose} disabled={saving}>

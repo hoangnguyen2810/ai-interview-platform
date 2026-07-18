@@ -357,30 +357,25 @@ function RecruiterCodingEditor({ meetingCode }: { meetingCode: string }) {
   return (
     <div className="w-full h-full flex flex-col bg-[#071524] rounded-xl overflow-hidden border border-cyan-500/20">
       {/* HEADER */}
-      <div className="h-12 flex items-center justify-between px-4 border-b border-cyan-500/10 bg-[#122131]">
+      <div className="h-12 px-5 flex items-center justify-between bg-[#0c1b2c] border-b border-white/5">
         <div className="flex items-center gap-3">
-          <h3 className="text-white font-medium">Live Coding</h3>
+          <span className="material-symbols-outlined text-cyan-400">code</span>
 
-          <span className="px-2 py-0.5 text-xs rounded-md bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-            {language === "python"
-              ? "Python3"
-              : language === "java"
-                ? "Java"
-                : language === "cpp"
-                  ? "C++"
-                  : "JavaScript"}
-          </span>
+          <span className="font-semibold text-white">Live Coding</span>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <span
             className={`text-xs ${isConnected ? "text-green-400 animate-pulse" : "text-red-400"}`}
           >
             {isConnected ? "● Receiving live code..." : "○ Disconnected"}
           </span>
+          <span className="px-2 py-1 rounded-md bg-cyan-500/10 text-cyan-300 text-[11px]">
+            {formatLanguage(language)}
+          </span>
 
-          <span className="px-2 py-0.5 text-xs rounded-md bg-white/5 text-white/60 border border-white/10">
-            Read Only
+          <span className="px-2 py-1 rounded-md bg-white/5 text-white/50 text-[11px]">
+            Read only
           </span>
         </div>
       </div>
@@ -391,7 +386,7 @@ function RecruiterCodingEditor({ meetingCode }: { meetingCode: string }) {
           language={language}
           height="100%"
           theme="vs-dark"
-          value={code || "// Waiting for candidate to start coding..."}
+          value={code || "// Đang chờ ứng viên bắt đầu viết mã..."}
           onChange={() => {}} // read-only
           options={{
             readOnly: true,
@@ -415,17 +410,17 @@ function RecruiterCodingEditor({ meetingCode }: { meetingCode: string }) {
       {/* OUTPUT PANEL */}
       <div
         style={{ height: outputHeight }}
-        className="min-h-40 max-h-[70vh] border-t border-cyan-500/10 bg-[#122131] flex flex-col overflow-hidden"
+        className="border-t border-white/5 bg-[#0d1b2a] flex flex-col overflow-hidden"
       >
-        {/* Tabs */}
-        <div className="flex items-center justify-between border-b border-cyan-500/10">
-          <div className="flex items-center">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 h-12 border-b border-white/5 bg-[#101d2d]">
+          <div className="flex items-center gap-1">
             <button
               onClick={() => setTab("output")}
-              className={`px-4 py-3 text-sm transition-colors ${
+              className={`px-4 h-8 rounded-lg text-sm font-medium transition ${
                 tab === "output"
-                  ? "text-cyan-400 border-b-2 border-cyan-400"
-                  : "text-white/50 hover:text-cyan-300"
+                  ? "bg-cyan-500/15 text-cyan-400"
+                  : "text-white/50 hover:text-white hover:bg-white/5"
               }`}
             >
               Output
@@ -433,49 +428,78 @@ function RecruiterCodingEditor({ meetingCode }: { meetingCode: string }) {
 
             <button
               onClick={() => setTab("history")}
-              className={`px-4 py-3 text-sm transition-colors flex items-center gap-2 ${
+              className={`px-4 h-8 rounded-lg text-sm font-medium transition flex items-center gap-2 ${
                 tab === "history"
-                  ? "text-cyan-400 border-b-2 border-cyan-400"
-                  : "text-white/50 hover:text-cyan-300"
+                  ? "bg-cyan-500/15 text-cyan-400"
+                  : "text-white/50 hover:text-white hover:bg-white/5"
               }`}
             >
-              History
-              {submissions.length > 0 && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300">
-                  {submissions.length}
-                </span>
-              )}
+              Lịch sử
+              <span
+                className={`text-[10px] rounded-full px-2 py-0.5 ${
+                  submissions.length
+                    ? "bg-cyan-500/20 text-cyan-300"
+                    : "bg-white/10 text-white/40"
+                }`}
+              >
+                {submissions.length}
+              </span>
             </button>
           </div>
+
+          {tab === "output" && (
+            <span className="text-[11px] text-white/40">
+              Live Coding Monitor
+            </span>
+          )}
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-3 text-sm custom-scrollbar">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4">
           {tab === "output" ? (
-            <div className="space-y-1 text-white/70">
-              <div className="flex justify-between">
-                <span className="text-white/50">Status</span>
-                <span className="text-green-400">
-                  {code ? "Receiving code" : "Waiting..."}
-                </span>
+            <div className="grid grid-cols-3 gap-3 mb-5">
+              <div className="rounded-xl bg-[#122131] border border-white/5 p-4">
+                <div className="text-[11px] uppercase tracking-wide text-white/40">
+                  Trạng thái
+                </div>
+                <div className="mt-2 font-semibold">
+                  {code ? (
+                    <span className="text-green-400">● Nhận Code</span>
+                  ) : (
+                    <span className="text-yellow-400">Chờ...</span>
+                  )}
+                </div>
               </div>
 
-              <div className="flex justify-between">
-                <span className="text-white/50">Characters</span>
-                <span>{code.length}</span>
-              </div>
+              <div className="rounded-xl bg-[#122131] border border-white/5 p-4">
+                <div className="text-[11px] uppercase tracking-wide text-white/40">
+                  Số ký tự
+                </div>
 
-              <div className="flex justify-between">
-                <span className="text-white/50">Submissions</span>
-                <span>{submissions.length}</span>
+                <div className="mt-2 text-xl font-bold text-white">
+                  {code.length.toLocaleString()}
+                </div>
+              </div>
+              <div className="rounded-xl bg-[#122131] border border-white/5 p-4">
+                <div className="text-[11px] uppercase tracking-wide text-white/40">
+                  Bài nộp
+                </div>
+
+                <div className="mt-2 text-xl font-bold text-cyan-400">
+                  {submissions.length}
+                </div>
               </div>
             </div>
           ) : submissions.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-white/40">
-              Candidate chưa submit bài nào.
+            <div className="h-full flex flex-col items-center justify-center text-white/40">
+              <span className="material-symbols-outlined text-5xl opacity-20 mb-3">
+                history
+              </span>
+
+              <p>Chưa có bài nộp.</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {submissions.map((s, idx) => (
                 <SubmissionBlock
                   key={s.submissionId}

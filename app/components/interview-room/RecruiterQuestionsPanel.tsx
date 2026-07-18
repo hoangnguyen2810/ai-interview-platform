@@ -11,6 +11,26 @@ type AvailableQuestion = {
   createdAt: string;
   isAssigned: boolean;
 };
+const difficultyColor = (d: string | null) => {
+  if (d === "EASY") return "text-green-400 bg-green-400/10 border-green-400/20";
+  if (d === "MEDIUM")
+    return "text-yellow-400 bg-yellow-400/10 border-yellow-400/20";
+  if (d === "HARD") return "text-red-400 bg-red-400/10 border-red-400/20";
+  return "text-gray-400 bg-gray-400/10 border-gray-400/20";
+};
+
+const difficultyLabel = (d: string | null) => {
+  switch (d) {
+    case "EASY":
+      return "Dễ";
+    case "MEDIUM":
+      return "Trung bình";
+    case "HARD":
+      return "Khó";
+    default:
+      return "—";
+  }
+};
 
 interface Props {
   meetingCode: string;
@@ -142,7 +162,7 @@ function QuestionForm({
                 }
               `}
             >
-              {d}
+              {difficultyLabel(d)}
             </button>
           ))}
         </div>
@@ -441,20 +461,12 @@ export default function RecruiterQuestionsPanel({
   };
 
   // ─── Style helpers ──────────────────────────────────────────────────────
-  const difficultyColor = (d: string | null) => {
-    if (d === "EASY")
-      return "text-green-400 bg-green-400/10 border-green-400/20";
-    if (d === "MEDIUM")
-      return "text-yellow-400 bg-yellow-400/10 border-yellow-400/20";
-    if (d === "HARD") return "text-red-400 bg-red-400/10 border-red-400/20";
-    return "text-gray-400 bg-gray-400/10 border-gray-400/20";
-  };
 
   const difficultyBadge = (d: string | null) => (
     <span
       className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${difficultyColor(d)}`}
     >
-      {d ?? "—"}
+      {difficultyLabel(d)}
     </span>
   );
 

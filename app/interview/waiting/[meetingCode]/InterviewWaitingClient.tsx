@@ -307,7 +307,7 @@ export default function InterviewWaitingClient({
                     <span>
                       {isHost
                         ? "Bạn có thể vào bất kỳ lúc nào."
-                        : "Host chưa vào phòng, vui lòng chờ..."}
+                        : "Chủ phòng chưa tham gia, vui lòng chờ..."}
                     </span>
                   </div>
                 )}
@@ -375,7 +375,9 @@ export default function InterviewWaitingClient({
       shadow-[0_0_30px_rgba(0,240,255,0.15)]
     "
           >
-            <h2 className="text-lg font-bold text-cyan-200">Device Settings</h2>
+            <h2 className="text-lg font-bold text-cyan-200">
+              Cài đặt thiết bị
+            </h2>
 
             {/* MIC */}
             <div>

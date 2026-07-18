@@ -138,7 +138,7 @@ function statusBadgeClass(status: string): string {
       return "bg-amber-500/15 text-amber-300 border-amber-500/30";
     case "DRAFT":
     default:
-      return "bg-cyan-500/15 text-cyan-300 border-cyan-500/30";
+      return "bg-[#3b82f6]/15 text-[#60a5fa] border-cyan-500/30";
   }
 }
 
@@ -265,7 +265,9 @@ export default function ReportViewer({
   const handleDelete = async () => {
     if (!report) return;
     if (typeof window !== "undefined") {
-      const ok = window.confirm("Xoá báo cáo này? Hành động không thể hoàn tác.");
+      const ok = window.confirm(
+        "Xoá báo cáo này? Hành động không thể hoàn tác.",
+      );
       if (!ok) return;
     }
     try {
@@ -321,9 +323,7 @@ export default function ReportViewer({
       setSaving(true);
       setError(null);
       const scoreNum =
-        draftScore.trim() === ""
-          ? null
-          : Number.parseFloat(draftScore);
+        draftScore.trim() === "" ? null : Number.parseFloat(draftScore);
       if (
         draftScore.trim() !== "" &&
         (Number.isNaN(scoreNum) || scoreNum! < 0 || scoreNum! > 10)
@@ -351,7 +351,9 @@ export default function ReportViewer({
         throw new Error(data.message || "Không lưu được báo cáo");
       }
       const updated: ReportPayload = data.report;
-      setReports((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      setReports((prev) =>
+        prev.map((r) => (r.id === updated.id ? updated : r)),
+      );
       setEditing(false);
       setDraft(null);
       setSuccess("Đã lưu báo cáo");
@@ -384,7 +386,9 @@ export default function ReportViewer({
         throw new Error(data.message || "Không cập nhật được trạng thái");
       }
       const updated: ReportPayload = data.report;
-      setReports((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      setReports((prev) =>
+        prev.map((r) => (r.id === updated.id ? updated : r)),
+      );
       setSuccess("Đã đánh dấu báo cáo là Hoàn tất");
       onReportChanged?.(updated);
     } catch (e) {
@@ -400,12 +404,12 @@ export default function ReportViewer({
       onClick={onClose}
     >
       <div
-        className="bg-[#0a1929] border border-cyan-500/30 rounded-xl w-full max-w-5xl max-h-[90vh] flex shadow-2xl"
+        className="bg-[#1b1b1b] border border-cyan-500/30 rounded-xl w-full max-w-5xl max-h-[90vh] flex shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Sidebar — list of reports */}
-        <div className="w-64 shrink-0 border-r border-cyan-500/20 bg-[#0d1c2d] rounded-l-xl flex flex-col">
-          <div className="px-3 py-3 border-b border-cyan-500/20 flex items-center justify-between">
+        <div className="w-64 shrink-0 border-r border-[#313131] bg-[#202020] rounded-l-xl flex flex-col">
+          <div className="px-3 py-3 border-b border-[#313131] flex items-center justify-between">
             <div className="min-w-0">
               <h4 className="text-white font-semibold text-xs uppercase tracking-wide">
                 Báo cáo ({reports.length})
@@ -419,14 +423,12 @@ export default function ReportViewer({
               onClick={handleGenerate}
               disabled={generating}
               title="Tạo báo cáo AI mới"
-              className="flex items-center justify-center h-7 w-7 rounded-md bg-cyan-500 hover:bg-cyan-400 text-black transition shadow disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center justify-center h-7 w-7 rounded-md bg-[#3b82f6] hover:bg-[#2563eb] text-white transition shadow disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {generating ? (
                 <span className="inline-block w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
               ) : (
-                <span className="material-symbols-outlined text-base">
-                  add
-                </span>
+                <span className="material-symbols-outlined text-base">add</span>
               )}
             </button>
           </div>
@@ -450,7 +452,7 @@ export default function ReportViewer({
                         disabled={editing}
                         className={`w-full text-left px-3 py-2.5 border-l-2 transition-colors ${
                           isSelected
-                            ? "bg-cyan-500/10 border-cyan-400"
+                            ? "bg-[#2d2d30] border-cyan-400"
                             : "border-transparent hover:bg-white/5"
                         } ${editing && !isSelected ? "opacity-50 cursor-not-allowed" : ""}`}
                       >
@@ -476,7 +478,7 @@ export default function ReportViewer({
                           {r.ai_overall_score !== null && (
                             <>
                               {" • "}
-                              <span className="text-cyan-300">
+                              <span className="text-[#60a5fa]">
                                 {r.ai_overall_score.toFixed(1)}/10
                               </span>
                             </>
@@ -494,9 +496,9 @@ export default function ReportViewer({
         {/* Main panel */}
         <div className="flex-1 flex flex-col min-w-0 rounded-r-xl">
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-cyan-500/20 bg-[#122131] rounded-tr-xl">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[#313131] bg-[#252526] rounded-tr-xl">
             <div className="flex items-center gap-3 min-w-0">
-              <span className="material-symbols-outlined text-cyan-400">
+              <span className="material-symbols-outlined text-[#3b82f6]">
                 description
               </span>
               <div className="min-w-0">
@@ -529,7 +531,7 @@ export default function ReportViewer({
           {/* Status banner */}
           {(error || success) && (
             <div
-              className={`px-4 py-2 text-sm border-b border-cyan-500/10 ${
+              className={`px-4 py-2 text-sm border-b border-[#313131] ${
                 error
                   ? "bg-red-500/10 text-red-300"
                   : "bg-green-500/10 text-green-300"
@@ -555,7 +557,7 @@ export default function ReportViewer({
                   type="button"
                   onClick={handleGenerate}
                   disabled={generating}
-                  className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-semibold transition shadow-lg shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-5 py-2.5 rounded-xl bg-[#3b82f6] hover:bg-[#2563eb] text-white font-semibold transition shadow-lg shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {generating ? (
                     <>
@@ -580,7 +582,7 @@ export default function ReportViewer({
             ) : (
               <div className="space-y-4">
                 {/* Status row + actions */}
-                <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg bg-[#0d1c2d] border border-cyan-500/10">
+                <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg bg-[#0d1c2d] border border-[#313131]">
                   <div className="flex items-center gap-2 text-xs">
                     <span className="text-white/50">Trạng thái:</span>
                     <span
@@ -591,7 +593,7 @@ export default function ReportViewer({
                     {report.ai_overall_score !== null && (
                       <span className="text-white/60">
                         • Điểm AI đề xuất:{" "}
-                        <span className="text-cyan-300 font-semibold">
+                        <span className="text-[#60a5fa] font-semibold">
                           {report.ai_overall_score.toFixed(2)}
                         </span>{" "}
                         / 10
@@ -604,7 +606,7 @@ export default function ReportViewer({
                         <button
                           type="button"
                           onClick={handleStartEdit}
-                          className="px-3 py-1.5 rounded-md bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-xs font-semibold transition-colors flex items-center gap-1"
+                          className="px-3 py-1.5 rounded-md bg-[#2d2d30] hover:bg-[#3b82f6]/20 text-[#60a5fa] border border-cyan-500/30 text-xs font-semibold transition-colors flex items-center gap-1"
                         >
                           <span className="material-symbols-outlined text-xs">
                             edit
@@ -652,7 +654,7 @@ export default function ReportViewer({
                           type="button"
                           onClick={handleSave}
                           disabled={saving}
-                          className="px-3 py-1.5 rounded-md bg-cyan-500 hover:bg-cyan-400 text-black text-xs font-semibold transition-colors flex items-center gap-1 disabled:opacity-50"
+                          className="px-3 py-1.5 rounded-md bg-[#3b82f6] hover:bg-[#2563eb] text-white text-xs font-semibold transition-colors flex items-center gap-1 disabled:opacity-50"
                         >
                           {saving ? "Đang lưu..." : "Lưu"}
                         </button>
@@ -671,13 +673,15 @@ export default function ReportViewer({
 
                 {/* ── View mode: unified report format ────────────────────── */}
                 {!editing && (
-                  <div className="space-y-0 rounded-lg border border-cyan-500/10 bg-[#0d1c2d] overflow-hidden">
+                  <div className="space-y-0 rounded-lg border border-[#313131] bg-[#0d1c2d] overflow-hidden">
                     {/* THÔNG TIN ỨNG VIÊN */}
-                    <div className="p-4 border-b border-cyan-500/10">
-                      <div className="text-cyan-400 font-semibold text-xs mb-1 uppercase tracking-wide">
+                    <div className="p-4 border-b border-[#313131]">
+                      <div className="text-[#3b82f6] font-semibold text-xs mb-1 uppercase tracking-wide">
                         THÔNG TIN ỨNG VIÊN
                       </div>
-                      <div className="text-cyan-500/40 text-xs mb-2">────────────────────────</div>
+                      <div className="text-cyan-500/40 text-xs mb-2">
+                        ────────────────────────
+                      </div>
                       <div className="space-y-0.5 text-sm text-white/85">
                         <div>
                           <span className="text-white/50">Tên ứng viên: </span>
@@ -686,30 +690,36 @@ export default function ReportViewer({
                           </span>
                         </div>
                         <div>
-                          <span className="text-white/50">Vị trí ứng tuyển: </span>
+                          <span className="text-white/50">
+                            Vị trí ứng tuyển:{" "}
+                          </span>
                           <span className="text-white">
                             {safeStr(report.content?.position) || "—"}
                           </span>
                         </div>
                         <div>
                           <span className="text-white/50">Điểm tổng: </span>
-                          <span className="text-cyan-300 font-semibold">
+                          <span className="text-[#60a5fa] font-semibold">
                             {report.ai_overall_score != null
                               ? `${report.ai_overall_score.toFixed(1)} / 10`
                               : "—"}
                           </span>
                         </div>
                       </div>
-                      <div className="text-cyan-500/40 text-xs mt-2">────────────────────────</div>
+                      <div className="text-cyan-500/40 text-xs mt-2">
+                        ────────────────────────
+                      </div>
                     </div>
 
                     {/* TÓM TẮT */}
                     {safeStr(report.content?.summary) && (
-                      <div className="p-4 border-b border-cyan-500/10">
-                        <div className="text-cyan-400 font-semibold text-xs mb-1 uppercase tracking-wide">
+                      <div className="p-4 border-b border-[#313131]">
+                        <div className="text-[#3b82f6] font-semibold text-xs mb-1 uppercase tracking-wide">
                           TÓM TẮT
                         </div>
-                        <div className="text-cyan-500/40 text-xs mb-2">────────────────────────</div>
+                        <div className="text-cyan-500/40 text-xs mb-2">
+                          ────────────────────────
+                        </div>
                         <div className="text-white/85 text-sm whitespace-pre-wrap leading-relaxed">
                           {stripHtml(safeStr(report.content?.summary))}
                         </div>
@@ -718,11 +728,13 @@ export default function ReportViewer({
 
                     {/* ĐÁNH GIÁ KỸ NĂNG */}
                     {safeStr(report.content?.skill_evaluation) && (
-                      <div className="p-4 border-b border-cyan-500/10">
-                        <div className="text-cyan-400 font-semibold text-xs mb-1 uppercase tracking-wide">
+                      <div className="p-4 border-b border-[#313131]">
+                        <div className="text-[#3b82f6] font-semibold text-xs mb-1 uppercase tracking-wide">
                           ĐÁNH GIÁ KỸ NĂNG
                         </div>
-                        <div className="text-cyan-500/40 text-xs mb-2">────────────────────────</div>
+                        <div className="text-cyan-500/40 text-xs mb-2">
+                          ────────────────────────
+                        </div>
                         <div className="text-white/85 text-sm whitespace-pre-wrap leading-relaxed">
                           {stripHtml(safeStr(report.content?.skill_evaluation))}
                         </div>
@@ -731,11 +743,13 @@ export default function ReportViewer({
 
                     {/* ĐIỂM MẠNH */}
                     {safeStr(report.content?.strengths) && (
-                      <div className="p-4 border-b border-cyan-500/10">
-                        <div className="text-cyan-400 font-semibold text-xs mb-1 uppercase tracking-wide">
+                      <div className="p-4 border-b border-[#313131]">
+                        <div className="text-[#3b82f6] font-semibold text-xs mb-1 uppercase tracking-wide">
                           ĐIỂM MẠNH
                         </div>
-                        <div className="text-cyan-500/40 text-xs mb-2">────────────────────────</div>
+                        <div className="text-cyan-500/40 text-xs mb-2">
+                          ────────────────────────
+                        </div>
                         <div className="text-white/85 text-sm whitespace-pre-wrap leading-relaxed">
                           {stripHtml(safeStr(report.content?.strengths))}
                         </div>
@@ -743,17 +757,25 @@ export default function ReportViewer({
                     )}
 
                     {/* ĐIỂM CẦN CẢI THIỆN */}
-                    {safeStr(report.content?.weaknesses) || safeStr(report.content?.improvement_suggestions) ? (
-                      <div className="p-4 border-b border-cyan-500/10">
-                        <div className="text-cyan-400 font-semibold text-xs mb-1 uppercase tracking-wide">
+                    {safeStr(report.content?.weaknesses) ||
+                    safeStr(report.content?.improvement_suggestions) ? (
+                      <div className="p-4 border-b border-[#313131]">
+                        <div className="text-[#3b82f6] font-semibold text-xs mb-1 uppercase tracking-wide">
                           ĐIỂM CẦN CẢI THIỆN
                         </div>
-                        <div className="text-cyan-500/40 text-xs mb-2">────────────────────────</div>
+                        <div className="text-cyan-500/40 text-xs mb-2">
+                          ────────────────────────
+                        </div>
                         <div className="text-white/85 text-sm whitespace-pre-wrap leading-relaxed">
-                          {[safeStr(report.content?.weaknesses), safeStr(report.content?.improvement_suggestions)]
+                          {[
+                            safeStr(report.content?.weaknesses),
+                            safeStr(report.content?.improvement_suggestions),
+                          ]
                             .filter(Boolean)
                             .map((text, i) => (
-                              <div key={i} className={i > 0 ? "mt-2" : ""}>{stripHtml(text)}</div>
+                              <div key={i} className={i > 0 ? "mt-2" : ""}>
+                                {stripHtml(text)}
+                              </div>
                             ))}
                         </div>
                       </div>
@@ -762,12 +784,16 @@ export default function ReportViewer({
                     {/* KẾT LUẬN */}
                     {safeStr(report.content?.hiring_conclusion) && (
                       <div className="p-4">
-                        <div className="text-cyan-400 font-semibold text-xs mb-1 uppercase tracking-wide">
+                        <div className="text-[#3b82f6] font-semibold text-xs mb-1 uppercase tracking-wide">
                           KẾT LUẬN
                         </div>
-                        <div className="text-cyan-500/40 text-xs mb-2">────────────────────────</div>
+                        <div className="text-cyan-500/40 text-xs mb-2">
+                          ────────────────────────
+                        </div>
                         <div className="text-white/85 text-sm whitespace-pre-wrap leading-relaxed">
-                          {stripHtml(safeStr(report.content?.hiring_conclusion))}
+                          {stripHtml(
+                            safeStr(report.content?.hiring_conclusion),
+                          )}
                         </div>
                       </div>
                     )}
@@ -782,9 +808,9 @@ export default function ReportViewer({
                       return (
                         <div
                           key={section.key}
-                          className="rounded-lg border border-cyan-500/10 bg-[#0d1c2d] p-3"
+                          className="rounded-lg border border-[#313131] bg-[#0d1c2d] p-3"
                         >
-                          <label className="block text-cyan-400 font-semibold text-xs mb-1.5 uppercase tracking-wide">
+                          <label className="block text-[#3b82f6] font-semibold text-xs mb-1.5 uppercase tracking-wide">
                             {section.label}
                           </label>
                           <textarea
@@ -815,8 +841,8 @@ export default function ReportViewer({
 
                 {/* Score field when editing */}
                 {editing && (
-                  <div className="rounded-lg border border-cyan-500/10 bg-[#0d1c2d] p-3">
-                    <label className="block text-cyan-400 font-semibold text-xs mb-1.5 uppercase tracking-wide">
+                  <div className="rounded-lg border border-[#313131] bg-[#0d1c2d] p-3">
+                    <label className="block text-[#3b82f6] font-semibold text-xs mb-1.5 uppercase tracking-wide">
                       Điểm tổng (0 - 10)
                     </label>
                     <input
@@ -833,10 +859,10 @@ export default function ReportViewer({
                 )}
 
                 {/* Footer info */}
-                <div className="text-xs text-white/40 border-t border-cyan-500/10 pt-3">
+                <div className="text-xs text-white/40 border-t border-[#313131] pt-3">
                   Mỗi buổi phỏng vấn có thể có nhiều báo cáo. Bấm "Tạo bản mới"
-                  để AI sinh thêm một phiên bản độc lập (mỗi lần tạo đều thêm
-                  1 báo cáo mới vào danh sách bên trái).
+                  để AI sinh thêm một phiên bản độc lập (mỗi lần tạo đều thêm 1
+                  báo cáo mới vào danh sách bên trái).
                 </div>
               </div>
             )}

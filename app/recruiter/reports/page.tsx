@@ -21,9 +21,9 @@ interface ReportDto {
 }
 
 const STATUS_LABEL: Record<ReportDto["status"], string> = {
-  DRAFT: "Draft",
-  EDITED: "Edited",
-  FINAL: "Final",
+  DRAFT: "Nháp",
+  EDITED: "Đã chỉnh sửa",
+  FINAL: "Hoàn thành",
 };
 
 export default function ReportsPage() {
@@ -224,7 +224,7 @@ export default function ReportsPage() {
         {/* Header */}
         <div className="mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold">Reports</h1>
+            <h1 className="text-4xl font-bold">Quản lí báo cáo</h1>
             <p className="text-slate-400 mt-2">
               Quản lý báo cáo AI sau phỏng vấn
             </p>
@@ -237,7 +237,7 @@ export default function ReportsPage() {
               className="flex items-center gap-2 px-5 py-3 rounded-xl bg-green-600 hover:bg-green-500 disabled:bg-slate-700 disabled:text-slate-400 transition"
             >
               <FileSpreadsheet size={18} />
-              Export Excel
+              Xuất Excel
             </button>
 
             <button
@@ -246,7 +246,7 @@ export default function ReportsPage() {
               className="flex items-center gap-2 px-5 py-3 rounded-xl bg-red-600 disabled:bg-slate-700 disabled:text-slate-400 hover:bg-red-500 transition"
             >
               <Trash2 size={18} />
-              Delete
+              Xoá
             </button>
           </div>
         </div>
@@ -260,7 +260,7 @@ export default function ReportsPage() {
                 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
               />
               <input
-                placeholder="Tìm candidate, interview..."
+                placeholder="Tìm ứng viên, buổi phỏng vấn..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full bg-[#071524] border border-slate-700 rounded-xl pl-11 pr-4 py-3 outline-none focus:border-cyan-500"
@@ -272,10 +272,10 @@ export default function ReportsPage() {
               onChange={(e) => setStatusFilter(e.target.value)}
               className="bg-[#071524] border border-slate-700 rounded-xl px-4"
             >
-              <option value="ALL">All Status</option>
-              <option value="DRAFT">Draft</option>
-              <option value="EDITED">Edited</option>
-              <option value="FINAL">Final</option>
+              <option value="ALL">Tất cả trạng thái</option>
+              <option value="DRAFT">Bản nháp</option>
+              <option value="EDITED">Đã chỉnh sửa</option>
+              <option value="FINAL">Hoàn thành</option>
             </select>
           </div>
 

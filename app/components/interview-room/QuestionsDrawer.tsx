@@ -44,14 +44,14 @@ export default function QuestionsDrawer({
         `}
       >
         <div className="h-16 px-6 flex items-center justify-between border-b border-[#3b494b]">
-          <h2 className="text-white font-semibold">Questions</h2>
+          <h2 className="text-white font-semibold">Câu hỏi phỏng vấn</h2>
 
           <button onClick={onClose} className="text-gray-400 hover:text-white">
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto h-[calc(100vh-64px)]">
+        <div className="p-6 overflow-y-auto custom-scrollbar h-[calc(100vh-64px)]">
           {role === "recruiter" ? (
             <RecruiterQuestionsPanel
               meetingCode={meetingCode}
@@ -63,9 +63,7 @@ export default function QuestionsDrawer({
               {isLoading && (
                 <p className="text-gray-500 text-sm">Đang tải câu hỏi...</p>
               )}
-              {error && (
-                <p className="text-red-400 text-sm">{error}</p>
-              )}
+              {error && <p className="text-red-400 text-sm">{error}</p>}
               {!isLoading && questions.length === 0 && (
                 <div className="text-center py-12">
                   <span className="material-symbols-outlined text-4xl text-gray-600">
