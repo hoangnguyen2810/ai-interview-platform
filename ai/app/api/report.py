@@ -107,6 +107,96 @@ def _extract_json_object(raw: str) -> dict | None:
     return None
 
 
+def _try_repair_truncated_json(raw: str) -> dict | None:
+    """Best-effort repair for Ollama outputs that got cut mid-string/array/object.
+
+    Strategy: scan char-by-char tracking JSON state (in_string, escaped, depth
+    of `{` and `[`). When the string ends without proper close, append the
+    minimal closing characters so json.loads can succeed. This recovers the
+    well-formed prefix that the model produced before the truncation.
+    """
+    if not raw:
+        return None
+
+    text = raw.strip()
+    # Drop markdown fences if any.
+    if text.startswith("```"):
+        first_newline = text.find("\n")
+        if first_newline != -1:
+            text = text[first_newline + 1 :]
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
+
+    start = text.find("{")
+    if start == -1:
+        return None
+    fragment = text[start:]
+
+    out: list[str] = []
+    in_string = False
+    escape = False
+    brace_depth = 0
+    bracket_depth = 0
+    trailing_comma = False  # last non-space char was ',' — strip if we close here
+
+    for ch in fragment:
+        out.append(ch)
+        if escape:
+            escape = False
+            trailing_comma = False
+            continue
+        if ch == "\\":
+            escape = True
+            trailing_comma = False
+            continue
+        if ch == '"':
+            in_string = not in_string
+            trailing_comma = False
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            brace_depth += 1
+            trailing_comma = False
+        elif ch == "}":
+            brace_depth -= 1
+            trailing_comma = False
+        elif ch == "[":
+            bracket_depth += 1
+            trailing_comma = False
+        elif ch == "]":
+            bracket_depth -= 1
+            trailing_comma = False
+        elif ch == ",":
+            trailing_comma = True
+        elif not ch.isspace():
+            trailing_comma = False
+
+    repaired = "".join(out)
+    # Trim trailing comma (and surrounding whitespace) before closing — JSON
+    # doesn't allow a trailing comma before `}` or `]`.
+    repaired = repaired.rstrip()
+    if repaired.endswith(","):
+        repaired = repaired[:-1].rstrip()
+
+    # Close any unterminated string first.
+    if in_string:
+        repaired += '"'
+
+    # Close open arrays then open objects in reverse order.
+    repaired += "]" * max(bracket_depth, 0)
+    repaired += "}" * max(brace_depth, 0)
+
+    try:
+        obj = json.loads(repaired)
+        if isinstance(obj, dict):
+            return obj
+    except Exception:
+        pass
+    return None
+
+
 @router.post("/report/generate")
 def generate_report(req: ReportRequest):
     user_message_parts = []
@@ -148,6 +238,13 @@ def generate_report(req: ReportRequest):
         )
 
     parsed = _extract_json_object(raw)
+    if not parsed:
+        # Last-resort: Ollama sometimes truncates output mid-string when the
+        # prompt is large (e.g. nhiều coding reviews ở lần generate thứ 2).
+        # We attempt to repair by closing any open string/array/object and
+        # re-parsing, instead of failing outright with 502.
+        parsed = _try_repair_truncated_json(raw)
+
     if not parsed:
         # Surface the raw output so Next.js side can store it for debugging.
         raise HTTPException(
