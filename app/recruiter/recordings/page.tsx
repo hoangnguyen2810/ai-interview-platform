@@ -2,6 +2,7 @@
 
 import { SideNavBar } from "@/app/components/SideNavBar";
 import { TopNavBar } from "@/app/components/TopNavBar";
+import { Pagination } from "@/app/components/Pagination";
 import {
   Search,
   PlayCircle,
@@ -12,6 +13,8 @@ import {
   AlertCircle,
   RefreshCw,
   CheckCircle2,
+  Filter,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -54,6 +57,8 @@ interface LatestResponse {
   message?: string;
 }
 
+type SortOption = "newest" | "oldest" | "duration_desc" | "duration_asc";
+
 function formatDuration(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) return "—";
   const h = Math.floor(seconds / 3600);
@@ -92,6 +97,9 @@ function meetingCodeFromCid(callCid: string): string {
   return idx < 0 ? callCid : callCid.slice(idx + 1);
 }
 
+const btnBase =
+  "min-w-[36px] h-9 px-3 inline-flex items-center justify-center rounded-lg text-sm font-medium transition disabled:opacity-40 disabled:cursor-not-allowed";
+
 export default function RecordingsPage() {
   const [recordings, setRecordings] = useState<RecordingDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -111,13 +119,20 @@ export default function RecordingsPage() {
     skipped?: number;
   } | null>(null);
 
+  // ----- BỘ LỌC -----
+  const [showFilters, setShowFilters] = useState(false);
+  const [typeFilter, setTypeFilter] = useState("ALL");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [sortBy, setSortBy] = useState<SortOption>("newest");
+
   const ITEMS_PER_PAGE = 5;
 
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search]);
+  }, [search, typeFilter, dateFrom, dateTo, sortBy]);
 
   const loadRecordings = useCallback(async () => {
     setIsLoading(true);
@@ -331,27 +346,96 @@ export default function RecordingsPage() {
     }
   }, [isSyncing, loadLatest, syncByCallCid, loadRecordings]);
 
+  // Danh sách loại ghi hình có sẵn trong dữ liệu (để render dropdown động)
+  const recordingTypes = useMemo(() => {
+    const set = new Set<string>();
+    recordings.forEach((r) => {
+      if (r.recordingType) set.add(r.recordingType);
+    });
+    return Array.from(set);
+  }, [recordings]);
+
+  const hasActiveFilters =
+    typeFilter !== "ALL" || !!dateFrom || !!dateTo || sortBy !== "newest";
+
+  function resetFilters() {
+    setTypeFilter("ALL");
+    setDateFrom("");
+    setDateTo("");
+    setSortBy("newest");
+  }
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return recordings.filter((r) => {
-      if (!q) return true;
+
+    const fromTime = dateFrom
+      ? new Date(dateFrom + "T00:00:00").getTime()
+      : null;
+    const toTime = dateTo ? new Date(dateTo + "T23:59:59").getTime() : null;
+
+    const result = recordings.filter((r) => {
       const code = meetingCodeFromCid(r.callCid);
-      return (
+
+      const matchSearch =
+        !q ||
         code.toLowerCase().includes(q) ||
         r.callCid.toLowerCase().includes(q) ||
         (r.filename ?? "").toLowerCase().includes(q) ||
         (r.interviewTitle ?? "").toLowerCase().includes(q) ||
-        (r.recordingType ?? "").toLowerCase().includes(q)
-      );
+        (r.recordingType ?? "").toLowerCase().includes(q);
+
+      const matchType = typeFilter === "ALL" || r.recordingType === typeFilter;
+
+      const createdTime = new Date(r.createdAt).getTime();
+      const matchFrom = fromTime === null || createdTime >= fromTime;
+      const matchTo = toTime === null || createdTime <= toTime;
+
+      return matchSearch && matchType && matchFrom && matchTo;
     });
-  }, [recordings, search]);
+
+    result.sort((a, b) => {
+      switch (sortBy) {
+        case "oldest":
+          return (
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          );
+        case "duration_desc":
+          return b.duration - a.duration;
+        case "duration_asc":
+          return a.duration - b.duration;
+        case "newest":
+        default:
+          return (
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+      }
+    });
+
+    return result;
+  }, [recordings, search, typeFilter, dateFrom, dateTo, sortBy]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
 
-  const paginatedRecordings = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filtered.slice(start, start + ITEMS_PER_PAGE);
-  }, [filtered, currentPage]);
+  const safePage = Math.min(currentPage, totalPages);
+
+  const pageStart = (safePage - 1) * ITEMS_PER_PAGE;
+  const pageEnd = pageStart + ITEMS_PER_PAGE;
+
+  const paginatedRecordings = useMemo(
+    () => filtered.slice(pageStart, pageEnd),
+    [filtered, pageStart, pageEnd],
+  );
+
+  const goToPage = (page: number) => {
+    if (page < 1 || page > totalPages) return;
+
+    setCurrentPage(page);
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  };
 
   return (
     <>
@@ -469,20 +553,113 @@ export default function RecordingsPage() {
           )}
         </div>
 
-        {/* SEARCH */}
+        {/* SEARCH + FILTER */}
         <div className="bg-[#0F1E2E] border border-cyan-500/10 rounded-2xl p-6 mb-10">
-          <div className="relative">
-            <Search
-              size={18}
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
-            />
-            <input
-              placeholder="Tìm theo tên buổi phỏng vấn, meeting code,..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-[#071524] border border-slate-700 rounded-xl pl-11 pr-4 py-3 outline-none focus:border-cyan-500"
-            />
+          <div className="flex gap-3">
+            <div className="relative flex-1">
+              <Search
+                size={18}
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
+              />
+              <input
+                placeholder="Tìm theo tên buổi phỏng vấn, meeting code,..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full bg-[#071524] border border-slate-700 rounded-xl pl-11 pr-4 py-3 outline-none focus:border-cyan-500"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowFilters((s) => !s)}
+              className={`flex items-center gap-2 px-5 py-3 rounded-xl border transition whitespace-nowrap ${
+                showFilters || hasActiveFilters
+                  ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-300"
+                  : "bg-[#071524] border-slate-700 hover:bg-slate-800"
+              }`}
+            >
+              <Filter size={18} />
+              Bộ lọc
+              {hasActiveFilters && (
+                <span className="w-2 h-2 rounded-full bg-cyan-400" />
+              )}
+            </button>
           </div>
+
+          {showFilters && (
+            <div className="mt-5 pt-5 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-xs text-slate-400 mb-1.5">
+                  Loại ghi hình
+                </label>
+                <select
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                  className="w-full bg-[#071524] border border-slate-700 rounded-xl px-3 py-2.5 outline-none focus:border-cyan-500"
+                >
+                  <option value="ALL">Tất cả</option>
+                  {recordingTypes.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-400 mb-1.5">
+                  Từ ngày
+                </label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="w-full bg-[#071524] border border-slate-700 rounded-xl px-3 py-2.5 outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-400 mb-1.5">
+                  Đến ngày
+                </label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="w-full bg-[#071524] border border-slate-700 rounded-xl px-3 py-2.5 outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-400 mb-1.5">
+                  Sắp xếp
+                </label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SortOption)}
+                  className="w-full bg-[#071524] border border-slate-700 rounded-xl px-3 py-2.5 outline-none focus:border-cyan-500"
+                >
+                  <option value="newest">Mới nhất</option>
+                  <option value="oldest">Cũ nhất</option>
+                  <option value="duration_desc">Thời lượng: dài → ngắn</option>
+                  <option value="duration_asc">Thời lượng: ngắn → dài</option>
+                </select>
+              </div>
+
+              {hasActiveFilters && (
+                <div className="sm:col-span-2 lg:col-span-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white px-3 py-2 rounded-lg hover:bg-slate-800 transition"
+                  >
+                    <X size={14} />
+                    Xóa bộ lọc
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* TABLE */}
@@ -502,17 +679,25 @@ export default function RecordingsPage() {
               <div className="p-10 text-center text-slate-400">
                 {recordings.length === 0
                   ? "Chưa có recording nào. Nhập callCid ở trên để đồng bộ từ GetStream."
-                  : "Không tìm thấy recording phù hợp."}
+                  : "Không tìm thấy recording phù hợp với bộ lọc."}
               </div>
             ) : (
-              <table className="w-full table-fixed">
+              <table className="w-full table-fixed min-w-[900px]">
+                <colgroup>
+                  <col className="w-[30%]" />
+                  <col className="w-[18%]" />
+                  <col className="w-[14%]" />
+                  <col className="w-[22%]" />
+                  <col className="w-[16%]" />
+                </colgroup>
+
                 <thead className="bg-[#13263a] text-sm">
-                  <tr className="text-left text-slate-300">
-                    <th className="p-5 w-[34%]">Tên buổi phỏng vấn</th>
-                    <th className="p-5 w-[20%]">Meeting Code</th>
-                    <th className="p-5 w-[14%]">Thời lượng</th>
-                    <th className="p-5 w-[20%]">Thời gian</th>
-                    <th className="p-5 w-[12%] text-center">Thao tác</th>
+                  <tr className="text-slate-300">
+                    <th className="p-5 text-left">Tên buổi phỏng vấn</th>
+                    <th className="p-5 text-left">Meeting Code</th>
+                    <th className="p-5 text-center">Thời lượng</th>
+                    <th className="p-5 text-center">Thời gian</th>
+                    <th className="p-5 text-center">Thao tác</th>
                   </tr>
                 </thead>
 
@@ -522,7 +707,7 @@ export default function RecordingsPage() {
                     return (
                       <tr
                         key={item.id}
-                        className="border-t border-slate-800 hover:bg-cyan-500/5 transition"
+                        className="border-t border-slate-800 hover:bg-cyan-500/5 transition duration-200"
                       >
                         <td
                           className="p-5 font-medium text-white truncate"
@@ -536,22 +721,25 @@ export default function RecordingsPage() {
                             </span>
                           )}
                         </td>
-                        <td className="p-5 font-medium text-white truncate">
+                        <td
+                          className="p-5 font-medium text-white truncate"
+                          title={code}
+                        >
                           {code}
                         </td>
-                        <td className="p-5">
-                          <div className="flex items-center gap-1">
+                        <td className="p-5 text-center">
+                          <div className="flex items-center justify-center gap-1">
                             <Clock3 size={14} />
                             {formatDuration(item.duration)}
                           </div>
                         </td>
-                        <td className="p-5">
-                          <div className="flex items-center gap-1">
+                        <td className="p-5 text-center">
+                          <div className="flex items-center justify-center gap-1">
                             <CalendarDays size={14} />
                             {formatDate(item.createdAt)}
                           </div>
                         </td>
-                        <td className="p-5">
+                        <td className="p-5 text-center">
                           <div className="flex justify-center gap-2">
                             <button
                               type="button"
@@ -582,52 +770,24 @@ export default function RecordingsPage() {
             )}
           </div>
         </div>
-        {filtered.length > ITEMS_PER_PAGE && (
-          <div className="flex items-center justify-between mt-6 px-4">
-            <div className="text-sm text-slate-400">
-              Hiển thị {(currentPage - 1) * ITEMS_PER_PAGE + 1}-
-              {Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)}
-              {" / "}
-              {filtered.length} recordings
-            </div>
+        {!isLoading && filtered.length > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4">
+            <p className="text-sm text-slate-400">
+              Hiển thị{" "}
+              <span className="font-semibold text-white">
+                {pageStart + 1}–{Math.min(pageEnd, filtered.length)}
+              </span>{" "}
+              / {filtered.length} recordings
+              <span className="text-slate-500 ml-2">
+                (Tổng: {recordings.length})
+              </span>
+            </p>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className="px-4 py-2 rounded-lg bg-slate-700 disabled:opacity-40 hover:bg-slate-600"
-              >
-                ← Trước
-              </button>
-
-              {Array.from({ length: totalPages }).map((_, index) => {
-                const page = index + 1;
-
-                return (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`w-10 h-10 rounded-lg transition ${
-                      page === currentPage
-                        ? "bg-cyan-500 text-white"
-                        : "bg-slate-700 hover:bg-slate-600"
-                    }`}
-                  >
-                    {page}
-                  </button>
-                );
-              })}
-
-              <button
-                onClick={() =>
-                  setCurrentPage((p) => Math.min(totalPages, p + 1))
-                }
-                disabled={currentPage === totalPages}
-                className="px-4 py-2 rounded-lg bg-slate-700 disabled:opacity-40 hover:bg-slate-600"
-              >
-                Sau →
-              </button>
-            </div>
+            <Pagination
+              currentPage={safePage}
+              totalPages={totalPages}
+              onPageChange={goToPage}
+            />
           </div>
         )}
       </main>

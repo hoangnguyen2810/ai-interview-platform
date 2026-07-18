@@ -2,15 +2,10 @@
 
 import { SideNavBar } from "@/app/components/SideNavBar";
 import { TopNavBar } from "@/app/components/TopNavBar";
-import {
-  Search,
-  Eye,
-  Trash2,
-  FileSpreadsheet,
-  Loader2,
-} from "lucide-react";
+import { Search, Eye, Trash2, FileSpreadsheet, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import ReportViewer from "@/app/components/interview-room/coding/ReportViewer";
+import { Pagination } from "@/app/components/Pagination";
 
 // Dữ liệu từ /api/recruiter/reports: gồm candidate name, interview title,
 // AI score, status (DRAFT/EDITED/FINAL), generated_at + meeting_code (để
@@ -469,8 +464,8 @@ export default function ReportsPage() {
                 Xoá {selectedIds.length} report(s)?
               </h3>
               <p className="text-sm text-slate-400 mb-6">
-                Hành động này sẽ ẩn report khỏi danh sách. Có thể khôi phục
-                từ database nếu cần.
+                Hành động này sẽ ẩn report khỏi danh sách. Có thể khôi phục từ
+                database nếu cần.
               </p>
               <div className="flex justify-end gap-3">
                 <button
@@ -490,6 +485,11 @@ export default function ReportsPage() {
                 </button>
               </div>
             </div>
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+            />
           </div>
         )}
       </main>

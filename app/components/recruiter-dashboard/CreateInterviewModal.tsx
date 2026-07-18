@@ -525,17 +525,6 @@ export function CreateInterviewModal({
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <input
-              id="allowGuest"
-              name="allowGuest"
-              type="checkbox"
-              checked={form.allowGuest}
-              onChange={handleChange}
-            />
-            <label htmlFor="allowGuest">Cho phép khách tham gia</label>
-          </div>
-
           <div className="flex items-start gap-3 rounded-xl border border-white/10 p-4">
             <input
               id="enableRecording"
@@ -546,13 +535,11 @@ export function CreateInterviewModal({
               className="mt-1"
             />
             <label htmlFor="enableRecording" className="flex-1 cursor-pointer">
-              <span className="block font-medium">
-                Ghi hình buổi phỏng vấn (Call Recording)
-              </span>
+              <span className="block font-medium">Ghi hình buổi phỏng vấn</span>
               <span className="block text-xs text-gray-400 mt-1">
                 Khi bật, buổi phỏng vấn sẽ được tự động ghi hình ngay khi cuộc
                 gọi bắt đầu và dừng khi kết thúc. File ghi hình sẽ hiển thị
-                trong trang Recordings.
+                trong mục lưu trữ.
               </span>
             </label>
           </div>

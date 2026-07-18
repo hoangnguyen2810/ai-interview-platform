@@ -37,9 +37,7 @@ function StatCard({
         <span className="text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider">
           {label}
         </span>
-        <span className={`material-symbols-outlined ${iconClass}`}>
-          {icon}
-        </span>
+        <span className={`material-symbols-outlined ${iconClass}`}>{icon}</span>
       </div>
       <div className={`text-4xl font-bold ${valueClass} mb-1`}>
         {loading || value === null ? (
@@ -143,7 +141,7 @@ export function QuickStats() {
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-gutter mb-10">
+    <div className="flex flex-col gap-gutter mb-10">
       {cards.map((stat) => (
         <StatCard
           key={stat.label}

@@ -3,6 +3,7 @@
 import { SideNavBar } from "@/app/components/SideNavBar";
 import { TopNavBar } from "@/app/components/TopNavBar";
 import { CreateInterviewModal } from "@/app/components/recruiter-dashboard/CreateInterviewModal";
+import { Pagination } from "@/app/components/Pagination";
 import { useRecruiterDashboard } from "@/app/components/recruiter-dashboard/DashboardContext";
 import {
   MoreHorizontal,
@@ -15,6 +16,23 @@ import {
   Loader2,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+
+function formatDateTime(value: string) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+
+  if (isNaN(date.getTime())) return value;
+
+  return date.toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
 
 type InterviewStatus = "SCHEDULED" | "ONGOING" | "FINISHED" | "CANCELLED";
 
@@ -83,101 +101,6 @@ const getStatusLabel = (status: InterviewStatus) => {
       return status;
   }
 };
-
-/* ================= PAGINATION ================= */
-function Pagination({
-  currentPage,
-  totalPages,
-  onPageChange,
-}: {
-  currentPage: number;
-  totalPages: number;
-  onPageChange: (page: number) => void;
-}) {
-  if (totalPages <= 1) return null;
-
-  // Sinh danh sách trang hiển thị với dấu "..."
-  // VD: 1 ... 4 5 [6] 7 8 ... 20
-  const getPageNumbers = (): (number | "...")[] => {
-    const pages: (number | "...")[] = [];
-    const window = 1; // số trang liền kề currentPage
-
-    if (totalPages <= 7) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
-      return pages;
-    }
-
-    pages.push(1);
-
-    const start = Math.max(2, currentPage - window);
-    const end = Math.min(totalPages - 1, currentPage + window);
-
-    if (start > 2) pages.push("...");
-
-    for (let i = start; i <= end; i++) pages.push(i);
-
-    if (end < totalPages - 1) pages.push("...");
-
-    pages.push(totalPages);
-    return pages;
-  };
-
-  const pages = getPageNumbers();
-  const isFirst = currentPage === 1;
-  const isLast = currentPage === totalPages;
-
-  const btnBase =
-    "min-w-[36px] h-9 px-3 inline-flex items-center justify-center rounded-lg text-sm font-medium transition disabled:opacity-40 disabled:cursor-not-allowed";
-
-  return (
-    <nav className="flex items-center gap-1" aria-label="Pagination">
-      <button
-        type="button"
-        onClick={() => onPageChange(currentPage - 1)}
-        disabled={isFirst}
-        className={`${btnBase} border border-slate-700 hover:border-cyan-500 hover:text-cyan-400 text-slate-300`}
-        aria-label="Trang trước"
-      >
-        ‹
-      </button>
-
-      {pages.map((p, idx) =>
-        p === "..." ? (
-          <span
-            key={`ellipsis-${idx}`}
-            className="min-w-[36px] h-9 inline-flex items-center justify-center text-slate-500"
-          >
-            …
-          </span>
-        ) : (
-          <button
-            key={p}
-            type="button"
-            onClick={() => onPageChange(p)}
-            aria-current={p === currentPage ? "page" : undefined}
-            className={
-              p === currentPage
-                ? `${btnBase} bg-cyan-500 text-black`
-                : `${btnBase} border border-slate-700 hover:border-cyan-500 hover:text-cyan-400 text-slate-300`
-            }
-          >
-            {p}
-          </button>
-        ),
-      )}
-
-      <button
-        type="button"
-        onClick={() => onPageChange(currentPage + 1)}
-        disabled={isLast}
-        className={`${btnBase} border border-slate-700 hover:border-cyan-500 hover:text-cyan-400 text-slate-300`}
-        aria-label="Trang sau"
-      >
-        ›
-      </button>
-    </nav>
-  );
-}
 
 export default function InterviewManagementPage() {
   const [interviews, setInterviews] = useState<InterviewItem[]>([]);
@@ -424,16 +347,27 @@ export default function InterviewManagementPage() {
         </div>
 
         {/* TABLE */}
+        {/* table-fixed + width % cố định cho từng cột để header và data luôn
+            canh thẳng hàng với nhau, không bị lệch theo độ dài nội dung */}
         <div className="bg-[#0F1E2E] border border-cyan-500/10 rounded-2xl overflow-hidden shadow-lg shadow-black/20">
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full table-fixed min-w-[860px]">
+              <colgroup>
+                <col className="w-[28%]" />
+                <col className="w-[15%]" />
+                <col className="w-[15%]" />
+                <col className="w-[13%]" />
+                <col className="w-[19%]" />
+                <col className="w-[10%]" />
+              </colgroup>
+
               <thead className="bg-[#13263a] text-sm">
-                <tr className="text-left text-slate-300">
-                  <th className="p-5">Tiêu đề</th>
-                  <th className="p-5">Mã phòng</th>
-                  <th className="p-5">Trạng thái</th>
-                  <th className="p-5">Thời lượng</th>
-                  <th className="p-5">Thời gian</th>
+                <tr className="text-slate-300">
+                  <th className="p-5 text-left">Tiêu đề</th>
+                  <th className="p-5 text-left">Mã phòng</th>
+                  <th className="p-5 text-center">Trạng thái</th>
+                  <th className="p-5 text-center">Thời lượng</th>
+                  <th className="p-5 text-center">Thời gian</th>
                   <th className="p-5 text-center">Thao tác</th>
                 </tr>
               </thead>
@@ -458,14 +392,22 @@ export default function InterviewManagementPage() {
                       key={item.id}
                       className="border-t border-slate-800 hover:bg-cyan-500/5 transition"
                     >
-                      <td className="p-5 font-medium">{item.title}</td>
-                      <td className="p-5 text-cyan-400 font-medium">
+                      <td
+                        className="p-5 font-medium truncate"
+                        title={item.title}
+                      >
+                        {item.title}
+                      </td>
+                      <td
+                        className="p-5 text-cyan-400 font-medium truncate"
+                        title={item.code}
+                      >
                         {item.code}
                       </td>
 
-                      <td className="p-5">
+                      <td className="p-5 text-center">
                         <span
-                          className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(
+                          className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(
                             item.status,
                           )}`}
                         >
@@ -473,8 +415,10 @@ export default function InterviewManagementPage() {
                         </span>
                       </td>
 
-                      <td className="p-5">{item.duration} phút</td>
-                      <td className="p-5">{item.time}</td>
+                      <td className="p-5 text-center">{item.duration} phút</td>
+                      <td className="p-5 text-center whitespace-nowrap">
+                        {formatDateTime(item.scheduledAt)}
+                      </td>
 
                       <td className="p-5">
                         <div className="flex justify-center">

@@ -37,17 +37,12 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    title: "AI & Phân tích",
+    title: "Báo cáo",
     items: [
       {
-        label: "Phân tích & Báo cáo",
+        label: "Các báo cáo ứng viên",
         icon: "analytics",
         href: "/recruiter/reports",
-      },
-      {
-        label: "Thống kê",
-        icon: "pie_chart",
-        href: "/recruiter/statistics",
       },
     ],
   },
