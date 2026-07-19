@@ -368,7 +368,7 @@ export function CreateInterviewModal({
               </dd>
             </div>
             <div className="flex justify-between">
-              <dt>Interviewer tối đa</dt>
+              <dt>Người phỏng vấn tối đa</dt>
               <dd className="font-medium text-white">
                 {created.maxInterviewers}
               </dd>

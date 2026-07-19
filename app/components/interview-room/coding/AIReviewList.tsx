@@ -648,7 +648,7 @@ function ReviewContent({
       <div className="bg-gradient-to-br from-cyan-500/10 to-purple-500/10 border border-cyan-500/20 rounded-lg p-3">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[10.5px] text-[#9a9a9a]">Overall Score</p>
+            <p className="text-[10.5px] text-[#9a9a9a]">Điểm tổng thể</p>
             <p className="text-3xl font-bold text-cyan-300">
               {review.overallScore.toFixed(1)}
               <span className="text-sm text-[#6e6e6e]">/10</span>
@@ -656,7 +656,7 @@ function ReviewContent({
           </div>
           <div className="text-right text-[10.5px] space-y-1">
             <div className="flex items-center justify-end gap-1.5">
-              <span className="text-[#9a9a9a]">Correctness:</span>
+              <span className="text-[#9a9a9a]">Tính chỉnh xác:</span>
               <CorrectnessBadge value={review.correctness} />
             </div>
             <p className="text-[#9a9a9a]">
@@ -677,20 +677,20 @@ function ReviewContent({
 
       {/* Score bars */}
       <div className="space-y-2 bg-white/5 rounded-lg p-3">
-        <ScoreBar label="Correctness" value={review.correctnessScore} />
-        <ScoreBar label="Algorithm" value={review.algorithmScore} />
+        <ScoreBar label="Tính chính xác" value={review.correctnessScore} />
+        <ScoreBar label="Đánh giá thuật toán" value={review.algorithmScore} />
       </div>
 
       {/* Complexity */}
       <div className="grid grid-cols-2 gap-2">
         <div className="bg-white/5 rounded p-2">
-          <p className="text-[10px] text-[#6e6e6e]">Time</p>
+          <p className="text-[10px] text-[#6e6e6e]">Độ phức tạp thời gian</p>
           <p className="text-cyan-300 font-mono text-[12px] mt-0.5">
             {review.timeComplexity}
           </p>
         </div>
         <div className="bg-white/5 rounded p-2">
-          <p className="text-[10px] text-[#6e6e6e]">Space</p>
+          <p className="text-[10px] text-[#6e6e6e]">Độ phức tạp bộ nhớ</p>
           <p className="text-cyan-300 font-mono text-[12px] mt-0.5">
             {review.spaceComplexity}
           </p>
@@ -700,9 +700,7 @@ function ReviewContent({
       {/* Algorithm */}
       {review.algorithm && (
         <div className="bg-white/5 rounded-lg p-3">
-          <p className="text-[10.5px] text-[#9a9a9a] mb-1">
-            Algorithm evaluation
-          </p>
+          <p className="text-[10.5px] text-[#9a9a9a] mb-1">Thuật toán</p>
           <p className="text-[12px] text-[#dcdcdc] leading-5 whitespace-pre-wrap">
             {review.algorithm}
           </p>
@@ -713,7 +711,7 @@ function ReviewContent({
       <div className="grid gap-2">
         {review.strengths && (
           <div className="bg-green-500/5 border border-green-500/20 rounded-lg p-2.5">
-            <p className="text-[10.5px] text-green-400 mb-1">Strengths</p>
+            <p className="text-[10.5px] text-green-400 mb-1">Điểm mạnh</p>
             <p className="text-[12px] text-[#dcdcdc] leading-5">
               {review.strengths}
             </p>
@@ -721,7 +719,7 @@ function ReviewContent({
         )}
         {review.weaknesses && (
           <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-2.5">
-            <p className="text-[10.5px] text-red-400 mb-1">Weaknesses</p>
+            <p className="text-[10.5px] text-red-400 mb-1">Điểm yếu</p>
             <p className="text-[12px] text-[#dcdcdc] leading-5">
               {review.weaknesses}
             </p>
@@ -746,8 +744,8 @@ function ReviewContent({
         <div>
           <div className="flex items-center justify-between mb-2 mt-2">
             <p className="text-[10.5px] text-[#9a9a9a] uppercase tracking-wider">
-              AI-generated test cases ({tests.total} test
-              {tests.total !== 1 ? "s" : ""} · chờ recruiter chạy)
+              Các trường hợp kiểm thử do AI tạo ra ({tests.total} test
+              {tests.total !== 1 ? "s" : ""} · chờ nhà tuyển dụng chạy)
             </p>
             {isRecruiter && tests.items.length > 0 && (
               <button

@@ -105,14 +105,14 @@ function CodeViewerModal({
             </span>
             <div className="min-w-0">
               <h3 className="text-white font-semibold text-sm truncate">
-                Source code đã submit
+                Source code đã nộp
               </h3>
               <p className="text-white/40 text-[11px] truncate">
                 Submission #{submission.submissionId.slice(0, 8)} •{" "}
                 {formatLanguage(submission.language)} •{" "}
                 {formatTime(submission.createdAt)}
                 {submission.candidateName &&
-                  ` • by ${submission.candidateName}`}
+                  ` • bởi ${submission.candidateName}`}
               </p>
             </div>
           </div>
@@ -368,7 +368,7 @@ function RecruiterCodingEditor({ meetingCode }: { meetingCode: string }) {
           <span
             className={`text-xs ${isConnected ? "text-green-400 animate-pulse" : "text-red-400"}`}
           >
-            {isConnected ? "● Receiving live code..." : "○ Disconnected"}
+            {isConnected ? "● Đã kết nối..." : "○ Mất kết nối"}
           </span>
           <span className="px-2 py-1 rounded-md bg-cyan-500/10 text-cyan-300 text-[11px]">
             {formatLanguage(language)}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 
 // 8 sections matching CHAT_PROMPT rule 8 / ai-report.ts.
 interface ReportContent {
@@ -154,6 +154,19 @@ function statusLabel(status: string): string {
   }
 }
 
+// ── Resizable modal constants ─────────────────────────────────────────────
+const MIN_MODAL_WIDTH = 640;
+const MIN_MODAL_HEIGHT = 420;
+const DEFAULT_MODAL_WIDTH = 1024; // ~ max-w-5xl
+const DEFAULT_MODAL_HEIGHT_RATIO = 0.94; // ~ h-[94vh]
+
+type ResizeDirection = "e" | "s" | "se" | "w" | "sw";
+
+interface DragOffset {
+  x: number;
+  y: number;
+}
+
 export default function ReportViewer({
   meetingCode,
   onClose,
@@ -170,6 +183,180 @@ export default function ReportViewer({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<ReportContent | null>(null);
   const [draftScore, setDraftScore] = useState<string>("");
+
+  // ── Resizable modal state ────────────────────────────────────────────
+  // null width/height means "use default responsive sizing" until the user
+  // performs their first manual resize.
+  const [modalSize, setModalSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
+  const resizeStateRef = useRef<{
+    direction: ResizeDirection;
+    startX: number;
+    startY: number;
+    startWidth: number;
+    startHeight: number;
+  } | null>(null);
+  const modalRef = useRef<HTMLDivElement | null>(null);
+
+  // ── Draggable modal state ────────────────────────────────────────────
+  // The modal is centered by its flex parent; dragOffset is an additional
+  // translate() applied on top of that centered position.
+  const [dragOffset, setDragOffset] = useState<DragOffset>({ x: 0, y: 0 });
+  const dragStateRef = useRef<{
+    startX: number;
+    startY: number;
+    startOffsetX: number;
+    startOffsetY: number;
+  } | null>(null);
+
+  const getInitialSize = useCallback(() => {
+    if (typeof window === "undefined") {
+      return { width: DEFAULT_MODAL_WIDTH, height: 700 };
+    }
+    return {
+      width: Math.min(DEFAULT_MODAL_WIDTH, window.innerWidth - 32),
+      height: Math.min(
+        window.innerHeight * DEFAULT_MODAL_HEIGHT_RATIO,
+        window.innerHeight - 32,
+      ),
+    };
+  }, []);
+
+  const handleResizeStart = useCallback(
+    (direction: ResizeDirection) => (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = modalRef.current?.getBoundingClientRect();
+      const current = modalSize ?? getInitialSize();
+      resizeStateRef.current = {
+        direction,
+        startX: e.clientX,
+        startY: e.clientY,
+        startWidth: rect?.width ?? current.width,
+        startHeight: rect?.height ?? current.height,
+      };
+      document.body.style.userSelect = "none";
+      document.body.style.cursor =
+        direction === "e" || direction === "w"
+          ? "ew-resize"
+          : direction === "s"
+            ? "ns-resize"
+            : "nwse-resize";
+    },
+    [modalSize, getInitialSize],
+  );
+
+  // Start dragging the modal from the header. Ignores clicks that land on
+  // buttons/icons (close, reset-layout, etc.) so those keep working normally.
+  const handleDragStart = useCallback(
+    (e: React.MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest("button")) return;
+      e.preventDefault();
+      dragStateRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        startOffsetX: dragOffset.x,
+        startOffsetY: dragOffset.y,
+      };
+      document.body.style.userSelect = "none";
+      document.body.style.cursor = "grabbing";
+    },
+    [dragOffset],
+  );
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const rs = resizeStateRef.current;
+      if (rs) {
+        const dx = e.clientX - rs.startX;
+        const dy = e.clientY - rs.startY;
+
+        let nextWidth = rs.startWidth;
+        if (rs.direction.includes("e")) {
+          nextWidth = rs.startWidth + dx;
+        } else if (rs.direction.includes("w")) {
+          nextWidth = rs.startWidth - dx;
+        }
+        let nextHeight = rs.startHeight;
+        if (rs.direction.includes("s")) {
+          nextHeight = rs.startHeight + dy;
+        }
+
+        const maxWidth = window.innerWidth - 32;
+        const maxHeight = window.innerHeight - 32;
+
+        nextWidth = Math.min(Math.max(nextWidth, MIN_MODAL_WIDTH), maxWidth);
+        nextHeight = Math.min(
+          Math.max(nextHeight, MIN_MODAL_HEIGHT),
+          maxHeight,
+        );
+
+        setModalSize({ width: nextWidth, height: nextHeight });
+        return;
+      }
+
+      const ds = dragStateRef.current;
+      if (ds) {
+        const rect = modalRef.current?.getBoundingClientRect();
+        const width = rect?.width ?? getInitialSize().width;
+        const height = rect?.height ?? getInitialSize().height;
+        const originalLeft = (window.innerWidth - width) / 2;
+        const originalTop = (window.innerHeight - height) / 2;
+
+        // Keep at least 100px of the modal visible horizontally, and keep
+        // the header reachable vertically, so the user can always grab it
+        // again after dragging it near an edge.
+        const minFinalLeft = -(width - 100);
+        const maxFinalLeft = window.innerWidth - 100;
+        const minFinalTop = 0;
+        const maxFinalTop = window.innerHeight - 60;
+
+        const minX = minFinalLeft - originalLeft;
+        const maxX = maxFinalLeft - originalLeft;
+        const minY = minFinalTop - originalTop;
+        const maxY = maxFinalTop - originalTop;
+
+        const dx = e.clientX - ds.startX;
+        const dy = e.clientY - ds.startY;
+
+        let nextX = ds.startOffsetX + dx;
+        let nextY = ds.startOffsetY + dy;
+
+        nextX = Math.min(Math.max(nextX, minX), maxX);
+        nextY = Math.min(Math.max(nextY, minY), maxY);
+
+        setDragOffset({ x: nextX, y: nextY });
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (resizeStateRef.current) {
+        resizeStateRef.current = null;
+        document.body.style.userSelect = "";
+        document.body.style.cursor = "";
+      }
+      if (dragStateRef.current) {
+        dragStateRef.current = null;
+        document.body.style.userSelect = "";
+        document.body.style.cursor = "";
+      }
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [getInitialSize]);
+
+  const handleResetLayout = useCallback(() => {
+    setModalSize(null);
+    setDragOffset({ x: 0, y: 0 });
+  }, []);
 
   const report = useMemo(
     () => reports.find((r) => r.id === selectedId) ?? null,
@@ -398,17 +585,38 @@ export default function ReportViewer({
     }
   };
 
+  const effectiveSize = modalSize;
+  const hasCustomLayout =
+    modalSize !== null || dragOffset.x !== 0 || dragOffset.y !== 0;
+
   return (
     <div
       className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
       onClick={onClose}
     >
       <div
-        className="bg-[#1b1b1b] border border-cyan-500/30 rounded-xl w-full max-w-5xl max-h-[90vh] flex shadow-2xl"
+        ref={modalRef}
+        className={`relative bg-[#18181B] border border-cyan-500/30 rounded-xl flex shadow-2xl ${
+          effectiveSize ? "" : "w-full max-w-5xl h-[94vh]"
+        }`}
+        style={{
+          ...(effectiveSize
+            ? {
+                width: effectiveSize.width,
+                height: effectiveSize.height,
+                maxWidth: "96vw",
+                maxHeight: "96vh",
+              }
+            : {}),
+          transform:
+            dragOffset.x !== 0 || dragOffset.y !== 0
+              ? `translate(${dragOffset.x}px, ${dragOffset.y}px)`
+              : undefined,
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Sidebar — list of reports */}
-        <div className="w-64 shrink-0 border-r border-[#313131] bg-[#202020] rounded-l-xl flex flex-col">
+        <div className="w-64 shrink-0 border-r border-[#313131] bg-[#161618] rounded-l-xl flex flex-col">
           <div className="px-3 py-3 border-b border-[#313131] flex items-center justify-between">
             <div className="min-w-0">
               <h4 className="text-white font-semibold text-xs uppercase tracking-wide">
@@ -495,9 +703,15 @@ export default function ReportViewer({
 
         {/* Main panel */}
         <div className="flex-1 flex flex-col min-w-0 rounded-r-xl">
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[#313131] bg-[#252526] rounded-tr-xl">
+          {/* Header — also doubles as the drag handle for moving the modal */}
+          <div
+            onMouseDown={handleDragStart}
+            className="flex items-center justify-between px-4 py-3 border-b border-[#313131] bg-[#202024] rounded-tr-xl cursor-grab active:cursor-grabbing select-none"
+          >
             <div className="flex items-center gap-3 min-w-0">
+              <span className="material-symbols-outlined text-white/20">
+                drag_indicator
+              </span>
               <span className="material-symbols-outlined text-[#3b82f6]">
                 description
               </span>
@@ -518,14 +732,29 @@ export default function ReportViewer({
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-white/50 hover:text-white transition-colors p-1"
-              aria-label="Đóng"
-            >
-              <span className="material-symbols-outlined text-xl">close</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {hasCustomLayout && (
+                <button
+                  type="button"
+                  onClick={handleResetLayout}
+                  title="Đặt lại vị trí & kích thước mặc định"
+                  className="text-white/40 hover:text-white transition-colors p-1"
+                  aria-label="Đặt lại vị trí và kích thước"
+                >
+                  <span className="material-symbols-outlined text-lg">
+                    fit_screen
+                  </span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={onClose}
+                className="text-white/50 hover:text-white transition-colors p-1"
+                aria-label="Đóng"
+              >
+                <span className="material-symbols-outlined text-xl">close</span>
+              </button>
+            </div>
           </div>
 
           {/* Status banner */}
@@ -557,7 +786,7 @@ export default function ReportViewer({
                   type="button"
                   onClick={handleGenerate}
                   disabled={generating}
-                  className="px-5 py-2.5 rounded-xl bg-[#3b82f6] hover:bg-[#2563eb] text-white font-semibold transition shadow-lg shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-5 py-2.5 rounded-xl bg-[#5E6AD2] hover:bg-[#6C78E8] text-white font-semibold transition-all duration-200 shadow-lg shadow-[#5E6AD2]/20 hover:shadow-[#5E6AD2]/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {generating ? (
                     <>
@@ -566,7 +795,7 @@ export default function ReportViewer({
                     </>
                   ) : (
                     <>
-                      <span className="material-symbols-outlined text-base">
+                      <span className="material-symbols-outlined text-base ">
                         auto_awesome
                       </span>
                       Tạo báo cáo AI
@@ -582,7 +811,7 @@ export default function ReportViewer({
             ) : (
               <div className="space-y-4">
                 {/* Status row + actions */}
-                <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-lg bg-[#0d1c2d] border border-[#313131]">
+                <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-[#202124] border border-[#323438]">
                   <div className="flex items-center gap-2 text-xs">
                     <span className="text-white/50">Trạng thái:</span>
                     <span
@@ -673,13 +902,13 @@ export default function ReportViewer({
 
                 {/* ── View mode: unified report format ────────────────────── */}
                 {!editing && (
-                  <div className="space-y-0 rounded-lg border border-[#313131] bg-[#0d1c2d] overflow-hidden">
+                  <div className="space-y-0 rounded-xl border border-[#323438] bg-[#1f2023] overflow-hidden">
                     {/* THÔNG TIN ỨNG VIÊN */}
                     <div className="p-4 border-b border-[#313131]">
                       <div className="text-[#3b82f6] font-semibold text-xs mb-1 uppercase tracking-wide">
                         THÔNG TIN ỨNG VIÊN
                       </div>
-                      <div className="text-cyan-500/40 text-xs mb-2">
+                      <div className="h-px bg-[#313338] my-3">
                         ────────────────────────
                       </div>
                       <div className="space-y-0.5 text-sm text-white/85">
@@ -706,18 +935,18 @@ export default function ReportViewer({
                           </span>
                         </div>
                       </div>
-                      <div className="text-cyan-500/40 text-xs mt-2">
+                      <div className="h-px bg-[#313338] my-3">
                         ────────────────────────
                       </div>
                     </div>
 
                     {/* TÓM TẮT */}
                     {safeStr(report.content?.summary) && (
-                      <div className="p-4 border-b border-[#313131]">
+                      <div className="p-5 border-b border-[#2f3135]">
                         <div className="text-[#3b82f6] font-semibold text-xs mb-1 uppercase tracking-wide">
                           TÓM TẮT
                         </div>
-                        <div className="text-cyan-500/40 text-xs mb-2">
+                        <div className="h-px bg-[#313338] my-3">
                           ────────────────────────
                         </div>
                         <div className="text-white/85 text-sm whitespace-pre-wrap leading-relaxed">
@@ -728,11 +957,11 @@ export default function ReportViewer({
 
                     {/* ĐÁNH GIÁ KỸ NĂNG */}
                     {safeStr(report.content?.skill_evaluation) && (
-                      <div className="p-4 border-b border-[#313131]">
+                      <div className="p-5 border-b border-[#2f3135]">
                         <div className="text-[#3b82f6] font-semibold text-xs mb-1 uppercase tracking-wide">
                           ĐÁNH GIÁ KỸ NĂNG
                         </div>
-                        <div className="text-cyan-500/40 text-xs mb-2">
+                        <div className="h-px bg-[#313338] my-3">
                           ────────────────────────
                         </div>
                         <div className="text-white/85 text-sm whitespace-pre-wrap leading-relaxed">
@@ -743,11 +972,11 @@ export default function ReportViewer({
 
                     {/* ĐIỂM MẠNH */}
                     {safeStr(report.content?.strengths) && (
-                      <div className="p-4 border-b border-[#313131]">
+                      <div className="p-5 border-b border-[#2f3135]">
                         <div className="text-[#3b82f6] font-semibold text-xs mb-1 uppercase tracking-wide">
                           ĐIỂM MẠNH
                         </div>
-                        <div className="text-cyan-500/40 text-xs mb-2">
+                        <div className="h-px bg-[#313338] my-3">
                           ────────────────────────
                         </div>
                         <div className="text-white/85 text-sm whitespace-pre-wrap leading-relaxed">
@@ -759,11 +988,11 @@ export default function ReportViewer({
                     {/* ĐIỂM CẦN CẢI THIỆN */}
                     {safeStr(report.content?.weaknesses) ||
                     safeStr(report.content?.improvement_suggestions) ? (
-                      <div className="p-4 border-b border-[#313131]">
+                      <div className="p-5 border-b border-[#2f3135]">
                         <div className="text-[#3b82f6] font-semibold text-xs mb-1 uppercase tracking-wide">
                           ĐIỂM CẦN CẢI THIỆN
                         </div>
-                        <div className="text-cyan-500/40 text-xs mb-2">
+                        <div className="h-px bg-[#313338] my-3">
                           ────────────────────────
                         </div>
                         <div className="text-white/85 text-sm whitespace-pre-wrap leading-relaxed">
@@ -787,7 +1016,7 @@ export default function ReportViewer({
                         <div className="text-[#3b82f6] font-semibold text-xs mb-1 uppercase tracking-wide">
                           KẾT LUẬN
                         </div>
-                        <div className="text-cyan-500/40 text-xs mb-2">
+                        <div className="h-px bg-[#313338] my-3">
                           ────────────────────────
                         </div>
                         <div className="text-white/85 text-sm whitespace-pre-wrap leading-relaxed">
@@ -868,6 +1097,42 @@ export default function ReportViewer({
             )}
           </div>
         </div>
+
+        {/* ── Resize handles ──────────────────────────────────────────── */}
+        {/* Right edge */}
+        <div
+          onMouseDown={handleResizeStart("e")}
+          className="absolute top-0 right-0 h-full w-2 cursor-ew-resize"
+          style={{ transform: "translateX(50%)" }}
+        />
+        {/* Left edge */}
+        <div
+          onMouseDown={handleResizeStart("w")}
+          className="absolute top-0 left-0 h-full w-2 cursor-ew-resize"
+          style={{ transform: "translateX(-50%)" }}
+        />
+        {/* Bottom edge */}
+        <div
+          onMouseDown={handleResizeStart("s")}
+          className="absolute bottom-0 left-0 w-full h-2 cursor-ns-resize"
+          style={{ transform: "translateY(50%)" }}
+        />
+        {/* Bottom-right corner */}
+        <div
+          onMouseDown={handleResizeStart("se")}
+          className="absolute bottom-0 right-0 h-4 w-4 cursor-nwse-resize flex items-end justify-end p-0.5"
+          style={{ transform: "translate(25%, 25%)" }}
+        >
+          <span className="material-symbols-outlined text-white/25 hover:text-white/60 transition-colors text-sm leading-none">
+            drag_indicator
+          </span>
+        </div>
+        {/* Bottom-left corner */}
+        <div
+          onMouseDown={handleResizeStart("sw")}
+          className="absolute bottom-0 left-0 h-4 w-4 cursor-nesw-resize"
+          style={{ transform: "translate(-25%, 25%)" }}
+        />
       </div>
     </div>
   );
