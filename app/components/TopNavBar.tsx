@@ -1,21 +1,29 @@
 "use client";
 
-import Image from "next/image";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { ChangePasswordModal } from "./ChangePasswordModal";
 
 export function TopNavBar() {
   const [openMenu, setOpenMenu] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const router = useRouter();
   const [role, setRole] = useState<string | null>(null);
+  const [provider, setProvider] = useState<string | null>(null);
 
   useEffect(() => {
     const user = localStorage.getItem("user");
     if (user) {
       const parsed = JSON.parse(user);
       setRole(parsed?.role);
+      setProvider(parsed?.provider ?? null);
     }
   }, []);
+
+  const handleChangePassword = () => {
+    setOpenMenu(false);
+    setShowChangePassword(true);
+  };
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -100,6 +108,15 @@ export function TopNavBar() {
                 Trang cá nhân
               </button>
 
+              {provider !== "GOOGLE" && (
+                <button
+                  onClick={handleChangePassword}
+                  className="w-full text-left px-4 py-2 hover:bg-surface-container-high text-sm"
+                >
+                  Đổi mật khẩu
+                </button>
+              )}
+
               <button
                 onClick={handleLogout}
                 className="w-full text-left px-4 py-2 hover:bg-surface-container-high text-sm text-red-400"
@@ -110,6 +127,10 @@ export function TopNavBar() {
           )}
         </div>
       </div>
+
+      {showChangePassword && (
+        <ChangePasswordModal onClose={() => setShowChangePassword(false)} />
+      )}
     </header>
   );
 }

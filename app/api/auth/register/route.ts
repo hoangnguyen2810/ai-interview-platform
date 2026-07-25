@@ -1,7 +1,7 @@
 import { pool } from "@/lib/db";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import { NextResponse } from "next/server";
+import { signAuthToken } from "@/lib/auth";
 
 function isStrongPassword(password: string) {
   return (
@@ -105,9 +105,10 @@ export async function POST(req: Request) {
         email,
         password_hash,
         full_name,
-        role
+        role,
+        password_changed_at
       )
-      VALUES ($1,$2,$3,$4)
+      VALUES ($1,$2,$3,$4, NOW())
       RETURNING
         id,
         email,
@@ -151,19 +152,9 @@ export async function POST(req: Request) {
 
     await client.query("COMMIT");
 
-    if (!process.env.JWT_SECRET) {
-      throw new Error("JWT_SECRET chưa được cấu hình");
-    }
-
-    const token = jwt.sign(
-      {
-        id: user.id,
-        role: user.role,
-      },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: "7d",
-      },
+    const token = signAuthToken(
+      { id: user.id, role: user.role },
+      Math.floor(Date.now() / 1000),
     );
 
     return NextResponse.json(

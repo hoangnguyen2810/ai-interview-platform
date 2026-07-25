@@ -95,10 +95,7 @@ export function InterviewHistoryList() {
       const headers: HeadersInit = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const qs =
-        status === "ALL"
-          ? "?limit=50"
-          : `?status=${status}&limit=50`;
+      const qs = status === "ALL" ? "?limit=50" : `?status=${status}&limit=50`;
       const res = await fetch(`/api/candidate/interviews${qs}`, {
         headers,
         credentials: "include",
@@ -195,9 +192,7 @@ export function InterviewHistoryList() {
           <span className="material-symbols-outlined text-5xl text-gray-500">
             history
           </span>
-          <p className="text-gray-400">
-            Bạn chưa tham gia buổi phỏng vấn nào
-          </p>
+          <p className="text-gray-400">Bạn chưa tham gia buổi phỏng vấn nào</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -251,7 +246,7 @@ export function InterviewHistoryList() {
                       <span className="material-symbols-outlined text-sm">
                         movie
                       </span>
-                      Có recording
+                      Có ghi hình
                     </span>
                   )}
                 </div>

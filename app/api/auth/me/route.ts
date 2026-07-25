@@ -24,8 +24,9 @@ export async function GET(req: Request) {
     full_name: string;
     avatar_url: string | null;
     role: string;
+    provider: string;
   }>(
-    `SELECT id, email, full_name, avatar_url, role
+    `SELECT id, email, full_name, avatar_url, role, provider
      FROM users
      WHERE id = $1
      LIMIT 1`,
@@ -44,6 +45,7 @@ export async function GET(req: Request) {
       fullName: row.full_name,
       avatarUrl: row.avatar_url,
       role: row.role,
+      provider: row.provider,
     },
   });
 }

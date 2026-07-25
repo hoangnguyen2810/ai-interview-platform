@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { OAuth2Client } from "google-auth-library";
 import { pool } from "@/lib/db";
-import jwt from "jsonwebtoken";
+import { signAuthToken } from "@/lib/auth";
 
 const client = new OAuth2Client(
   process.env.GOOGLE_CLIENT_ID,
@@ -48,7 +48,7 @@ export async function GET(req: Request) {
 
     // check user
     const userRes = await db.query(
-      `SELECT * FROM users WHERE email=$1 AND deleted_at IS NULL`,
+      `SELECT id, email, full_name, role, password_changed_at FROM users WHERE email=$1 AND deleted_at IS NULL`,
       [email],
     );
 
@@ -56,9 +56,9 @@ export async function GET(req: Request) {
 
     if (userRes.rows.length === 0) {
       const insert = await db.query(
-        `INSERT INTO users (email, full_name, avatar_url, role, provider)
-         VALUES ($1,$2,$3,'CANDIDATE','GOOGLE')
-         RETURNING id,email,full_name,role`,
+        `INSERT INTO users (email, full_name, avatar_url, role, provider, password_changed_at)
+         VALUES ($1,$2,$3,'CANDIDATE','GOOGLE', NOW())
+         RETURNING id,email,full_name,role,password_changed_at`,
         [email, fullName, avatar],
       );
 
@@ -78,13 +78,11 @@ export async function GET(req: Request) {
     await db.query("COMMIT");
 
     // JWT
-    const token = jwt.sign(
-      {
-        id: user.id,
-        role: user.role,
-      },
-      process.env.JWT_SECRET!,
-      { expiresIn: "7d" },
+    const token = signAuthToken(
+      { id: user.id, role: user.role },
+      user.password_changed_at
+        ? Math.floor(new Date(user.password_changed_at).getTime() / 1000)
+        : 0,
     );
 
     // redirect về frontend kèm token

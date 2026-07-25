@@ -1,7 +1,7 @@
 import { pool } from "@/lib/db";
 import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
 import { NextResponse } from "next/server";
+import { signAuthToken } from "@/lib/auth";
 
 export async function POST(req: Request) {
   try {
@@ -31,7 +31,9 @@ export async function POST(req: Request) {
         full_name,
         password_hash,
         role,
-        is_active
+        provider,
+        is_active,
+        password_changed_at
       FROM users
       WHERE email = $1
       AND deleted_at IS NULL
@@ -79,15 +81,11 @@ export async function POST(req: Request) {
       [user.id],
     );
 
-    const token = jwt.sign(
-      {
-        id: user.id,
-        role: user.role,
-      },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: "7d",
-      },
+    const token = signAuthToken(
+      { id: user.id, role: user.role },
+      user.password_changed_at
+        ? Math.floor(new Date(user.password_changed_at).getTime() / 1000)
+        : 0,
     );
 
     const response = NextResponse.json({
@@ -98,6 +96,7 @@ export async function POST(req: Request) {
         email: user.email,
         fullName: user.full_name,
         role: user.role,
+        provider: user.provider,
       },
     });
 

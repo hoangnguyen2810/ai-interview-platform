@@ -14,35 +14,50 @@ export default function AuthSuccess() {
     // save auth
     localStorage.setItem("token", token);
 
-    // decode payload từ JWT
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    const role = payload.role;
-
-    // TopNavBar và các chỗ khác đọc role từ localStorage "user",
-    // nên phải lưu lại để đồng bộ với flow login thường.
-    localStorage.setItem(
-      "user",
-      JSON.stringify({
-        id: payload.id,
-        email: payload.email,
-        fullName: payload.fullName ?? "",
-        role,
-      }),
-    );
-
     // Best-effort: cũng set cookie để server page (vd. /interview/*) đọc được.
     // Cookie này KHÔNG httpOnly, không dùng cho bảo mật; chỉ là fallback.
     document.cookie = `token=${encodeURIComponent(
       token,
     )}; path=/; max-age=${60 * 60 * 24 * 7}; samesite=lax`;
 
-    if (role === "CANDIDATE") {
-      window.location.href = "/candidate/dashboard";
-    } else if (role === "RECRUITER") {
-      window.location.href = "/recruiter/dashboard";
-    } else {
-      window.location.href = "/";
-    }
+    // JWT chỉ chứa { id, role } — không đủ để dựng "user" cho localStorage
+    // (thiếu email, fullName, provider...). Gọi /api/auth/me để lấy đầy đủ,
+    // đồng bộ với format user object mà flow login thường đang lưu.
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/me", {
+          headers: { Authorization: `Bearer ${token}` },
+          credentials: "include",
+        });
+        const data = await res.json();
+
+        if (!data.user) {
+          window.location.href = "/login?error=google_auth_failed";
+          return;
+        }
+
+        localStorage.setItem(
+          "user",
+          JSON.stringify({
+            id: data.user.id,
+            email: data.user.email,
+            fullName: data.user.fullName,
+            role: data.user.role,
+            provider: data.user.provider,
+          }),
+        );
+
+        if (data.user.role === "CANDIDATE") {
+          window.location.href = "/candidate/dashboard";
+        } else if (data.user.role === "RECRUITER") {
+          window.location.href = "/recruiter/dashboard";
+        } else {
+          window.location.href = "/";
+        }
+      } catch {
+        window.location.href = "/login?error=google_auth_failed";
+      }
+    })();
   }, []);
 
   return (
