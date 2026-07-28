@@ -74,11 +74,6 @@ export function TopNavBar() {
       </div>
 
       <div className="flex items-center gap-4 relative">
-        {/* NOTI */}
-        <button className="material-symbols-outlined text-on-surface-variant hover:text-primary-fixed p-2">
-          notifications
-        </button>
-
         {/* SETTINGS */}
         <div className="relative">
           <button

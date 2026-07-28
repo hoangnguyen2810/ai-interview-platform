@@ -213,7 +213,6 @@ export default function InterviewManagementPage() {
     return stats.total.toLocaleString("vi-VN");
   }, [stats.total]);
 
-  // ============== Pagination ==============
   const totalPages = Math.max(1, Math.ceil(interviews.length / PAGE_SIZE));
 
   // Nếu currentPage vượt quá totalPages (vd. data shrink sau khi xóa/finish),

@@ -25,7 +25,6 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: "Tài nguyên",
     items: [
-      { label: "Câu hỏi luyện tập", icon: "quiz", href: "#" },
       {
         label: "Kho kiến thức",
         icon: "menu_book",
