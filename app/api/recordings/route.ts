@@ -8,8 +8,9 @@
 //   - limit:   số bản ghi trả về (mặc định 100, tối đa 500).
 //
 // Auth:
-//   - RECRUITER/ADMIN: xem tất cả.
-//   - CANDIDATE:        chỉ xem recordings của callCid mà mình tham gia.
+//   - ADMIN:     xem tất cả.
+//   - RECRUITER: chỉ xem recordings của interview mình là HOST/INTERVIEWER.
+//   - CANDIDATE: chỉ xem recordings của callCid mà mình tham gia.
 
 import { NextResponse } from "next/server";
 import { pool } from "@/lib/db";
@@ -62,7 +63,22 @@ export async function GET(req: Request) {
         JOIN interviews i ON i.id = ip.interview_id
         WHERE ip.user_id = $1 AND i.deleted_at IS NULL
       )`;
-    } else if (auth.role !== "RECRUITER" && auth.role !== "ADMIN") {
+    } else if (auth.role === "RECRUITER") {
+      // Recruiter chỉ thấy recording của interview mà mình là
+      // HOST/INTERVIEWER — KHÔNG được xem recording của recruiter khác.
+      // (Trước đây nhánh này rơi qua without lọc → where vẫn "1=1" →
+      // lộ recording của mọi recruiter. Đã sửa để khớp logic trong
+      // /api/recordings/latest.)
+      params.push(auth.id);
+      where = `rec.call_cid IN (
+        SELECT ('default:' || i.meeting_code)
+        FROM interview_participants ip
+        JOIN interviews i ON i.id = ip.interview_id
+        WHERE ip.user_id = $1
+          AND ip.participant_role IN ('HOST', 'INTERVIEWER')
+          AND i.deleted_at IS NULL
+      )`;
+    } else if (auth.role !== "ADMIN") {
       return forbidden("Không có quyền xem recordings");
     }
 

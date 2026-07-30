@@ -76,6 +76,11 @@ export async function GET(req: Request) {
 
     const rows = dataRes.rows.map((r) => ({
       ...r,
+      // Postgres NUMERIC/DECIMAL trả về dạng string qua node-postgres
+      // (để tránh mất độ chính xác) — phải ép sang number ở đây, nếu
+      // không FE gọi `.toFixed()` sẽ crash vì nhận được string.
+      ai_overall_score:
+        r.ai_overall_score != null ? Number(r.ai_overall_score) : null,
       content: undefined,
     }));
 
@@ -132,7 +137,14 @@ export async function PATCH(req: Request) {
   try {
     const res = await pool.query(sql, params);
     if (res.rows.length === 0) return apiErr("Không tìm thấy report", 404);
-    return ok({ report: res.rows[0] });
+    const row = res.rows[0];
+    return ok({
+      report: {
+        ...row,
+        ai_overall_score:
+          row.ai_overall_score != null ? Number(row.ai_overall_score) : null,
+      },
+    });
   } catch (e) {
     console.error("ADMIN REPORTS PATCH ERROR:", e);
     return apiErr("Không thể cập nhật", 500);

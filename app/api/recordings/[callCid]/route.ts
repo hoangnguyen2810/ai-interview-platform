@@ -19,7 +19,10 @@
 //
 // Auth:
 //   - CANDIDATE: chỉ được sync recordings của interview mà mình tham gia.
-//   - RECRUITER/ADMIN: được sync cho mọi interview.
+//   - RECRUITER: chỉ được sync recordings của interview mà mình là
+//                HOST/INTERVIEWER (KHÔNG được sync/xem interview của
+//                recruiter khác).
+//   - ADMIN: được sync cho mọi interview.
 //   - Guest (chưa login): 401.
 
 import { NextResponse } from "next/server";
@@ -53,23 +56,46 @@ interface RecordingRow {
 
 /**
  * Verify user hiện tại có quyền truy cập callCid. Cho phép:
- *   - RECRUITER/ADMIN: mọi callCid.
- *   - CANDIDATE: chỉ callCid của interview mà user là participant.
+ *   - ADMIN: mọi callCid.
+ *   - RECRUITER: chỉ callCid của interview mà user là HOST/INTERVIEWER.
+ *   - CANDIDATE: chỉ callCid của interview mà user là participant (mọi role).
+ *
+ * LƯU Ý: trước đây RECRUITER được return true ngay (mọi callCid) — dẫn
+ * đến recruiter A có thể sync/xem recording của interview do recruiter B
+ * host. Đã sửa để RECRUITER phải qua cùng kiểm tra participant, chỉ khác
+ * là giới hạn thêm participant_role.
  */
 async function verifyAccess(
   userId: string,
   role: string,
   callCid: string,
 ): Promise<boolean> {
-  if (role === "RECRUITER" || role === "ADMIN") return true;
+  if (role === "ADMIN") return true;
 
-  // Candidate: kiểm tra trong interview_participants xem user này có thuộc
-  // interview mà callCid thuộc về không. callCid thường có dạng
-  // "<callType>:<meetingCode>"; meetingCode nằm trong bảng interviews.
+  // callCid thường có dạng "<callType>:<meetingCode>"; meetingCode nằm
+  // trong bảng interviews.
   const meetingCode = callCid.includes(":")
     ? callCid.split(":").slice(1).join(":")
     : callCid;
 
+  if (role === "RECRUITER") {
+    const res = await pool.query<{ exists: boolean }>(
+      `SELECT EXISTS(
+         SELECT 1
+         FROM interview_participants ip
+         JOIN interviews i ON i.id = ip.interview_id
+         WHERE ip.user_id = $1
+           AND i.meeting_code = $2
+           AND ip.participant_role IN ('HOST', 'INTERVIEWER')
+           AND i.deleted_at IS NULL
+       ) AS exists`,
+      [userId, meetingCode],
+    );
+    return Boolean(res.rows[0]?.exists);
+  }
+
+  // Candidate (hoặc role khác): kiểm tra trong interview_participants xem
+  // user này có thuộc interview mà callCid thuộc về không (mọi role).
   const res = await pool.query<{ exists: boolean }>(
     `SELECT EXISTS(
        SELECT 1
@@ -193,10 +219,7 @@ export async function GET(_req: Request, ctx: Params) {
     const existingRes = await pool.query<{
       filename: string | null;
       url: string;
-    }>(
-      `SELECT filename, url FROM recordings WHERE call_cid = $1`,
-      [callCid],
-    );
+    }>(`SELECT filename, url FROM recordings WHERE call_cid = $1`, [callCid]);
 
     const existingFilenames = new Set<string>();
     const existingUrls = new Set<string>();
@@ -350,8 +373,7 @@ export async function GET(_req: Request, ctx: Params) {
     return NextResponse.json(
       {
         success: false,
-        message:
-          error instanceof Error ? error.message : "Lỗi máy chủ",
+        message: error instanceof Error ? error.message : "Lỗi máy chủ",
       },
       { status: 500 },
     );

@@ -31,12 +31,10 @@ Quy tắc:
 
     Constraints:
 
-    
     Input:
     
     Output:
    
-
     Example 1
     Input:
  
@@ -44,7 +42,6 @@ Quy tắc:
  
     Explanation:
    
-
     Example 2
     Input:
  

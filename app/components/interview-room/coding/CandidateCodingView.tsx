@@ -185,10 +185,7 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
       if (response.ok) {
         setSubmitted(true);
         if (submitTimeoutRef.current) clearTimeout(submitTimeoutRef.current);
-        submitTimeoutRef.current = setTimeout(
-          () => setSubmitted(false),
-          4000,
-        );
+        submitTimeoutRef.current = setTimeout(() => setSubmitted(false), 4000);
       } else {
         alert(data.message || "Submit thất bại");
       }
@@ -216,7 +213,9 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
       {/* ── Submitted notification banner ── */}
       {submitted && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-green-500/15 border border-green-500/40 text-green-300 px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 backdrop-blur-md animate-in fade-in slide-in-from-top-2">
-          <span className="material-symbols-outlined text-green-400">check_circle</span>
+          <span className="material-symbols-outlined text-green-400">
+            check_circle
+          </span>
           <div>
             <p className="font-semibold text-sm">Đã submit code thành công</p>
             <p className="text-xs text-green-300/70">
@@ -238,7 +237,7 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
                 pending_actions
               </span>
               <p className="text-gray-500 text-sm">
-                Đang chờ recruiter giao câu hỏi...
+                Đang chờ nhà tuyển dụng giao câu hỏi...
               </p>
             </div>
           ) : (

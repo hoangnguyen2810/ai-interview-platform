@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Trash2, Eye } from "lucide-react";
+import { Loader2, Trash2, Eye, X } from "lucide-react";
 import { AdminShell } from "@/app/components/admin-dashboard/AdminShell";
 import { AdminTable } from "@/app/components/admin-dashboard/AdminTable";
 import { AdminFilter } from "@/app/components/admin-dashboard/AdminFilter";
@@ -27,6 +27,15 @@ type ReportRow = {
   created_by_email: string | null;
 };
 
+// Chi tiết report trả về từ GET /api/admin/reports/[id] — có thêm
+// content (JSONB tự do) + vài field snapshot khác.
+type ReportDetail = ReportRow & {
+  updated_at: string | null;
+  cv_filename: string | null;
+  coding_analysis_snapshot: unknown;
+  content: unknown;
+};
+
 const STATUS_OPTIONS = [
   { value: "", label: "Tất cả trạng thái" },
   { value: "DRAFT", label: "DRAFT" },
@@ -40,6 +49,110 @@ const STATUS_COLOR: Record<ReportRow["status"], string> = {
   FINAL: "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30",
 };
 
+// ---------------------------------------------------------------------
+// JsonPretty: render 1 giá trị JSON (object/array/primitive) bất kỳ
+// thành các block dễ đọc, thay vì <pre>{JSON.stringify(...)}</pre>.
+// Vì `content` là JSONB tự do (schema có thể đổi theo thời gian tuỳ
+// prompt AI), component này không giả định cấu trúc cố định — chỉ format
+// key thành label đẹp, và đệ quy xuống nested object/array.
+// ---------------------------------------------------------------------
+function prettifyKey(key: string): string {
+  return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function JsonPretty({ value, depth = 0 }: { value: unknown; depth?: number }) {
+  if (value === null || value === undefined) {
+    return <span className="text-slate-500 text-sm">—</span>;
+  }
+
+  if (typeof value === "string") {
+    return (
+      <span className="text-sm text-slate-200 whitespace-pre-wrap">
+        {value || "—"}
+      </span>
+    );
+  }
+
+  if (typeof value === "number") {
+    return <span className="text-sm text-cyan-300 font-medium">{value}</span>;
+  }
+
+  if (typeof value === "boolean") {
+    return (
+      <span
+        className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+          value
+            ? "bg-emerald-500/15 text-emerald-300"
+            : "bg-slate-600/30 text-slate-400"
+        }`}
+      >
+        {value ? "Có" : "Không"}
+      </span>
+    );
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return <span className="text-slate-500 text-sm">—</span>;
+    }
+    // Mảng chuỗi/số đơn giản → hiện dạng chip cho gọn.
+    const isPrimitiveArray = value.every(
+      (v) => typeof v === "string" || typeof v === "number",
+    );
+    if (isPrimitiveArray) {
+      return (
+        <div className="flex flex-wrap gap-1.5">
+          {value.map((v, i) => (
+            <span
+              key={i}
+              className="text-xs px-2 py-1 rounded-md bg-slate-700/40 text-slate-200 border border-slate-600/40"
+            >
+              {String(v)}
+            </span>
+          ))}
+        </div>
+      );
+    }
+    // Mảng object → mỗi phần tử 1 card con.
+    return (
+      <div className="space-y-2">
+        {value.map((v, i) => (
+          <div
+            key={i}
+            className="rounded-lg border border-slate-700/60 bg-slate-800/30 p-3"
+          >
+            <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1.5">
+              #{i + 1}
+            </div>
+            <JsonPretty value={v} depth={depth + 1} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length === 0) {
+      return <span className="text-slate-500 text-sm">—</span>;
+    }
+    return (
+      <div className={depth === 0 ? "space-y-3" : "space-y-2 pl-3"}>
+        {entries.map(([k, v]) => (
+          <div key={k}>
+            <div className="text-xs font-semibold text-slate-400 mb-1">
+              {prettifyKey(k)}
+            </div>
+            <JsonPretty value={v} depth={depth + 1} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return <span className="text-sm text-slate-300">{String(value)}</span>;
+}
+
 export default function AdminReportsPage() {
   const { ready } = useAdminGuard();
   const [search, setSearch] = useState("");
@@ -52,7 +165,7 @@ export default function AdminReportsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<ReportRow | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
-  const [preview, setPreview] = useState<unknown>(null);
+  const [preview, setPreview] = useState<ReportDetail | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,13 +206,18 @@ export default function AdminReportsPage() {
       const res = await adminFetch(`/api/admin/reports/${id}`);
       const data = await res.json();
       if (!data?.success) throw new Error(data?.message || "Lỗi");
-      setPreview(data.report);
+      setPreview(data.report as ReportDetail);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Lỗi");
       setPreviewId(null);
     } finally {
       setPreviewLoading(false);
     }
+  };
+
+  const closePreview = () => {
+    setPreviewId(null);
+    setPreview(null);
   };
 
   const changeStatus = async (
@@ -213,7 +331,7 @@ export default function AdminReportsPage() {
             render: (r) =>
               r.ai_overall_score != null ? (
                 <span className="text-sm font-semibold text-cyan-300">
-                  {r.ai_overall_score.toFixed(1)} / 10
+                  {Number(r.ai_overall_score).toFixed(1)} / 10
                 </span>
               ) : (
                 <span className="text-xs text-slate-500">—</span>
@@ -312,27 +430,132 @@ export default function AdminReportsPage() {
       />
 
       {previewId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-8 shadow-2xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-on-surface">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-[#0B1120] border border-white/10 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+              <h2 className="text-lg font-semibold text-white">
                 Nội dung report
               </h2>
               <button
                 type="button"
-                onClick={() => setPreviewId(null)}
-                className="material-symbols-outlined text-on-surface-variant"
+                onClick={closePreview}
+                className="text-slate-400 hover:text-white transition-colors"
               >
-                close
+                <X className="w-5 h-5" />
               </button>
             </div>
-            {previewLoading ? (
-              <p className="text-sm text-slate-400">Đang tải…</p>
-            ) : (
-              <pre className="text-xs text-slate-200 bg-[#071524] rounded-lg p-4 overflow-x-auto">
-                {JSON.stringify(preview, null, 2)}
-              </pre>
-            )}
+
+            {/* Body */}
+            <div className="overflow-y-auto px-6 py-5">
+              {previewLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+                </div>
+              ) : preview ? (
+                <div className="space-y-5">
+                  {/* Tóm tắt */}
+                  <div className="rounded-xl border border-slate-700/60 bg-slate-800/30 p-4 grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">
+                        Phỏng vấn
+                      </div>
+                      <div className="text-sm text-white">
+                        {preview.interview_title}
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        {preview.meeting_code}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">
+                        AI Score
+                      </div>
+                      <div className="text-sm font-semibold text-cyan-300">
+                        {preview.ai_overall_score != null
+                          ? `${Number(preview.ai_overall_score).toFixed(1)} / 10`
+                          : "—"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">
+                        Model
+                      </div>
+                      <div className="text-sm text-slate-200">
+                        {preview.ai_model || "—"}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">
+                        Trạng thái
+                      </div>
+                      <span
+                        className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_COLOR[preview.status]}`}
+                      >
+                        {preview.status}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">
+                        Người tạo
+                      </div>
+                      <div className="text-sm text-slate-200">
+                        {preview.created_by_name || "—"}
+                      </div>
+                      {preview.created_by_email && (
+                        <div className="text-xs text-slate-500">
+                          {preview.created_by_email}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">
+                        Tạo lúc
+                      </div>
+                      <div className="text-sm text-slate-200">
+                        {new Date(preview.generated_at).toLocaleString("vi-VN")}
+                      </div>
+                    </div>
+                    {preview.cv_filename && (
+                      <div className="col-span-2 sm:col-span-3">
+                        <div className="text-[11px] uppercase tracking-wide text-slate-500 mb-1">
+                          File CV
+                        </div>
+                        <div className="text-sm text-slate-200 break-all">
+                          {preview.cv_filename}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Nội dung report (JSONB) */}
+                  {preview.content != null && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-white mb-2">
+                        Chi tiết đánh giá
+                      </h3>
+                      <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-4">
+                        <JsonPretty value={preview.content} />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Coding analysis snapshot (nếu có) */}
+                  {preview.coding_analysis_snapshot != null && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-white mb-2">
+                        Live Coding
+                      </h3>
+                      <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-4">
+                        <JsonPretty value={preview.coding_analysis_snapshot} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400">Không có dữ liệu.</p>
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -31,7 +31,16 @@ export async function GET(
       [id],
     );
     if (res.rows.length === 0) return apiErr("Không tìm thấy report", 404);
-    return ok({ report: res.rows[0] });
+    const row = res.rows[0];
+    return ok({
+      report: {
+        ...row,
+        // Postgres NUMERIC/DECIMAL trả về string qua node-postgres — ép
+        // sang number để FE gọi `.toFixed()` không bị crash.
+        ai_overall_score:
+          row.ai_overall_score != null ? Number(row.ai_overall_score) : null,
+      },
+    });
   } catch (e) {
     console.error("ADMIN REPORT GET ERROR:", e);
     return apiErr("Không thể lấy report", 500);

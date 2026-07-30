@@ -81,17 +81,25 @@ export default function FooterControls({
 
   /**
    * Xử lý End Call theo role:
-   *  - HOST/CO_HOST: stop recording → set interview FINISHED → end call trên
-   *    Stream → leave → sync recordings → redirect /dashboard.
-   *  - CANDIDATE: chỉ leave call, KHÔNG stop recording (HOST sẽ quyết định),
-   *    KHÔNG set FINISHED. Redirect về /candidate/dashboard.
+   *  - HOST: stop recording → set interview FINISHED → end call trên
+   *    Stream → leave → sync recordings → redirect /recruiter/dashboard.
+   *  - INTERVIEWER (recruiter phụ, KHÔNG phải host): CHỈ leave call —
+   *    KHÔNG stop recording, KHÔNG gọi /end, KHÔNG set FINISHED.
+   *    Redirect /recruiter/dashboard (vẫn là recruiter, nhưng không
+   *    được coi là người kết thúc phiên).
+   *  - CANDIDATE: chỉ leave call, KHÔNG stop recording, KHÔNG set
+   *    FINISHED. Redirect /candidate/dashboard.
    */
   const handleEndCall = async () => {
     if (isEnding) return; // chống double-click
     setIsEnding(true);
 
-    const isHost =
-      participantRole === "HOST" || participantRole === "INTERVIEWER";
+    // CHỈ HOST mới được coi là người kết thúc phiên.
+    // INTERVIEWER (recruiter phụ tham gia phòng) KHÔNG được phép
+    // stop recording / end call — trước đây bug do check
+    // `participantRole === "HOST" || participantRole === "INTERVIEWER"`
+    // khiến recruiter phụ rời phòng cũng dừng luôn ghi hình.
+    const isHost = participantRole === "HOST";
 
     try {
       if (isHost) {
@@ -128,7 +136,7 @@ export default function FooterControls({
         }
       }
 
-      // 3. Leave call (cả HOST và CANDIDATE đều cần)
+      // 3. Leave call (HOST, INTERVIEWER và CANDIDATE đều cần rời phòng)
       if (call) {
         try {
           await call.leave();
@@ -146,9 +154,9 @@ export default function FooterControls({
         }
       }
 
-      // 5. Thông báo dashboard (nếu recruiter còn mở tab dashboard ở background)
-      //    để Upcoming/Recent refresh data. Dùng CustomEvent để tránh coupling
-      //    giữa InterviewRoom tree và RecruiterDashboard tree.
+      // 5. Thông báo dashboard (nếu recruiter còn mở tab dashboard ở
+      //    background) để Upcoming/Recent refresh data. Chỉ phát khi
+      //    thực sự kết thúc phiên (HOST).
       if (isHost && typeof window !== "undefined" && meetingCode) {
         try {
           window.dispatchEvent(
@@ -161,10 +169,13 @@ export default function FooterControls({
         }
       }
     } finally {
-      // 5. Redirect theo role
-      const redirectTo = isHost
-        ? "/recruiter/dashboard"
-        : "/candidate/dashboard";
+      // 6. Redirect theo role:
+      //    - CANDIDATE → /candidate/dashboard
+      //    - HOST và INTERVIEWER (đều là recruiter) → /recruiter/dashboard
+      const redirectTo =
+        participantRole === "CANDIDATE"
+          ? "/candidate/dashboard"
+          : "/recruiter/dashboard";
       window.location.href = redirectTo;
     }
   };
@@ -287,7 +298,7 @@ export default function FooterControls({
             onClick={handleEndCall}
             disabled={isEnding}
             title={
-              participantRole === "HOST" || participantRole === "INTERVIEWER"
+              participantRole === "HOST"
                 ? "Kết thúc buổi phỏng vấn (toàn bộ phòng sẽ rời đi)"
                 : "Rời khỏi phòng"
             }
