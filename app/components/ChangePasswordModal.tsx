@@ -122,7 +122,11 @@ export function ChangePasswordModal({ onClose }: ChangePasswordModalProps) {
               <label className="text-sm text-on-surface-variant">
                 Mật khẩu hiện tại
               </label>
-              <div className="relative">
+              {/* relative + overflow-hidden: chặn mọi icon "reveal password"
+                  gốc của trình duyệt (Edge/extension) lòi ra ngoài viền bo
+                  góc của input. Icon custom vẫn hiển thị bình thường vì nó
+                  nằm trong cùng box, chỉ những gì tràn ra ngoài mới bị cắt. */}
+              <div className="relative overflow-hidden rounded-lg">
                 <input
                   type={showOldPassword ? "text" : "password"}
                   value={oldPassword}
@@ -134,7 +138,8 @@ export function ChangePasswordModal({ onClose }: ChangePasswordModalProps) {
                   type="button"
                   onClick={() => setShowOldPassword((prev) => !prev)}
                   tabIndex={-1}
-                  className="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-lg text-on-surface-variant hover:text-primary-fixed"
+                  aria-label={showOldPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                  className="material-symbols-outlined absolute right-2 top-1/2 z-10 flex h-5 w-5 -translate-y-1/2 items-center justify-center p-0 text-lg leading-none text-on-surface-variant hover:text-primary-fixed"
                 >
                   {showOldPassword ? "visibility_off" : "visibility"}
                 </button>
@@ -145,7 +150,7 @@ export function ChangePasswordModal({ onClose }: ChangePasswordModalProps) {
               <label className="text-sm text-on-surface-variant">
                 Mật khẩu mới
               </label>
-              <div className="relative">
+              <div className="relative overflow-hidden rounded-lg">
                 <input
                   type={showNewPassword ? "text" : "password"}
                   value={newPassword}
@@ -157,7 +162,8 @@ export function ChangePasswordModal({ onClose }: ChangePasswordModalProps) {
                   type="button"
                   onClick={() => setShowNewPassword((prev) => !prev)}
                   tabIndex={-1}
-                  className="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-lg text-on-surface-variant hover:text-primary-fixed"
+                  aria-label={showNewPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                  className="material-symbols-outlined absolute right-2 top-1/2 z-10 flex h-5 w-5 -translate-y-1/2 items-center justify-center p-0 text-lg leading-none text-on-surface-variant hover:text-primary-fixed"
                 >
                   {showNewPassword ? "visibility_off" : "visibility"}
                 </button>
@@ -168,7 +174,7 @@ export function ChangePasswordModal({ onClose }: ChangePasswordModalProps) {
               <label className="text-sm text-on-surface-variant">
                 Nhập lại mật khẩu mới
               </label>
-              <div className="relative">
+              <div className="relative overflow-hidden rounded-lg">
                 <input
                   type={showConfirmPassword ? "text" : "password"}
                   value={confirmPassword}
@@ -180,7 +186,10 @@ export function ChangePasswordModal({ onClose }: ChangePasswordModalProps) {
                   type="button"
                   onClick={() => setShowConfirmPassword((prev) => !prev)}
                   tabIndex={-1}
-                  className="material-symbols-outlined absolute right-2 top-1/2 -translate-y-1/2 text-lg text-on-surface-variant hover:text-primary-fixed"
+                  aria-label={
+                    showConfirmPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"
+                  }
+                  className="material-symbols-outlined absolute right-2 top-1/2 z-10 flex h-5 w-5 -translate-y-1/2 items-center justify-center p-0 text-lg leading-none text-on-surface-variant hover:text-primary-fixed"
                 >
                   {showConfirmPassword ? "visibility_off" : "visibility"}
                 </button>

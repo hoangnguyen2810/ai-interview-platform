@@ -287,7 +287,7 @@ export default function InterviewWaitingClient({
                       : "Bắt đầu phỏng vấn →"
                     : isHost
                       ? "Đang chờ người tham gia..."
-                      : "Đang chờ Host..."}
+                      : "Đang chờ chủ phòng..."}
                 </button>
 
                 {/* WARNING */}

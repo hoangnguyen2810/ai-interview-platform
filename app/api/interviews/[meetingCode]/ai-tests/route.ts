@@ -68,7 +68,7 @@ function ensureRecruiter(auth: ReturnType<typeof getAuthUserFromRequest>) {
   return null;
 }
 
-/** Resolve submission → interview for the given meeting. Returns submission + source code + language. */
+/** Resolve submission → interview for the given meeting. Returns submission + source code + language + execution_mode. */
 async function loadSubmissionContext(
   meetingCode: string,
   submissionId: string,
@@ -77,6 +77,7 @@ async function loadSubmissionContext(
       submissionId: string;
       sourceCode: string;
       language: string;
+      executionMode: string | null;
     }
   | { error: NextResponse }
 > {
@@ -87,8 +88,10 @@ async function loadSubmissionContext(
     `SELECT s.id          AS submission_id,
             s.source_code,
             s.language,
-            s.interview_id
+            s.interview_id,
+            r.execution_mode
      FROM code_submissions s
+     LEFT JOIN ai_reviews r ON r.submission_id = s.id
      WHERE s.id = $1::uuid
        AND s.interview_id = (SELECT id FROM interviews WHERE meeting_code = $2)
      LIMIT 1`,
@@ -97,7 +100,10 @@ async function loadSubmissionContext(
   if (res.rows.length === 0) {
     return {
       error: NextResponse.json(
-        { success: false, message: "Submission không tồn tại trong meeting này" },
+        {
+          success: false,
+          message: "Submission không tồn tại trong meeting này",
+        },
         { status: 404 },
       ),
     };
@@ -106,6 +112,8 @@ async function loadSubmissionContext(
     submissionId: res.rows[0].submission_id,
     sourceCode: res.rows[0].source_code,
     language: res.rows[0].language,
+    // null nếu submission chưa từng chạy AI review (chưa có row ai_reviews)
+    executionMode: res.rows[0].execution_mode ?? null,
   };
 }
 
@@ -182,17 +190,16 @@ export async function POST(req: NextRequest, ctx: Params) {
   if (guardErr) return guardErr;
 
   const { meetingCode } = await ctx.params;
-  const body = (await req.json().catch(() => null)) as
-    | {
-        action?: string;
-        submissionId?: string;
-        testIds?: string[];
-        inputData?: string;
-        expectedOutput?: string;
-        description?: string;
-        edgeCaseType?: string;
-      }
-    | null;
+  const body = (await req.json().catch(() => null)) as {
+    action?: string;
+    submissionId?: string;
+    testIds?: string[];
+    inputData?: string;
+    expectedOutput?: string;
+    description?: string;
+    edgeCaseType?: string;
+    force?: boolean;
+  } | null;
 
   if (!body || typeof body.action !== "string") {
     return badRequest("Thiếu action");
@@ -204,7 +211,14 @@ export async function POST(req: NextRequest, ctx: Params) {
   if ("error" in ctx2) return ctx2.error;
 
   if (body.action === "run") {
-    return handleRun(ctx2.submissionId, ctx2.sourceCode, ctx2.language, body.testIds ?? []);
+    return handleRun(
+      ctx2.submissionId,
+      ctx2.sourceCode,
+      ctx2.language,
+      ctx2.executionMode,
+      body.testIds ?? [],
+      body.force === true,
+    );
   }
   if (body.action === "add") {
     return handleAdd(
@@ -222,13 +236,90 @@ async function handleRun(
   submissionId: string,
   sourceCode: string,
   language: string,
+  executionMode: string | null,
   testIds: string[],
+  force: boolean,
+) {
+  try {
+    return await handleRunInner(
+      submissionId,
+      sourceCode,
+      language,
+      executionMode,
+      testIds,
+      force,
+    );
+  } catch (e) {
+    console.error("[ai-tests run] UNHANDLED ERROR:", e);
+    return NextResponse.json(
+      {
+        success: false,
+        message: `Lỗi khi chạy test case: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      },
+      { status: 500 },
+    );
+  }
+}
+
+async function handleRunInner(
+  submissionId: string,
+  sourceCode: string,
+  language: string,
+  executionMode: string | null,
+  testIds: string[],
+  force: boolean,
 ) {
   if (!Array.isArray(testIds) || testIds.length === 0) {
     return badRequest("Thiếu testIds (mảng UUID)");
   }
   if (testIds.some((id) => !UUID_RE.test(id))) {
     return badRequest("testIds chứa phần tử không phải UUID");
+  }
+
+  // ── Gate: chỉ chạy sandbox tự động khi chương trình thực sự đọc từ stdin.
+  //    Với "hardcoded" / "function" / "unknown", source code không đổi giữa
+  //    các lần chạy dù input_data khác nhau → PASSED/FAILED không phản ánh
+  //    đúng bản chất bài làm (khác với khi tự sửa tay và chạy trên VSCode).
+  //    force=true cho phép recruiter cố tình chạy dù biết rủi ro (UI nên
+  //    hiển thị cảnh báo rõ ràng trước khi gửi force=true).
+  if (executionMode && executionMode !== "stdin" && !force) {
+    const reasonMap: Record<string, string> = {
+      hardcoded:
+        "Chương trình không đọc input từ stdin (dùng giá trị hardcode). " +
+        "Source code không đổi giữa các test case nên kết quả PASSED/FAILED " +
+        "không đáng tin cậy. Vui lòng kiểm tra thủ công hoặc gửi lại với force=true để chạy bất chấp.",
+      function:
+        "Chương trình ở dạng function, không có entry point đọc stdin trực tiếp. " +
+        "Sandbox có thể không phản ánh đúng kết quả thực thi. " +
+        "Vui lòng kiểm tra thủ công hoặc gửi lại với force=true.",
+      unknown:
+        "Không xác định được cách chương trình nhận input. " +
+        "Kết quả chạy tự động có thể không đáng tin cậy. " +
+        "Vui lòng kiểm tra thủ công hoặc gửi lại với force=true.",
+    };
+    const message =
+      reasonMap[executionMode] ??
+      `Execution mode "${executionMode}" không hỗ trợ chạy tự động qua sandbox. Gửi lại với force=true để chạy bất chấp.`;
+
+    // Lưu ý: KHÔNG set status = 'UNRELIABLE' ở đây vì cột `status` trong DB
+    // có thể có CHECK constraint / ENUM chỉ cho phép các giá trị
+    // (PENDING | PASSED | FAILED | RUNTIME_ERROR | TIMEOUT). Ghi giá trị lạ
+    // vào đó sẽ làm UPDATE lỗi → 500. Nếu muốn đánh dấu UNRELIABLE trong DB,
+    // cần chạy migration mở rộng constraint/enum trước, hoặc dùng cột khác
+    // (vd: `reliability_warning text`) thay vì tái dùng cột `status`.
+    // Tạm thời chỉ trả cảnh báo cho client, không đổi status trong DB.
+
+    return NextResponse.json(
+      {
+        success: false,
+        code: "UNRELIABLE_EXECUTION_MODE",
+        executionMode,
+        message,
+      },
+      { status: 409 },
+    );
   }
 
   const results: unknown[] = [];
@@ -241,33 +332,53 @@ async function handleRun(
     const sandboxRun = await runInSandbox(sourceCode, language, row.input_data);
     const { status, actual } = evaluateTest(sandboxRun, row.expected_output);
 
-    await pool.query(
-      `UPDATE ai_generated_test_cases
-       SET status = $1,
-           actual_output = $2,
-           stderr = $3,
-           runtime_ms = $4,
-           ai_verified = $5
-       WHERE id = $6::uuid`,
-      [
-        status,
-        actual,
-        sandboxRun.stderr ?? "",
-        sandboxRun.runtimeMs ?? 0,
-        status === "PASSED",
-        row.id,
-      ],
-    );
+    // Nếu recruiter force chạy dù execution_mode không phải "stdin", vẫn lưu
+    // kết quả nhưng không đánh dấu ai_verified=true để tránh gắn nhãn "AI đã
+    // xác nhận" cho một kết quả không đáng tin cậy.
+    const reliable = !executionMode || executionMode === "stdin";
+
+    try {
+      await pool.query(
+        `UPDATE ai_generated_test_cases
+         SET status = $1,
+             actual_output = $2,
+             stderr = $3,
+             runtime_ms = $4,
+             ai_verified = $5
+         WHERE id = $6::uuid`,
+        [
+          status,
+          actual,
+          sandboxRun.stderr ?? "",
+          sandboxRun.runtimeMs ?? 0,
+          status === "PASSED" && reliable,
+          row.id,
+        ],
+      );
+    } catch (e) {
+      console.error("[ai-tests run] DB update error:", e);
+      results.push({
+        id: row.id,
+        error: "db_update_failed",
+        detail: e instanceof Error ? e.message : String(e),
+      });
+      continue;
+    }
     results.push({
       id: row.id,
       status,
       actualOutput: actual,
       stderr: sandboxRun.stderr ?? "",
       runtimeMs: sandboxRun.runtimeMs ?? 0,
+      reliable,
     });
   }
 
-  return NextResponse.json({ success: true, results });
+  return NextResponse.json({
+    success: true,
+    executionMode: executionMode ?? "unknown",
+    results,
+  });
 }
 
 async function handleAdd(
@@ -330,16 +441,14 @@ export async function PATCH(req: NextRequest, ctx: Params) {
   if (guardErr) return guardErr;
 
   const { meetingCode } = await ctx.params;
-  const body = (await req.json().catch(() => null)) as
-    | {
-        id?: string;
-        submissionId?: string;
-        inputData?: string;
-        expectedOutput?: string | null;
-        description?: string | null;
-        edgeCaseType?: string | null;
-      }
-    | null;
+  const body = (await req.json().catch(() => null)) as {
+    id?: string;
+    submissionId?: string;
+    inputData?: string;
+    expectedOutput?: string | null;
+    description?: string | null;
+    edgeCaseType?: string | null;
+  } | null;
 
   if (!body?.id) return badRequest("Thiếu id");
   if (!body.submissionId) return badRequest("Thiếu submissionId");
@@ -371,16 +480,22 @@ export async function PATCH(req: NextRequest, ctx: Params) {
     addParam("input_data", body.inputData);
     resetVerified = true;
   }
-  if (Object.prototype.hasOwnProperty.call(body, "expectedOutput") &&
-      body.expectedOutput !== undefined) {
+  if (
+    Object.prototype.hasOwnProperty.call(body, "expectedOutput") &&
+    body.expectedOutput !== undefined
+  ) {
     addParam("expected_output", body.expectedOutput);
     resetVerified = true;
   }
-  if (Object.prototype.hasOwnProperty.call(body, "description") &&
-      body.description !== undefined)
+  if (
+    Object.prototype.hasOwnProperty.call(body, "description") &&
+    body.description !== undefined
+  )
     addParam("description", body.description);
-  if (Object.prototype.hasOwnProperty.call(body, "edgeCaseType") &&
-      body.edgeCaseType !== undefined)
+  if (
+    Object.prototype.hasOwnProperty.call(body, "edgeCaseType") &&
+    body.edgeCaseType !== undefined
+  )
     addParam("edge_case_type", body.edgeCaseType);
 
   if (updates.length === 0) {
@@ -397,7 +512,7 @@ export async function PATCH(req: NextRequest, ctx: Params) {
   // is the first verification of the edited pair.
   if (resetVerified) addLiteral("ai_verified = FALSE");
 
-  addParam("id", body.id);  // uses $N placeholder
+  addParam("id", body.id); // uses $N placeholder
   const finalSql = `UPDATE ai_generated_test_cases SET ${updates.join(", ")}
    WHERE id = $${params.length}::uuid
    RETURNING id, submission_id, input_data, expected_output, description,
