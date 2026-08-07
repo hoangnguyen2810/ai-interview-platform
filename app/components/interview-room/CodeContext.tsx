@@ -30,7 +30,8 @@ export interface CodeContextValue {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
+const SOCKET_URL =
+  process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
 const DEBOUNCE_MS = 250; // 250ms debounce — balance between realtime & performance
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -75,6 +76,13 @@ export function CodeProvider({
     socket.on("connect", () => {
       console.log(`[CodeContext] Socket connected: ${socket.id}`);
       setIsConnected(true);
+
+      // Note: no manual sync request needed here. The server keeps the
+      // latest code snapshot per meetingCode and emits a code:sync event to
+      // this socket automatically as soon as it joins the room (see
+      // server.js). That restores the current code for both the candidate
+      // (their own in-progress code) and the recruiter (the candidate's
+      // code) immediately on reconnect, instead of a blank editor.
     });
 
     socket.on("connect_error", (err) => {
@@ -89,14 +97,50 @@ export function CodeProvider({
 
     // ── code:update ──────────────────────────────────────────────────────────
     // Receives code changes from candidate in real-time
-    socket.on("code:update", (payload: { code: string; language?: string; cursorLine?: number; cursorColumn?: number }) => {
-      // Ignore if WE are the sender
-      if (isSenderRef.current) return;
+    socket.on(
+      "code:update",
+      (payload: {
+        code: string;
+        language?: string;
+        cursorLine?: number;
+        cursorColumn?: number;
+      }) => {
+        // Ignore if WE are the sender — the server relays to everyone in the
+        // room including us, and re-applying our own just-typed change would
+        // fight with what's currently in the editor / jump the cursor.
+        if (isSenderRef.current) return;
 
-      console.log(`[CodeContext] code:update received (${payload.code.length} chars)`);
-      if (payload.code !== undefined) setCodeState(payload.code);
-      if (payload.language) setLanguageState(payload.language);
-    });
+        console.log(
+          `[CodeContext] code:update received (${payload.code.length} chars)`,
+        );
+        if (payload.code !== undefined) setCodeState(payload.code);
+        if (payload.language) setLanguageState(payload.language);
+      },
+    );
+
+    // ── code:sync ─────────────────────────────────────────────────────────────
+    // Sent once by the server right after this socket joins its room,
+    // carrying the last known code for the meeting (see server.js). Unlike
+    // code:update, this is NOT filtered by isSender: it's a restore, not a
+    // live echo. This is what makes a candidate who closes and reopens the
+    // coding panel get their in-progress code back, instead of starting
+    // from a blank editor — previously that snapshot was sent over
+    // "code:update", which the sender-side guard above silently discarded.
+    socket.on(
+      "code:sync",
+      (payload: {
+        code: string;
+        language?: string;
+        cursorLine?: number;
+        cursorColumn?: number;
+      }) => {
+        console.log(
+          `[CodeContext] code:sync received (${payload.code.length} chars)`,
+        );
+        if (payload.code !== undefined) setCodeState(payload.code);
+        if (payload.language) setLanguageState(payload.language);
+      },
+    );
 
     socketRef.current = socket;
 
@@ -128,7 +172,9 @@ export function CodeProvider({
           meetingCode,
         });
 
-        console.log(`[CodeContext] Emitted code:update (${pendingCodeRef.current.length} chars)`);
+        console.log(
+          `[CodeContext] Emitted code:update (${pendingCodeRef.current.length} chars)`,
+        );
         pendingCodeRef.current = "";
       }, DEBOUNCE_MS);
     },

@@ -225,12 +225,14 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
         </div>
       )}
       {/* LEFT SIDE */}
+      {/* min-w-0 + overflow-hidden: ngăn nội dung dài bên trong đẩy panel này
+          giãn rộng ra và đè lên Monaco editor ở bên phải (lỗi flexbox mặc định) */}
       <div
         id="left-panel"
-        className="flex-[4] flex flex-col border-r border-cyan-500/10"
+        className="flex-[4] min-w-0 flex flex-col border-r border-cyan-500/10 overflow-hidden"
       >
         {/* QUESTION */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-6">
           {!question ? (
             <div className="flex flex-col items-center justify-center h-full text-center gap-3">
               <span className="material-symbols-outlined text-5xl text-gray-600">
@@ -274,15 +276,18 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
 
         <div
           onMouseDown={handleMouseDown}
-          className="h-1 cursor-row-resize bg-cyan-500/20 hover:bg-cyan-400 transition"
+          className="h-1 cursor-row-resize bg-cyan-500/20 hover:bg-cyan-400 transition shrink-0"
         ></div>
 
         {/* OUTPUT */}
+        {/* shrink-0 + min-w-0 + overflow-hidden: khung output giữ đúng chiều
+            cao được set (outputHeight) và không tràn ra khỏi panel dù nội
+            dung stdout/stderr rất dài */}
         <div
           style={{ height: outputHeight }}
-          className="border-t border-cyan-500/10 bg-[#0d1c2d] flex flex-col"
+          className="border-t border-cyan-500/10 bg-[#0d1c2d] flex flex-col shrink-0 min-w-0 overflow-hidden"
         >
-          <div className="flex items-center justify-between px-4 border-b border-cyan-500/10">
+          <div className="flex items-center justify-between px-4 border-b border-cyan-500/10 shrink-0">
             <div className="flex items-center">
               <button className="px-4 py-3 text-sm text-cyan-400 border-b-2 border-cyan-400">
                 Output
@@ -327,7 +332,9 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
             </div>
           </div>
 
-          <div className="p-4 flex-1 overflow-y-auto custom-scrollbar">
+          {/* min-h-0 là mấu chốt: cho phép vùng này thực sự co lại và tự
+              cuộn (overflow-y-auto) thay vì bị nội dung đẩy giãn to ra */}
+          <div className="p-4 flex-1 min-h-0 min-w-0 overflow-y-auto custom-scrollbar">
             {isRunning ? (
               <div className="flex items-center gap-2 text-blue-400">
                 <span className="animate-spin">⚙</span>
@@ -335,8 +342,8 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
               </div>
             ) : result ? (
               <>
-                <div className="flex items-center gap-4 text-xs text-white/50 mb-2">
-                  <span>
+                <div className="flex items-center gap-4 text-xs text-white/50 mb-2 flex-wrap">
+                  <span className="flex items-center gap-1">
                     Status: <StatusBadge status={result.status} />
                   </span>
                   {result.runtimeMs > 0 && (
@@ -348,18 +355,20 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
                 </div>
 
                 {result.stdout && (
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs text-green-400 mb-1">Output:</p>
-                    <pre className="text-sm text-white/90 bg-[#0a1929] rounded p-2 overflow-x-auto">
+                    {/* whitespace-pre-wrap + break-words + max-w-full: bọc
+                        dòng dài xuống dòng thay vì tràn ngang ra ngoài khung */}
+                    <pre className="text-sm text-white/90 bg-[#0a1929] rounded p-2 max-w-full whitespace-pre-wrap break-words overflow-x-auto">
                       {result.stdout}
                     </pre>
                   </div>
                 )}
 
                 {result.stderr && (
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs text-red-400 mb-1">Error:</p>
-                    <pre className="text-sm text-red-300 bg-[#1a0a0a] rounded p-2 overflow-x-auto">
+                    <pre className="text-sm text-red-300 bg-[#1a0a0a] rounded p-2 max-w-full whitespace-pre-wrap break-words overflow-x-auto">
                       {result.stderr}
                     </pre>
                   </div>
@@ -379,7 +388,7 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
       </div>
 
       {/* RIGHT SIDE */}
-      <div className="flex-[5] flex flex-col">
+      <div className="flex-[5] min-w-0 flex flex-col">
         <div className="h-11 flex items-center justify-between px-4 border-b border-cyan-500/10 bg-[#122131]">
           <span className="text-sm text-white/70">
             solution.
@@ -417,7 +426,7 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
           </div>
         </div>
 
-        <div className="flex-1 bg-[#0d1c2d]">
+        <div className="flex-1 min-h-0 bg-[#0d1c2d]">
           <Editor
             language={language}
             height="100%"

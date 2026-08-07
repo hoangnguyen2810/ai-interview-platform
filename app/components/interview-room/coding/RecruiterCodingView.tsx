@@ -323,6 +323,7 @@ function RecruiterCodingEditor({ meetingCode }: { meetingCode: string }) {
             runtimeMs: number;
             createdAt: string;
             candidateName: string | null;
+            sourceCode?: string;
             stdout?: string;
             stderr?: string;
             exitCode?: number;
@@ -332,6 +333,15 @@ function RecruiterCodingEditor({ meetingCode }: { meetingCode: string }) {
             language: s.language,
             status: s.status,
             runtimeMs: s.runtimeMs ?? 0,
+            // NOTE: this was previously missing, which meant every
+            // submission loaded via this initial fetch (i.e. any time the
+            // panel is (re)opened) had no sourceCode, so "Xem code" showed
+            // "không có source code được lưu" even though a code was
+            // submitted. Submissions received live via the
+            // "submission:added" socket event above already included the
+            // full payload (see server.js docs), which is why it worked
+            // before the panel was closed and reopened.
+            sourceCode: s.sourceCode ?? "",
             stdout: s.stdout ?? "",
             stderr: s.stderr ?? "",
             exitCode: s.exitCode,

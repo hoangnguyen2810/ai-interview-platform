@@ -8,6 +8,7 @@
  *  - question:updated  {id, title, description, difficulty}
  *  - question:removed  {questionId}
  *  - code:update       {code, language, cursorLine, cursorColumn}
+ *  - code:sync         {code, language, cursorLine, cursorColumn} — sent once to a socket right after it joins a room, restoring the last known code (not filtered by sender role, unlike code:update)
  *  - submission:added  {submissionId, questionId, language, sourceCode, stdout, stderr, runtimeMs, status, success, createdAt, candidateName, ...}
  *
  * HTTP endpoints (for Next.js API to call):
@@ -24,7 +25,8 @@ const url = require("url");
 
 const SOCKET_PORT = process.env.SOCKET_PORT || 3001;
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:3000";
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || `http://localhost:${SOCKET_PORT}`;
+const SOCKET_URL =
+  process.env.NEXT_PUBLIC_SOCKET_URL || `http://localhost:${SOCKET_PORT}`;
 
 // ─── Create HTTP server + Socket.IO ────────────────────────────────────────────
 
@@ -37,32 +39,86 @@ const io = new Server(httpServer, {
   },
 });
 
+// ─── In-memory per-room code state ─────────────────────────────────────────────
+// This server only relayed events — it never persisted the "current" code
+// anywhere. That meant a client that (re)joined a room (e.g. recruiter
+// closing/reopening the coding panel) had nothing to render until the
+// candidate's next keystroke triggered a fresh code:update. We now keep the
+// latest snapshot per meetingCode in memory and hand it to any socket that
+// joins the room, so reconnecting always shows the current state instantly.
+//
+// Note: this is in-memory only — it resets on server restart, and grows by
+// one entry per meetingCode that has ever received a code:update. For long
+// -running deployments consider clearing an entry once its room is empty
+// (see the commented cleanup in the disconnect handler below) or backing
+// this with a TTL cache / external store.
+const roomCodeState = new Map(); // meetingCode -> { code, language, cursorLine, cursorColumn }
+
 // ─── Socket.IO connection handler ──────────────────────────────────────────────
 
 io.on("connection", (socket) => {
   const meetingCode = socket.handshake.query.meetingCode || "";
-  console.log(`[Socket.IO] Connected: ${socket.id} | meeting: "${meetingCode}"`);
+  console.log(
+    `[Socket.IO] Connected: ${socket.id} | meeting: "${meetingCode}"`,
+  );
 
   if (meetingCode) {
     socket.join(meetingCode);
     console.log(`[Socket.IO] ${socket.id} joined room: ${meetingCode}`);
+
+    // Replay the last known code snapshot to this socket only, so a
+    // reconnecting client — recruiter OR candidate — immediately sees the
+    // current code instead of a blank editor. This is sent on a dedicated
+    // "code:sync" event (not "code:update") specifically so it reaches the
+    // candidate's own client too: the candidate's CodeContext ignores
+    // "code:update" for itself (to avoid re-applying an echo of its own
+    // edits while typing), but a fresh join has nothing to echo — it needs
+    // this restore regardless of sender/receiver role.
+    const lastState = roomCodeState.get(meetingCode);
+    if (lastState) {
+      socket.emit("code:sync", lastState);
+      console.log(
+        `[Socket.IO] → code:sync (on join) | room: ${meetingCode} | to: ${socket.id} | ${lastState.code.length} chars`,
+      );
+    }
   }
 
   // ── code:update — relay code changes to everyone in the room ─────────────────
   socket.on("code:update", (payload) => {
     const mc = payload?.meetingCode || meetingCode;
     if (!mc || !payload?.code) return;
-    io.to(mc).emit("code:update", {
+
+    const state = {
       code: payload.code,
       language: payload.language,
       cursorLine: payload.cursorLine,
       cursorColumn: payload.cursorColumn,
-    });
-    console.log(`[Socket.IO] code:update relay | room: ${mc} | ${payload.code.length} chars`);
+    };
+
+    // Remember this as the latest state for the room so future joiners
+    // (e.g. a recruiter reopening the panel) can be synced immediately.
+    roomCodeState.set(mc, state);
+
+    io.to(mc).emit("code:update", state);
+    console.log(
+      `[Socket.IO] code:update relay | room: ${mc} | ${payload.code.length} chars`,
+    );
   });
 
   socket.on("disconnect", () => {
     console.log(`[Socket.IO] Disconnected: ${socket.id}`);
+
+    // Optional cleanup: once nobody is left in a room, its stored code
+    // state is no longer useful. Uncomment if you want to free memory for
+    // meetings that have fully ended (safe to leave in as-is otherwise —
+    // state is small and just gets overwritten on the next session reusing
+    // the same meetingCode).
+    // if (meetingCode) {
+    //   const room = io.sockets.adapter.rooms.get(meetingCode);
+    //   if (!room || room.size === 0) {
+    //     roomCodeState.delete(meetingCode);
+    //   }
+    // }
   });
 });
 
@@ -70,32 +126,53 @@ io.on("connection", (socket) => {
 
 function emitQuestionAdded(meetingCode, question) {
   io.to(meetingCode).emit("question:added", question);
-  console.log(`[Socket.IO] → question:added | room: ${meetingCode} | q: ${question.title}`);
+  console.log(
+    `[Socket.IO] → question:added | room: ${meetingCode} | q: ${question.title}`,
+  );
 }
 
 function emitQuestionActivated(meetingCode, question) {
   io.to(meetingCode).emit("question:activated", question);
-  console.log(`[Socket.IO] → question:activated | room: ${meetingCode} | q: ${question.title}`);
+  console.log(
+    `[Socket.IO] → question:activated | room: ${meetingCode} | q: ${question.title}`,
+  );
 }
 
 function emitQuestionUpdated(meetingCode, question) {
   io.to(meetingCode).emit("question:updated", question);
-  console.log(`[Socket.IO] → question:updated | room: ${meetingCode} | q: ${question.title}`);
+  console.log(
+    `[Socket.IO] → question:updated | room: ${meetingCode} | q: ${question.title}`,
+  );
 }
 
 function emitQuestionRemoved(meetingCode, questionId) {
   io.to(meetingCode).emit("question:removed", { questionId });
-  console.log(`[Socket.IO] → question:removed | room: ${meetingCode} | qid: ${questionId}`);
+  console.log(
+    `[Socket.IO] → question:removed | room: ${meetingCode} | qid: ${questionId}`,
+  );
 }
 
 function emitCodeUpdate(meetingCode, payload) {
+  // Keep the HTTP-triggered path consistent with the socket path: also
+  // update the stored snapshot so a client joining right after this call
+  // still gets synced correctly.
+  roomCodeState.set(meetingCode, {
+    code: payload.code,
+    language: payload.language,
+    cursorLine: payload.cursorLine,
+    cursorColumn: payload.cursorColumn,
+  });
   io.to(meetingCode).emit("code:update", payload);
-  console.log(`[Socket.IO] → code:update | room: ${meetingCode} | ${payload.code.length} chars`);
+  console.log(
+    `[Socket.IO] → code:update | room: ${meetingCode} | ${payload.code.length} chars`,
+  );
 }
 
 function emitSubmissionAdded(meetingCode, submission) {
   io.to(meetingCode).emit("submission:added", submission);
-  console.log(`[Socket.IO] → submission:added | room: ${meetingCode} | sid: ${submission.submissionId}`);
+  console.log(
+    `[Socket.IO] → submission:added | room: ${meetingCode} | sid: ${submission.submissionId}`,
+  );
 }
 
 // ─── HTTP endpoint handler ─────────────────────────────────────────────────────
@@ -128,15 +205,24 @@ httpServer.on("request", (req, res) => {
       try {
         const { meetingCode, question } = JSON.parse(body);
         if (!meetingCode || !question) {
-          res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+          res.writeHead(400, {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": CLIENT_URL,
+          });
           res.end(JSON.stringify({ error: "missing meetingCode or question" }));
           return;
         }
         emitQuestionAdded(meetingCode, question);
-        res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+        res.writeHead(200, {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": CLIENT_URL,
+        });
         res.end(JSON.stringify({ success: true }));
       } catch {
-        res.writeHead(500, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+        res.writeHead(500, {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": CLIENT_URL,
+        });
         res.end(JSON.stringify({ error: "parse error" }));
       }
     });
@@ -151,15 +237,24 @@ httpServer.on("request", (req, res) => {
       try {
         const { meetingCode, question } = JSON.parse(body);
         if (!meetingCode || !question) {
-          res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+          res.writeHead(400, {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": CLIENT_URL,
+          });
           res.end(JSON.stringify({ error: "missing meetingCode or question" }));
           return;
         }
         emitQuestionActivated(meetingCode, question);
-        res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+        res.writeHead(200, {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": CLIENT_URL,
+        });
         res.end(JSON.stringify({ success: true }));
       } catch {
-        res.writeHead(500, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+        res.writeHead(500, {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": CLIENT_URL,
+        });
         res.end(JSON.stringify({ error: "parse error" }));
       }
     });
@@ -184,17 +279,32 @@ httpServer.on("request", (req, res) => {
     req.on("data", (c) => (body += c));
     req.on("end", () => {
       try {
-        const { meetingCode, code, language, cursorLine, cursorColumn } = JSON.parse(body);
+        const { meetingCode, code, language, cursorLine, cursorColumn } =
+          JSON.parse(body);
         if (!meetingCode || !code) {
-          res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+          res.writeHead(400, {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": CLIENT_URL,
+          });
           res.end(JSON.stringify({ error: "missing meetingCode or code" }));
           return;
         }
-        emitCodeUpdate(meetingCode, { code, language, cursorLine, cursorColumn });
-        res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+        emitCodeUpdate(meetingCode, {
+          code,
+          language,
+          cursorLine,
+          cursorColumn,
+        });
+        res.writeHead(200, {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": CLIENT_URL,
+        });
         res.end(JSON.stringify({ success: true }));
       } catch {
-        res.writeHead(500, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+        res.writeHead(500, {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": CLIENT_URL,
+        });
         res.end(JSON.stringify({ error: "parse error" }));
       }
     });
@@ -209,15 +319,26 @@ httpServer.on("request", (req, res) => {
       try {
         const { meetingCode, submission } = JSON.parse(body);
         if (!meetingCode || !submission) {
-          res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
-          res.end(JSON.stringify({ error: "missing meetingCode or submission" }));
+          res.writeHead(400, {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": CLIENT_URL,
+          });
+          res.end(
+            JSON.stringify({ error: "missing meetingCode or submission" }),
+          );
           return;
         }
         emitSubmissionAdded(meetingCode, submission);
-        res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+        res.writeHead(200, {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": CLIENT_URL,
+        });
         res.end(JSON.stringify({ success: true }));
       } catch {
-        res.writeHead(500, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+        res.writeHead(500, {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": CLIENT_URL,
+        });
         res.end(JSON.stringify({ error: "parse error" }));
       }
     });
@@ -226,8 +347,13 @@ httpServer.on("request", (req, res) => {
 
   // ── GET /health ──────────────────────────────────────────────────────────────
   if (pathname === "/health" && method === "GET") {
-    res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
-    res.end(JSON.stringify({ status: "ok", connections: io.engine.clientsCount }));
+    res.writeHead(200, {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": CLIENT_URL,
+    });
+    res.end(
+      JSON.stringify({ status: "ok", connections: io.engine.clientsCount }),
+    );
     return;
   }
 
@@ -244,15 +370,24 @@ function handleQuestionUpdated(req, res) {
     try {
       const { meetingCode, question } = JSON.parse(body);
       if (!meetingCode || !question) {
-        res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+        res.writeHead(400, {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": CLIENT_URL,
+        });
         res.end(JSON.stringify({ error: "missing meetingCode or question" }));
         return;
       }
       emitQuestionUpdated(meetingCode, question);
-      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+      res.writeHead(200, {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": CLIENT_URL,
+      });
       res.end(JSON.stringify({ success: true }));
     } catch {
-      res.writeHead(500, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+      res.writeHead(500, {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": CLIENT_URL,
+      });
       res.end(JSON.stringify({ error: "parse error" }));
     }
   });
@@ -266,15 +401,24 @@ function handleQuestionRemoved(req, res) {
     try {
       const { meetingCode, questionId } = JSON.parse(body);
       if (!meetingCode || !questionId) {
-        res.writeHead(400, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+        res.writeHead(400, {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": CLIENT_URL,
+        });
         res.end(JSON.stringify({ error: "missing meetingCode or questionId" }));
         return;
       }
       emitQuestionRemoved(meetingCode, questionId);
-      res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+      res.writeHead(200, {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": CLIENT_URL,
+      });
       res.end(JSON.stringify({ success: true }));
     } catch {
-      res.writeHead(500, { "Content-Type": "application/json", "Access-Control-Allow-Origin": CLIENT_URL });
+      res.writeHead(500, {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": CLIENT_URL,
+      });
       res.end(JSON.stringify({ error: "parse error" }));
     }
   });

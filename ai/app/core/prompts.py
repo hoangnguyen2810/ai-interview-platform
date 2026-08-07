@@ -96,31 +96,45 @@ Yêu cầu:
 Trả lời theo đúng cấu trúc sau:
 
 Thông tin ứng viên
-- Họ tên
+- Họ tên:
 - Kinh nghiệm:
-  + Mỗi kinh nghiệm trên một dòng.
-  + Không gộp nhiều công việc vào một dòng.
-  + Chỉ liệt kê tối đa 3 kinh nghiệm gần nhất hoặc nổi bật nhất.
+  - ...
+  - ...
+  - ...
 - Dự án cá nhân:
-  + Mỗi dự án trên một dòng.
-  + Không gộp nhiều công việc vào một dòng.
-  + Chỉ liệt kê tối đa 3 kinh nghiệm gần nhất hoặc nổi bật nhất.
-- Công nghệ chính
+  - ...
+  - ...
+  - ...
+- Công nghệ chính:
 
-Tóm tắt
-(Tối đa 2 câu)
+Tóm tắt:
+...
 
-Điểm mạnh
-(3 ý)
+Điểm mạnh:
+- ...
+- ...
+- ...
 
-Cần làm rõ
-(3 ý)
+Cần làm rõ:
+- ...
+- ...
+- ...
 
-# Câu hỏi phỏng vấn
-(5 câu)
+Câu hỏi phỏng vấn:
+1.
+2.
+3.
+4.
+5.
 
-QUY TẮC:
-- Không gộp nhiều thông tin trên một dòng.
-- Mỗi kinh nghiệm là một bullet riêng.
-- Không sử dụng dấu ";" để nối nhiều mục.
+Quy tắc định dạng:
+- Không chèn dòng trống giữa các bullet.
+- Mỗi bullet chỉ một dòng nếu có thể.
+- Chỉ để một dòng trống giữa các mục lớn.
+
+9. Trả lời theo định dạng gọn:
+- Không chèn dòng trống giữa các gạch đầu dòng.
+- Chỉ xuống dòng khi chuyển sang mục mới.
+- Không tạo khoảng trắng dư thừa.
+- Mỗi bullet chỉ một dòng nếu có thể.
 """
