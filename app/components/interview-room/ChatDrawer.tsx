@@ -1,11 +1,6 @@
 "use client";
 
-import React, {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useChat } from "./ChatContext";
 
 type Props = {
@@ -59,13 +54,21 @@ function DateDivider({ date }: { date: string }) {
   );
 }
 
+// Cho phép textarea tự cao lên theo nội dung, nhưng chặn ở 1 chiều cao
+// tối đa hợp lý (~5 dòng) rồi mới cho scroll bên trong.
+const MAX_TEXTAREA_HEIGHT_PX = 120;
+
 export default function ChatDrawer({ open, onClose }: Props) {
-  const { messages, sendMessage, isLoading, unreadCount } = useChat();
+  const { messages, sendMessage, isLoading, unreadCount, markRead } = useChat();
 
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  // FIX: <input type="text"> không thể chứa ký tự xuống dòng dù bắt phím
+  // Shift+Enter thế nào đi nữa — đó là giới hạn của chính element input
+  // 1 dòng theo chuẩn HTML, không phải lỗi logic JS. Đổi sang <textarea>
+  // để Shift+Enter chèn newline thật sự.
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const prevLenRef = useRef(messages.length);
 
   // Auto-scroll to bottom when new messages arrive
@@ -77,12 +80,21 @@ export default function ChatDrawer({ open, onClose }: Props) {
     prevLenRef.current = messages.length;
   }, [messages, open]);
 
-  // Focus input when drawer opens
+  // Focus input when drawer opens + mark all messages as read
   useEffect(() => {
     if (open) {
       setTimeout(() => inputRef.current?.focus(), 300);
+      markRead();
     }
-  }, [open]);
+  }, [open, markRead]);
+
+  // Auto-resize textarea theo nội dung (tối đa MAX_TEXTAREA_HEIGHT_PX)
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT_PX)}px`;
+  }, [input]);
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
@@ -98,16 +110,16 @@ export default function ChatDrawer({ open, onClose }: Props) {
     }
   }, [input, sending, sendMessage]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
+    // Shift+Enter: không làm gì ở đây — để textarea tự chèn newline mặc định.
   };
 
   // Group messages by date
-  const grouped: { date: string; messages: (typeof messages)[number][] }[] =
-    [];
+  const grouped: { date: string; messages: (typeof messages)[number][] }[] = [];
   for (const msg of messages) {
     const date = new Date(msg.createdAt).toDateString();
     const last = grouped[grouped.length - 1];
@@ -153,7 +165,7 @@ export default function ChatDrawer({ open, onClose }: Props) {
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
+        <div className="flex-1 overflow-y-auto custom-scrollbar px-3 py-2 space-y-1">
           {isLoading && messages.length === 0 && (
             <div className="flex items-center justify-center h-24">
               <div className="w-5 h-5 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin" />
@@ -176,10 +188,7 @@ export default function ChatDrawer({ open, onClose }: Props) {
               {dayMessages.map((msg) => {
                 if (msg.type === "SYSTEM") {
                   return (
-                    <div
-                      key={msg.id}
-                      className="flex justify-center my-2"
-                    >
+                    <div key={msg.id} className="flex justify-center my-2">
                       <span className="text-[11px] text-gray-500 italic px-3 py-1 bg-white/5 rounded-full">
                         {msg.content}
                       </span>
@@ -200,7 +209,7 @@ export default function ChatDrawer({ open, onClose }: Props) {
                       </span>
                     )}
                     <div
-                      className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm leading-relaxed ${
+                      className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words ${
                         msg.isMine
                           ? "bg-cyan-500 text-black rounded-br-md"
                           : "bg-[#163149] text-white rounded-bl-md"
@@ -226,15 +235,16 @@ export default function ChatDrawer({ open, onClose }: Props) {
         {/* Input */}
         <div className="flex-shrink-0 border-t border-white/10 p-3">
           <div className="flex items-end gap-2">
-            <input
+            <textarea
               ref={inputRef}
-              type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Nhập tin nhắn..."
               maxLength={1000}
-              className="flex-1 bg-[#122131] text-white text-sm rounded-xl px-4 py-2.5 border border-[#2a3b4f] placeholder-gray-500 focus:outline-none focus:border-cyan-400 transition-colors resize-none"
+              rows={1}
+              className="flex-1 bg-[#122131] text-white text-sm rounded-xl px-4 py-2.5 border border-[#2a3b4f] placeholder-gray-500 focus:outline-none focus:border-cyan-400 transition-colors resize-none overflow-y-auto custom-scrollbar leading-relaxed"
+              style={{ maxHeight: MAX_TEXTAREA_HEIGHT_PX }}
             />
             <button
               onClick={handleSend}

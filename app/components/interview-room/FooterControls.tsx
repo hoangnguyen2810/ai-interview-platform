@@ -332,9 +332,12 @@ export default function FooterControls({
           </button>
 
           {/* CHAT */}
+          {/* FIX: thêm "relative" — badge unreadCount dùng absolute
+              positioning nên cần cha positioned để định vị đúng vào
+              góc trên-phải của nút, thay vì trôi theo ancestor xa hơn. */}
           <button
             onClick={handleOpenChat}
-            className="w-14 h-14 rounded-full flex items-center justify-center border bg-[#122131] border-[#3b494b] hover:border-cyan-400 cursor-pointer"
+            className="relative w-14 h-14 rounded-full flex items-center justify-center border bg-[#122131] border-[#3b494b] hover:border-cyan-400 cursor-pointer"
           >
             <span className="material-symbols-outlined">chat</span>
             {unreadCount > 0 && (
