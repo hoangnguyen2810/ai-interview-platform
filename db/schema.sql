@@ -251,6 +251,7 @@ CREATE TABLE IF NOT EXISTS public.recordings
     created_at timestamp without time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
     interview_id uuid,
     interview_title character varying(255) COLLATE pg_catalog."default",
+    deleted_at timestamp without time zone,
     CONSTRAINT recordings_pkey PRIMARY KEY (id)
 );
 
@@ -279,16 +280,6 @@ CREATE TABLE IF NOT EXISTS public.room_presence
     last_seen_at timestamp without time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT room_presence_pkey PRIMARY KEY (id),
     CONSTRAINT room_presence_interview_id_user_id_session_id_key UNIQUE (interview_id, user_id, session_id)
-);
-
-CREATE TABLE IF NOT EXISTS public.test_cases
-(
-    id uuid NOT NULL DEFAULT gen_random_uuid(),
-    question_id uuid NOT NULL,
-    input_data text COLLATE pg_catalog."default",
-    expected_output text COLLATE pg_catalog."default",
-    is_hidden boolean DEFAULT false,
-    CONSTRAINT test_cases_pkey PRIMARY KEY (id)
 );
 
 CREATE TABLE IF NOT EXISTS public.users
@@ -554,13 +545,6 @@ ALTER TABLE IF EXISTS public.room_presence
 ALTER TABLE IF EXISTS public.room_presence
     ADD CONSTRAINT room_presence_user_id_fkey FOREIGN KEY (user_id)
     REFERENCES public.users (id) MATCH SIMPLE
-    ON UPDATE NO ACTION
-    ON DELETE CASCADE;
-
-
-ALTER TABLE IF EXISTS public.test_cases
-    ADD CONSTRAINT test_cases_question_id_fkey FOREIGN KEY (question_id)
-    REFERENCES public.coding_questions (id) MATCH SIMPLE
     ON UPDATE NO ACTION
     ON DELETE CASCADE;
 

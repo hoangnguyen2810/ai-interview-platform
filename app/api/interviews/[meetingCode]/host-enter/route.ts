@@ -65,6 +65,15 @@ export async function POST(req: Request, ctx: Params) {
        WHERE interview_id = $1 AND user_id = $2`,
       [interview.id, auth.id],
     );
+    await pool.query(
+      `UPDATE interviews
+   SET
+     status = 'ONGOING',
+     started_at = COALESCE(started_at, NOW())
+   WHERE id = $1
+     AND status = 'SCHEDULED'`,
+      [interview.id],
+    );
 
     return NextResponse.json({
       success: true,

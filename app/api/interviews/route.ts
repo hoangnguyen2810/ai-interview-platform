@@ -50,18 +50,26 @@ export async function GET(req: Request) {
       );
     }
 
-    // Build dynamic WHERE
+    // Trạng thái hiển thị được SUY LUẬN theo thời gian thực (giống /api/interviews/upcoming),
+    // thay vì chỉ đọc cột i.status thô từ DB. Nếu không có job nào chủ động UPDATE
+    // i.status khi tới giờ, cột DB sẽ mãi mãi là SCHEDULED cho tới khi có hành động khác
+    // (start call, end call...) — đây chính là lý do trang Quản lý phỏng vấn trước đây
+    // không tự chuyển "Đã lên lịch" -> "Đang diễn ra" khi tới giờ.
+    const derivedStatusExpr = `
+      CASE
+        WHEN i.status IN ('FINISHED', 'CANCELLED') THEN i.status
+        WHEN i.scheduled_at <= NOW() THEN 'ONGOING'
+        ELSE 'SCHEDULED'
+      END
+    `;
+
+    // Build dynamic WHERE (áp dụng cho các điều kiện KHÔNG liên quan tới status suy luận)
     const conditions: string[] = [
       "i.deleted_at IS NULL",
       "ip.user_id = $1",
       "ip.participant_role = 'HOST'",
     ];
     const params: (string | number)[] = [auth.id];
-
-    if (statusFilter) {
-      conditions.push(`i.status = $${params.length + 1}`);
-      params.push(statusFilter);
-    }
 
     if (search) {
       conditions.push(
@@ -70,45 +78,56 @@ export async function GET(req: Request) {
       params.push(`%${search}%`);
     }
 
-    if (
-      durationFilter &&
-      /^(30|60|90|120)$/.test(durationFilter)
-    ) {
+    if (durationFilter && /^(30|60|90|120)$/.test(durationFilter)) {
       conditions.push(`i.duration_minutes = $${params.length + 1}`);
       params.push(Number(durationFilter));
     }
 
     const whereClause = `WHERE ${conditions.join(" AND ")}`;
 
-    // Lấy data phân trang + filter
+    // statusFilter lọc theo status ĐÃ SUY LUẬN (derived_status), không phải i.status thô,
+    // để filter "Đang diễn ra" trên UI khớp với trạng thái thực tế đang hiển thị.
+    let statusHaving = "";
+    if (statusFilter) {
+      statusHaving = `WHERE derived_status = $${params.length + 1}`;
+      params.push(statusFilter);
+    }
+
+    // Lấy data phân trang + filter (dùng CTE để filter/order theo status suy luận)
     const listResult = await pool.query<{
       id: string;
       title: string;
       meeting_code: string;
-      status: "SCHEDULED" | "ONGOING" | "FINISHED" | "CANCELLED";
+      derived_status: "SCHEDULED" | "ONGOING" | "FINISHED" | "CANCELLED";
       duration_minutes: number;
       scheduled_at: Date | string;
       max_interviewers: number;
     }>(
       `
-      SELECT
-        i.id,
-        i.title,
-        i.meeting_code,
-        i.status,
-        i.duration_minutes,
-        i.scheduled_at,
-        i.max_interviewers
-      FROM interviews i
-      JOIN interview_participants ip ON ip.interview_id = i.id
-      ${whereClause}
-      ORDER BY i.scheduled_at DESC
+      WITH base AS (
+        SELECT
+          i.id,
+          i.title,
+          i.meeting_code,
+          i.duration_minutes,
+          i.scheduled_at,
+          i.max_interviewers,
+          ${derivedStatusExpr} AS derived_status
+        FROM interviews i
+        JOIN interview_participants ip ON ip.interview_id = i.id
+        ${whereClause}
+      )
+      SELECT *
+      FROM base
+      ${statusHaving}
+      ORDER BY scheduled_at DESC
       LIMIT $${params.length + 1}
       `,
       [...params, limit],
     );
 
-    // Stats: đếm theo từng status + số liệu thời gian (KHÔNG filter status — luôn tính trên toàn bộ của recruiter)
+    // Stats: đếm theo từng status suy luận + số liệu thời gian
+    // (KHÔNG filter status — luôn tính trên toàn bộ của recruiter)
     const statsResult = await pool.query<{
       total: string;
       scheduled: string;
@@ -118,24 +137,30 @@ export async function GET(req: Request) {
       today: string;
     }>(
       `
+      WITH base AS (
+        SELECT
+          i.scheduled_at,
+          ${derivedStatusExpr} AS derived_status
+        FROM interviews i
+        JOIN interview_participants ip ON ip.interview_id = i.id
+        WHERE i.deleted_at IS NULL
+          AND ip.user_id = $1
+          AND ip.participant_role = 'HOST'
+      )
       SELECT
         COUNT(*)::text AS total,
-        COUNT(*) FILTER (WHERE i.status = 'SCHEDULED')::text AS scheduled,
-        COUNT(*) FILTER (WHERE i.status = 'ONGOING')::text   AS ongoing,
-        COUNT(*) FILTER (WHERE i.status = 'FINISHED')::text  AS finished,
+        COUNT(*) FILTER (WHERE derived_status = 'SCHEDULED')::text AS scheduled,
+        COUNT(*) FILTER (WHERE derived_status = 'ONGOING')::text   AS ongoing,
+        COUNT(*) FILTER (WHERE derived_status = 'FINISHED')::text  AS finished,
         COUNT(*) FILTER (
-          WHERE date_trunc('month', i.scheduled_at AT TIME ZONE 'Asia/Ho_Chi_Minh')
+          WHERE date_trunc('month', scheduled_at AT TIME ZONE 'Asia/Ho_Chi_Minh')
               = date_trunc('month', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')
         )::text AS this_month,
         COUNT(*) FILTER (
-          WHERE (i.scheduled_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date
+          WHERE (scheduled_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date
               = (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date
         )::text AS today
-      FROM interviews i
-      JOIN interview_participants ip ON ip.interview_id = i.id
-      WHERE i.deleted_at IS NULL
-        AND ip.user_id = $1
-        AND ip.participant_role = 'HOST'
+      FROM base
       `,
       [auth.id],
     );
@@ -170,7 +195,7 @@ export async function GET(req: Request) {
         id: row.id,
         title: row.title,
         code: row.meeting_code,
-        status: row.status,
+        status: row.derived_status,
         duration: row.duration_minutes,
         time: `${datePart} - ${timePart}`,
         interviewers: row.max_interviewers,
@@ -250,6 +275,97 @@ export async function POST(req: Request) {
     );
   } catch (error) {
     console.error("POST /api/interviews ERROR:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        message: error instanceof Error ? error.message : "Lỗi máy chủ",
+      },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const auth = getAuthUserFromRequest(req);
+    if (!auth) return unauthorized();
+    if (auth.role !== "RECRUITER") {
+      return forbidden("Chỉ tài khoản Recruiter mới xoá được buổi phỏng vấn");
+    }
+
+    const url = new URL(req.url);
+    const id = url.searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json(
+        { success: false, message: "Thiếu tham số id" },
+        { status: 400 },
+      );
+    }
+
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      return NextResponse.json(
+        { success: false, message: "id không hợp lệ" },
+        { status: 400 },
+      );
+    }
+
+    // Xác nhận interview tồn tại + user hiện tại là HOST của nó
+    // Dùng status suy luận theo thời gian để tránh trường hợp scheduled_at đã qua
+    // nhưng cột i.status trong DB chưa kịp cập nhật thành ONGOING.
+    const ownedResult = await pool.query<{
+      id: string;
+      status: "SCHEDULED" | "ONGOING" | "FINISHED" | "CANCELLED";
+    }>(
+      `
+      SELECT
+        i.id,
+        CASE
+          WHEN i.status IN ('FINISHED', 'CANCELLED') THEN i.status
+          WHEN i.scheduled_at <= NOW() THEN 'ONGOING'
+          ELSE 'SCHEDULED'
+        END AS status
+      FROM interviews i
+      JOIN interview_participants ip ON ip.interview_id = i.id
+      WHERE i.id = $1
+        AND i.deleted_at IS NULL
+        AND ip.user_id = $2
+        AND ip.participant_role = 'HOST'
+      LIMIT 1
+      `,
+      [id, auth.id],
+    );
+
+    const interview = ownedResult.rows[0];
+    if (!interview) {
+      return NextResponse.json(
+        { success: false, message: "Không tìm thấy buổi phỏng vấn" },
+        { status: 404 },
+      );
+    }
+
+    if (interview.status === "ONGOING") {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Không thể xoá buổi phỏng vấn đang diễn ra",
+        },
+        { status: 409 },
+      );
+    }
+
+    await pool.query(`UPDATE interviews SET deleted_at = NOW() WHERE id = $1`, [
+      id,
+    ]);
+
+    return NextResponse.json({
+      success: true,
+      message: "Đã xoá buổi phỏng vấn",
+    });
+  } catch (error) {
+    console.error("DELETE /api/interviews ERROR:", error);
     return NextResponse.json(
       {
         success: false,

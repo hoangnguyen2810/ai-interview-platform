@@ -14,6 +14,7 @@ import {
   Clock3,
   CheckCircle2,
   Loader2,
+  Trash2,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -119,6 +120,12 @@ export default function InterviewManagementPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+
+  // --- Xoá buổi phỏng vấn ---
+  const [deleteTarget, setDeleteTarget] = useState<InterviewItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const {
     subscribeInterviewCreated,
     subscribeInterviewFinished,
@@ -174,6 +181,17 @@ export default function InterviewManagementPage() {
     fetchData();
   }, [fetchData]);
 
+  // Tự động refetch định kỳ (30s) để trạng thái SCHEDULED -> ONGOING tự cập nhật
+  // theo thời gian thực, không phụ thuộc vào việc có sự kiện tạo mới / kết thúc
+  // phỏng vấn hay không. Trước đây trang này chỉ refetch khi có event, nên nếu
+  // recruiter không thao tác gì, bảng sẽ "đứng hình" dù đã tới giờ phỏng vấn.
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      fetchData();
+    }, 30000);
+    return () => window.clearInterval(interval);
+  }, [fetchData]);
+
   // Mỗi khi filter/search thay đổi → reset về page 1
   useEffect(() => {
     setCurrentPage(1);
@@ -208,6 +226,39 @@ export default function InterviewManagementPage() {
     };
   }, [notifyInterviewFinished]);
 
+  const handleDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const token =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem("token")
+          : null;
+      const headers: HeadersInit = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch(
+        `/api/interviews?id=${encodeURIComponent(deleteTarget.id)}`,
+        { method: "DELETE", headers, credentials: "include" },
+      );
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.message || `Xoá thất bại (${res.status})`);
+      }
+
+      setDeleteTarget(null);
+      fetchData();
+    } catch (err) {
+      setDeleteError(
+        err instanceof Error ? err.message : "Không thể xoá buổi phỏng vấn",
+      );
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteTarget, fetchData]);
+
   const totalLabel = useMemo(() => {
     if (stats.total === 0) return "0";
     return stats.total.toLocaleString("vi-VN");
@@ -237,7 +288,6 @@ export default function InterviewManagementPage() {
     <>
       <TopNavBar />
       <SideNavBar />
-
       <main className="ml-sidebar-width pt-20 px-10 pb-10 min-h-screen bg-[#071524] text-white overflow-x-auto custom-scrollbar">
         {/* HEADER */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 mb-10">
@@ -421,8 +471,20 @@ export default function InterviewManagementPage() {
 
                       <td className="p-5">
                         <div className="flex justify-center">
-                          <button className="p-2 rounded-lg hover:bg-slate-700 transition">
-                            <MoreHorizontal size={18} />
+                          <button
+                            className="p-2 rounded-lg hover:bg-slate-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                            disabled={item.status === "ONGOING"}
+                            title={
+                              item.status === "ONGOING"
+                                ? "Không thể xoá buổi đang diễn ra"
+                                : "Xoá buổi phỏng vấn"
+                            }
+                            onClick={() => {
+                              setDeleteError(null);
+                              setDeleteTarget(item);
+                            }}
+                          >
+                            <Trash2 size={18} />
                           </button>
                         </div>
                       </td>
@@ -467,6 +529,51 @@ export default function InterviewManagementPage() {
           fetchData();
         }}
       />
+
+      {/* Modal xác nhận xoá */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#0B1120] border border-white/10 rounded-2xl p-8 shadow-2xl max-w-md w-full mx-4">
+            <h3 className="text-xl font-bold mb-2">Xoá buổi phỏng vấn?</h3>
+            <p className="text-slate-400 mb-6">
+              Bạn sắp xoá{" "}
+              <span className="text-white font-medium">
+                "{deleteTarget.title}"
+              </span>
+              . Hành động này không thể hoàn tác.
+            </p>
+
+            {deleteError && (
+              <p className="text-red-400 text-sm mb-4 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">
+                {deleteError}
+              </p>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => {
+                  setDeleteTarget(null);
+                  setDeleteError(null);
+                }}
+                className="px-6 py-3 rounded-xl border border-white/10 disabled:opacity-40"
+              >
+                Huỷ
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={handleDelete}
+                className="flex items-center gap-2 px-6 py-3 rounded-xl bg-red-500 hover:bg-red-400 text-black font-semibold transition disabled:opacity-40"
+              >
+                {deleting && <Loader2 size={16} className="animate-spin" />}
+                Xoá
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

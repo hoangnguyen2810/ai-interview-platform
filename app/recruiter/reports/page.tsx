@@ -306,7 +306,7 @@ export default function ReportsPage() {
             </div>
           ) : filtered.length === 0 ? (
             <div className="p-12 text-center text-slate-400">
-              Không tìm thấy report nào.
+              Không tìm thấy báo cáo nào.
             </div>
           ) : (
             <table className="w-full">
