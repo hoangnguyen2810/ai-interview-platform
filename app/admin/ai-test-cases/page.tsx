@@ -4,15 +4,14 @@
 //
 // Trang quản lý AI-generated test cases, khớp 1-1 với
 // GET/DELETE /api/admin/ai-test-cases (status, edge_case_type,
-// submission_id, search, pagination).
+// search, pagination).
 //
-// Giả định: Tailwind CSS đã cấu hình sẵn trong dự án (theo stack
-// Next.js App Router bạn đang dùng). Không phụ thuộc thư viện UI
-// ngoài React để tránh xung đột với bộ component sẵn có của bạn —
-// nếu dự án đã có Button/Table/Badge riêng, thay các thẻ thô bên
-// dưới bằng component đó là đủ.
+// Đã đồng bộ UI/UX với trang "Kho câu hỏi lập trình"
+// (app/admin/questions/page.tsx): cùng dark theme, cùng cách bố cục
+// header, filter, bảng, phân trang, và cùng dùng adminFetch/fetchJson
+// thay vì gọi fetch trực tiếp.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 
 import { AdminShell } from "@/app/components/admin-dashboard/AdminShell";
@@ -37,13 +36,29 @@ const STATUS_OPTIONS = [
 
 type Status = (typeof STATUS_OPTIONS)[number];
 
-const STATUS_STYLE: Record<Status, string> = {
-  PENDING: "bg-zinc-100 text-zinc-600 ring-zinc-300",
-  PASSED: "bg-emerald-50 text-emerald-700 ring-emerald-300",
-  FAILED: "bg-red-50 text-red-700 ring-red-300",
-  RUNTIME_ERROR: "bg-amber-50 text-amber-700 ring-amber-300",
-  TIMEOUT: "bg-violet-50 text-violet-700 ring-violet-300",
+// Cùng "họ" màu badge với DIFFICULTY_COLOR ở trang questions
+// (nền /15, chữ /300, viền /30) để hai trang admin nhất quán.
+const STATUS_COLOR: Record<Status, string> = {
+  PENDING: "bg-slate-500/15 text-slate-300 border border-slate-500/30",
+  PASSED: "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30",
+  FAILED: "bg-rose-500/15 text-rose-300 border border-rose-500/30",
+  RUNTIME_ERROR: "bg-amber-500/15 text-amber-300 border border-amber-500/30",
+  TIMEOUT: "bg-violet-500/15 text-violet-300 border border-violet-500/30",
 };
+
+const STATUS_FILTER_OPTIONS = [
+  { value: "", label: "Tất cả trạng thái" },
+  ...STATUS_OPTIONS.map((s) => ({ value: s, label: s })),
+];
+
+const EDGE_CASE_OPTIONS = [
+  { value: "", label: "Tất cả edge case" },
+  { value: "BOUNDARY", label: "BOUNDARY" },
+  { value: "NULL_EMPTY", label: "NULL_EMPTY" },
+  { value: "LARGE_INPUT", label: "LARGE_INPUT" },
+  { value: "NEGATIVE", label: "NEGATIVE" },
+  { value: "TYPICAL", label: "TYPICAL" },
+];
 
 interface TestCaseRow {
   id: string;
@@ -63,94 +78,74 @@ interface TestCaseRow {
   question_title: string | null;
 }
 
-interface ListResponse {
-  data: TestCaseRow[];
-  pagination: { page: number; limit: number; total: number };
-}
-
-const LIMIT = 5;
+const LIMIT = 20;
 
 export default function AiTestCasesAdminPage() {
-  const [rows, setRows] = useState<TestCaseRow[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const [status, setStatus] = useState<string>("");
-  const [edgeCaseType, setEdgeCaseType] = useState("");
-  const [submissionId, setSubmissionId] = useState("");
-  const [search, setSearch] = useState("");
-  const [searchInput, setSearchInput] = useState("");
-
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<TestCaseRow | null>(null);
-
   const { ready } = useAdminGuard();
 
-  // debounce ô tìm kiếm để không bắn request mỗi keystroke
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setSearch(searchInput);
-      setPage(1);
-    }, 350);
-    return () => clearTimeout(t);
-  }, [searchInput]);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const [edgeCaseType, setEdgeCaseType] = useState("");
+  const [page, setPage] = useState(1);
+  const [limit] = useState(LIMIT);
+
+  const [rows, setRows] = useState<TestCaseRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<TestCaseRow | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
+    if (!ready) return;
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({
         page: String(page),
-        limit: String(LIMIT),
+        limit: String(limit),
       });
+      if (search) params.set("search", search);
       if (status) params.set("status", status);
       if (edgeCaseType) params.set("edge_case_type", edgeCaseType);
-      if (submissionId) params.set("submission_id", submissionId);
-      if (search) params.set("search", search);
-
-      const res = await fetch(`/api/admin/ai-test-cases?${params}`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Không thể tải danh sách test case");
-      const json: { data: ListResponse } | ListResponse = await res.json();
-      const payload =
-        "data" in json && "pagination" in json
-          ? (json as ListResponse)
-          : (json as any).data;
-      setRows(payload.data);
-      setTotal(payload.pagination.total);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Đã có lỗi xảy ra");
+      const data = await fetchJson<Paginated<TestCaseRow>>(
+        `/api/admin/ai-test-cases?${params.toString()}`,
+      );
+      setRows(data.data);
+      setTotal(data.pagination.total);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Lỗi");
+      setRows([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
-  }, [page, status, edgeCaseType, submissionId, search]);
+  }, [ready, page, limit, search, status, edgeCaseType]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  async function handleDelete(id: string) {
-    if (!confirm("Xoá test case này? Hành động không thể hoàn tác.")) return;
-    setDeletingId(id);
+  const doDelete = async (r: TestCaseRow) => {
+    setBusyId(r.id);
     try {
-      const res = await fetch(`/api/admin/ai-test-cases?id=${id}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Xoá thất bại");
-      setRows((prev) => prev.filter((r) => r.id !== id));
+      const res = await adminFetch(
+        `/api/admin/ai-test-cases?id=${encodeURIComponent(r.id)}`,
+        { method: "DELETE" },
+      );
+      const data = await res.json();
+      if (!data?.success) throw new Error(data?.message || "Lỗi");
+      setRows((prev) => prev.filter((row) => row.id !== r.id));
       setTotal((t) => Math.max(0, t - 1));
-    } catch (e) {
-      alert(e instanceof Error ? e.message : "Xoá thất bại");
+      setConfirmDelete(null);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Lỗi");
     } finally {
-      setDeletingId(null);
+      setBusyId(null);
     }
-  }
+  };
 
-  const totalPages = Math.max(1, Math.ceil(total / LIMIT));
+  const totalPages = Math.max(1, Math.ceil(total / limit));
 
   if (!ready) {
     return (
@@ -161,169 +156,190 @@ export default function AiTestCasesAdminPage() {
       </AdminShell>
     );
   }
+
   return (
     <AdminShell>
-      <div className="p-6 max-w-7xl mx-auto">
-        <header className="mb-6">
-          <h1 className="text-xl font-semibold text-zinc-900">
-            Test case do AI sinh ra
-          </h1>
-          <p className="text-sm text-zinc-500 mt-1">
-            Quản lý các test case được AI tự động tạo khi chấm bài nộp của ứng
-            viên.
-          </p>
-        </header>
-
-        {/* Bộ lọc */}
-
-        <AdminFilter
-          search={searchInput}
-          onSearchChange={(v) => {
-            setSearchInput(v);
-            setPage(1);
-          }}
-          selects={[
-            {
-              value: status,
-              onChange: (v) => {
-                setStatus(v);
-                setPage(1);
-              },
-              options: [
-                { value: "", label: "Tất cả trạng thái" },
-                ...STATUS_OPTIONS.map((s) => ({
-                  value: s,
-                  label: s,
-                })),
-              ],
-            },
-          ]}
-        />
-
-        {error && (
-          <div className="mb-4 rounded-md bg-red-50 px-4 py-2 text-sm text-red-700 ring-1 ring-red-200">
-            {error}
-          </div>
-        )}
-
-        <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
-          <AdminTable<TestCaseRow>
-            rows={rows}
-            loading={loading}
-            rowKey={(r) => r.id}
-            emptyMessage="Không có test case."
-            columns={[
-              {
-                key: "question",
-                header: "Câu hỏi",
-                render: (r) => (
-                  <div>
-                    <div className="text-sm text-white">
-                      {r.question_title ?? "—"}
-                    </div>
-                    <div className="text-xs text-slate-400">
-                      {r.question_id}
-                    </div>
-                  </div>
-                ),
-              },
-              {
-                key: "candidate",
-                header: "Ứng viên",
-                render: (r) => (
-                  <div className="text-xs text-slate-300">
-                    {r.candidate_name ?? "—"}
-                  </div>
-                ),
-              },
-              {
-                key: "language",
-                header: "Ngôn ngữ",
-                render: (r) => (
-                  <span className="text-sm text-slate-300">
-                    {r.language ?? "—"}
-                  </span>
-                ),
-              },
-              {
-                key: "edge",
-                header: "Edge Case",
-                render: (r) => (
-                  <span className="text-sm text-slate-300">
-                    {r.edge_case_type ?? "—"}
-                  </span>
-                ),
-              },
-              {
-                key: "status",
-                header: "Trạng thái",
-                render: (r) => (
-                  <span
-                    className={`px-2 py-1 rounded-full text-xs ${STATUS_STYLE[r.status]}`}
-                  >
-                    {r.status}
-                  </span>
-                ),
-              },
-              {
-                key: "runtime",
-                header: "Runtime",
-                render: (r) => (
-                  <span className="text-sm text-slate-300">
-                    {r.runtime_ms ?? "—"} ms
-                  </span>
-                ),
-              },
-              {
-                key: "created",
-                header: "Tạo lúc",
-                render: (r) => (
-                  <span className="text-xs text-slate-300">
-                    {new Date(r.created_at).toLocaleString("vi-VN")}
-                  </span>
-                ),
-              },
-              {
-                key: "actions",
-                header: "Hành động",
-                render: (r) => (
-                  <button
-                    onClick={() => setConfirmDelete(r)}
-                    className="px-2 py-1 rounded-lg border border-rose-500/30 text-rose-300 hover:bg-rose-500/10 text-xs flex items-center gap-1"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                    Xoá
-                  </button>
-                ),
-              },
-            ]}
-          />
-        </div>
-
-        {/* Phân trang */}
-        <AdminPagination
-          currentPage={page}
-          totalPages={totalPages}
-          totalItems={total}
-          pageSize={LIMIT}
-          onPageChange={setPage}
-        />
-        <ConfirmDialog
-          open={!!confirmDelete}
-          title="Xoá test case?"
-          description={`Test case của "${confirmDelete?.question_title}" sẽ bị xoá.`}
-          confirmText="Xoá"
-          destructive
-          loading={deletingId === confirmDelete?.id}
-          onCancel={() => setConfirmDelete(null)}
-          onConfirm={() => {
-            if (confirmDelete) {
-              handleDelete(confirmDelete.id);
-              setConfirmDelete(null);
-            }
-          }}
-        />
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-white">
+          Test case do AI sinh ra
+        </h1>
+        <p className="mt-1 text-sm text-slate-400">
+          Các test case được AI tự động tạo khi chấm bài nộp của ứng viên
+        </p>
       </div>
+
+      <AdminFilter
+        search={search}
+        onSearchChange={(v) => {
+          setPage(1);
+          setSearch(v);
+        }}
+        selects={[
+          {
+            value: status,
+            onChange: (v) => {
+              setPage(1);
+              setStatus(v);
+            },
+            options: STATUS_FILTER_OPTIONS,
+          },
+          {
+            value: edgeCaseType,
+            onChange: (v) => {
+              setPage(1);
+              setEdgeCaseType(v);
+            },
+            options: EDGE_CASE_OPTIONS,
+          },
+        ]}
+      />
+
+      {error && (
+        <p className="mb-4 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+          {error}
+        </p>
+      )}
+
+      <AdminTable<TestCaseRow>
+        rows={rows}
+        loading={loading}
+        rowKey={(r) => r.id}
+        emptyMessage="Không có test case."
+        columns={[
+          {
+            key: "question",
+            header: "Câu hỏi",
+            width: "w-[320px]",
+            render: (r) => (
+              <div className="min-w-0">
+                <div
+                  className="text-sm font-medium text-white truncate"
+                  title={r.question_title || ""}
+                >
+                  {r.question_title ?? "—"}
+                </div>
+                <div className="text-xs text-slate-400 truncate">
+                  {r.question_id ?? "—"}
+                </div>
+              </div>
+            ),
+          },
+          {
+            key: "candidate",
+            header: "Ứng viên",
+            width: "w-40",
+            render: (r) => (
+              <span
+                className="text-sm text-slate-300 truncate block"
+                title={r.candidate_name || ""}
+              >
+                {r.candidate_name ?? "—"}
+              </span>
+            ),
+          },
+          {
+            key: "language",
+            header: "Ngôn ngữ",
+            width: "w-28",
+            headerClassName: "text-center",
+            cellClassName: "text-center",
+            render: (r) => (
+              <span className="text-sm text-slate-300">
+                {r.language ?? "—"}
+              </span>
+            ),
+          },
+          {
+            key: "edge",
+            header: "Edge Case",
+            width: "w-32",
+            headerClassName: "text-center",
+            cellClassName: "text-center",
+            render: (r) => (
+              <span className="text-sm text-slate-300">
+                {r.edge_case_type ?? "—"}
+              </span>
+            ),
+          },
+          {
+            key: "status",
+            header: "Trạng thái",
+            width: "w-32",
+            headerClassName: "text-center",
+            cellClassName: "text-center",
+            render: (r) => (
+              <span
+                className={`inline-flex px-2 py-1 rounded-full text-xs font-semibold ${STATUS_COLOR[r.status]}`}
+              >
+                {r.status}
+              </span>
+            ),
+          },
+          {
+            key: "runtime",
+            header: "Runtime",
+            width: "w-24",
+            headerClassName: "text-center",
+            cellClassName: "text-center",
+            render: (r) => (
+              <span className="text-sm text-slate-300">
+                {r.runtime_ms ?? "—"} ms
+              </span>
+            ),
+          },
+          {
+            key: "created",
+            header: "Tạo lúc",
+            width: "w-48",
+            headerClassName: "text-center",
+            cellClassName: "text-center",
+            render: (r) => (
+              <span className="text-xs text-slate-300 whitespace-nowrap">
+                {new Date(r.created_at).toLocaleString("vi-VN")}
+              </span>
+            ),
+          },
+          {
+            key: "actions",
+            header: "Hành động",
+            width: "w-28",
+            headerClassName: "text-center",
+            cellClassName: "text-center",
+            render: (r) => (
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  type="button"
+                  disabled={busyId === r.id}
+                  onClick={() => setConfirmDelete(r)}
+                  className="px-2 py-1 rounded-lg border border-rose-500/30 text-rose-300 hover:bg-rose-500/10 text-xs flex items-center gap-1 disabled:opacity-50"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  Xóa
+                </button>
+              </div>
+            ),
+          },
+        ]}
+      />
+
+      <AdminPagination
+        currentPage={page}
+        totalPages={totalPages}
+        totalItems={total}
+        pageSize={limit}
+        onPageChange={setPage}
+      />
+
+      <ConfirmDialog
+        open={!!confirmDelete}
+        title="Xoá test case?"
+        description={`Test case của "${confirmDelete?.question_title ?? "câu hỏi này"}" sẽ bị xoá.`}
+        confirmText="Xoá"
+        destructive
+        loading={busyId === confirmDelete?.id}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() => confirmDelete && doDelete(confirmDelete)}
+      />
     </AdminShell>
   );
 }

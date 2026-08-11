@@ -245,7 +245,7 @@ export default function AdminInterviewsPage() {
                 onChange={(e) =>
                   changeStatus(r, e.target.value as InterviewRow["status"])
                 }
-                className={`w-full px-2 py-1 rounded-lg text-xs font-semibold ${STATUS_COLOR[r.status]}`}
+                className={`w-full px-2 py-1 rounded-lg text-xs font-semibold bg-slate-800 text-slate-200 border border-slate-700 focus:outline-none focus:ring-1 focus:ring-cyan-500/50 ${STATUS_COLOR[r.status]}`}
               >
                 {STATUS_OPTIONS.filter((o) => o.value).map((opt) => (
                   <option key={opt.value} value={opt.value}>

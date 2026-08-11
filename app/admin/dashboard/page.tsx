@@ -17,6 +17,12 @@ type StatsPayload = {
   aiTestCases: { total: number };
 };
 
+const ROLE_LABEL: Record<string, string> = {
+  ADMIN: "Quản trị viên",
+  RECRUITER: "Nhà tuyển dụng",
+  CANDIDATE: "Ứng viên",
+};
+
 export default function AdminDashboardPage() {
   const { ready } = useAdminGuard();
   const [stats, setStats] = useState<StatsPayload | null>(null);
@@ -177,16 +183,16 @@ function BreakdownCard({
       <div className="mt-4 space-y-2">
         {Object.entries(items).map(([k, v]) => (
           <div key={k} className="flex items-center gap-3">
-            <span className="w-24 text-xs text-slate-400 truncate">{k}</span>
+            <span className="w-24 text-xs text-slate-400 truncate">
+              {ROLE_LABEL[k] || k}
+            </span>
             <div className="flex-grow h-2 bg-slate-800 rounded overflow-hidden">
               <div
                 className={colors[accent]}
                 style={{ width: `${(v / total) * 100}%`, height: "100%" }}
               />
             </div>
-            <span className="w-10 text-right text-xs text-slate-300">
-              {v}
-            </span>
+            <span className="w-10 text-right text-xs text-slate-300">{v}</span>
           </div>
         ))}
         {Object.keys(items).length === 0 && (

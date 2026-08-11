@@ -3,7 +3,14 @@
 //   GET    list + filter difficulty + search
 //   POST   tạo mới
 //   PATCH  cập nhật
-//   DELETE xoá (cascade test_cases + interview_questions)
+//   DELETE xoá (cascade interview_questions)
+//
+// LƯU Ý: bảng `test_cases` không tồn tại trong schema hiện tại (chỉ có
+// `ai_generated_test_cases`, khóa theo submission_id chứ không phải
+// question_id). Đã bỏ mọi tham chiếu tới `test_cases` để tránh lỗi
+// "relation test_cases does not exist" -> 500. Nếu bảng test case theo
+// câu hỏi cần tồn tại, tạo bảng đó trước rồi khôi phục lại đoạn subquery
+// (test_case_count) và câu DELETE tương ứng.
 
 import { pool } from "@/lib/db";
 import { NextResponse } from "next/server";
@@ -45,9 +52,7 @@ export async function GET(req: Request) {
   const dataSql = `
     SELECT q.id, q.title, q.description, q.difficulty, q.created_at,
            u.email AS created_by_email,
-           u.full_name AS created_by_name,
-           (SELECT COUNT(*)::int FROM test_cases tc WHERE tc.question_id = q.id)
-             AS test_case_count
+           u.full_name AS created_by_name
     FROM coding_questions q
     LEFT JOIN users u ON u.id = q.created_by
     ${where}
@@ -174,11 +179,8 @@ export async function DELETE(req: Request) {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    // Cascade: xoá test_cases và interview_questions trước.
-    await client.query(
-      `DELETE FROM test_cases WHERE question_id = $1`,
-      [id],
-    );
+    // interview_questions.question_id -> coding_questions có FK nhưng
+    // ON DELETE NO ACTION, nên vẫn cần xoá thủ công trước.
     await client.query(
       `DELETE FROM interview_questions WHERE question_id = $1`,
       [id],
