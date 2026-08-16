@@ -2,7 +2,10 @@
 
 import { SideNavBar } from "@/app/components/SideNavBar";
 import { TopNavBar } from "@/app/components/TopNavBar";
-import { CreateInterviewModal } from "@/app/components/recruiter-dashboard/CreateInterviewModal";
+import {
+  CreateInterviewModal,
+  type EditableInterview,
+} from "@/app/components/recruiter-dashboard/CreateInterviewModal";
 import { Pagination } from "@/app/components/Pagination";
 import { useRecruiterDashboard } from "@/app/components/recruiter-dashboard/DashboardContext";
 import {
@@ -15,6 +18,7 @@ import {
   CheckCircle2,
   Loader2,
   Trash2,
+  Pencil,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -40,11 +44,15 @@ type InterviewStatus = "SCHEDULED" | "ONGOING" | "FINISHED" | "CANCELLED";
 type InterviewItem = {
   id: string;
   title: string;
+  description: string | null;
   code: string;
   status: InterviewStatus;
-  duration: number;
+  duration: 30 | 60 | 90 | 120;
   time: string;
-  interviewers: number;
+  interviewers: 2 | 3;
+  maxParticipants: number;
+  allowGuest: boolean;
+  enableRecording: boolean;
   scheduledAt: string;
 };
 
@@ -103,6 +111,22 @@ const getStatusLabel = (status: InterviewStatus) => {
   }
 };
 
+function toEditableInterview(item: InterviewItem): EditableInterview {
+  return {
+    id: item.id,
+    title: item.title,
+    description: item.description,
+    code: item.code,
+    status: item.status,
+    duration: item.duration,
+    interviewers: item.interviewers,
+    maxParticipants: item.maxParticipants,
+    allowGuest: item.allowGuest,
+    enableRecording: item.enableRecording,
+    scheduledAt: item.scheduledAt,
+  };
+}
+
 export default function InterviewManagementPage() {
   const [interviews, setInterviews] = useState<InterviewItem[]>([]);
   const [stats, setStats] = useState<Stats>({
@@ -125,6 +149,12 @@ export default function InterviewManagementPage() {
   const [deleteTarget, setDeleteTarget] = useState<InterviewItem | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // --- Sửa buổi phỏng vấn ---
+  // Chỉ cho phép mở khi status === SCHEDULED (nút Sửa cũng disable tương ứng,
+  // server-side vẫn chặn lại lần nữa ở PATCH /api/interviews để phòng race
+  // condition, vd. buổi vừa chuyển ONGOING đúng lúc client bấm Sửa).
+  const [editTarget, setEditTarget] = useState<InterviewItem | null>(null);
 
   const {
     subscribeInterviewCreated,
@@ -402,12 +432,12 @@ export default function InterviewManagementPage() {
           <div className="overflow-x-auto custom-scrollbar">
             <table className="w-full table-fixed min-w-[860px]">
               <colgroup>
-                <col className="w-[28%]" />
-                <col className="w-[15%]" />
-                <col className="w-[15%]" />
-                <col className="w-[13%]" />
+                <col className="w-[26%]" />
+                <col className="w-[14%]" />
+                <col className="w-[14%]" />
+                <col className="w-[12%]" />
                 <col className="w-[19%]" />
-                <col className="w-[10%]" />
+                <col className="w-[15%]" />
               </colgroup>
 
               <thead className="bg-[#13263a] text-sm">
@@ -436,60 +466,77 @@ export default function InterviewManagementPage() {
                     </td>
                   </tr>
                 ) : (
-                  paginatedInterviews.map((item) => (
-                    <tr
-                      key={item.id}
-                      className="border-t border-slate-800 hover:bg-cyan-500/5 transition"
-                    >
-                      <td
-                        className="p-5 font-medium truncate"
-                        title={item.title}
+                  paginatedInterviews.map((item) => {
+                    const editable = item.status === "SCHEDULED";
+                    return (
+                      <tr
+                        key={item.id}
+                        className="border-t border-slate-800 hover:bg-cyan-500/5 transition"
                       >
-                        {item.title}
-                      </td>
-                      <td
-                        className="p-5 text-cyan-400 font-medium truncate"
-                        title={item.code}
-                      >
-                        {item.code}
-                      </td>
-
-                      <td className="p-5 text-center">
-                        <span
-                          className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(
-                            item.status,
-                          )}`}
+                        <td
+                          className="p-5 font-medium truncate"
+                          title={item.title}
                         >
-                          {getStatusLabel(item.status)}
-                        </span>
-                      </td>
+                          {item.title}
+                        </td>
+                        <td
+                          className="p-5 text-cyan-400 font-medium truncate"
+                          title={item.code}
+                        >
+                          {item.code}
+                        </td>
 
-                      <td className="p-5 text-center">{item.duration} phút</td>
-                      <td className="p-5 text-center whitespace-nowrap">
-                        {formatDateTime(item.scheduledAt)}
-                      </td>
-
-                      <td className="p-5">
-                        <div className="flex justify-center">
-                          <button
-                            className="p-2 rounded-lg hover:bg-slate-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
-                            disabled={item.status === "ONGOING"}
-                            title={
-                              item.status === "ONGOING"
-                                ? "Không thể xoá buổi đang diễn ra"
-                                : "Xoá buổi phỏng vấn"
-                            }
-                            onClick={() => {
-                              setDeleteError(null);
-                              setDeleteTarget(item);
-                            }}
+                        <td className="p-5 text-center">
+                          <span
+                            className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(
+                              item.status,
+                            )}`}
                           >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                            {getStatusLabel(item.status)}
+                          </span>
+                        </td>
+
+                        <td className="p-5 text-center">
+                          {item.duration} phút
+                        </td>
+                        <td className="p-5 text-center whitespace-nowrap">
+                          {formatDateTime(item.scheduledAt)}
+                        </td>
+
+                        <td className="p-5">
+                          <div className="flex justify-center gap-1">
+                            <button
+                              className="p-2 rounded-lg hover:bg-slate-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                              disabled={!editable}
+                              title={
+                                editable
+                                  ? "Chỉnh sửa buổi phỏng vấn"
+                                  : "Chỉ có thể sửa buổi Đã lên lịch"
+                              }
+                              onClick={() => setEditTarget(item)}
+                            >
+                              <Pencil size={18} />
+                            </button>
+                            <button
+                              className="p-2 rounded-lg hover:bg-slate-700 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                              disabled={item.status === "ONGOING"}
+                              title={
+                                item.status === "ONGOING"
+                                  ? "Không thể xoá buổi đang diễn ra"
+                                  : "Xoá buổi phỏng vấn"
+                              }
+                              onClick={() => {
+                                setDeleteError(null);
+                                setDeleteTarget(item);
+                              }}
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -526,6 +573,17 @@ export default function InterviewManagementPage() {
           // Báo cho dashboard đang mở ở tab khác (Upcoming/Recent) refresh
           notifyInterviewCreated(interview);
           // Tự refresh list ngay
+          fetchData();
+        }}
+      />
+
+      {/* Modal chỉnh sửa — dùng chung component với modal tạo, mode="edit" */}
+      <CreateInterviewModal
+        open={editTarget !== null}
+        mode="edit"
+        editInterview={editTarget ? toEditableInterview(editTarget) : null}
+        onClose={() => setEditTarget(null)}
+        onUpdated={() => {
           fetchData();
         }}
       />

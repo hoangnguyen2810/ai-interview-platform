@@ -1,7 +1,16 @@
 import { NextResponse } from "next/server";
 import { forbidden, getAuthUserFromRequest, unauthorized } from "@/lib/auth";
-import { ValidationError, validateCreateInterviewPayload } from "./dto";
-import { createInterviewForRecruiter } from "./service";
+import {
+  ValidationError,
+  validateCreateInterviewPayload,
+  validateUpdateInterviewPayload,
+} from "./dto";
+import {
+  createInterviewForRecruiter,
+  InterviewNotEditableError,
+  InterviewNotFoundError,
+  updateInterviewForRecruiter,
+} from "./service";
 import { pool } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -94,24 +103,35 @@ export async function GET(req: Request) {
     }
 
     // Lấy data phân trang + filter (dùng CTE để filter/order theo status suy luận)
+    // Trả thêm description/allow_guest/max_participants/enable_recording để
+    // modal "Chỉnh sửa" ở client có thể prefill form mà không cần gọi thêm
+    // API riêng cho từng buổi.
     const listResult = await pool.query<{
       id: string;
       title: string;
+      description: string | null;
       meeting_code: string;
       derived_status: "SCHEDULED" | "ONGOING" | "FINISHED" | "CANCELLED";
       duration_minutes: number;
       scheduled_at: Date | string;
       max_interviewers: number;
+      max_participants: number;
+      allow_guest: boolean;
+      enable_recording: boolean;
     }>(
       `
       WITH base AS (
         SELECT
           i.id,
           i.title,
+          i.description,
           i.meeting_code,
           i.duration_minutes,
           i.scheduled_at,
           i.max_interviewers,
+          i.max_participants,
+          i.allow_guest,
+          i.enable_recording,
           ${derivedStatusExpr} AS derived_status
         FROM interviews i
         JOIN interview_participants ip ON ip.interview_id = i.id
@@ -194,11 +214,15 @@ export async function GET(req: Request) {
       return {
         id: row.id,
         title: row.title,
+        description: row.description,
         code: row.meeting_code,
         status: row.derived_status,
         duration: row.duration_minutes,
         time: `${datePart} - ${timePart}`,
         interviewers: row.max_interviewers,
+        maxParticipants: row.max_participants,
+        allowGuest: row.allow_guest,
+        enableRecording: row.enable_recording,
         scheduledAt:
           scheduledAt instanceof Date
             ? scheduledAt.toISOString()
@@ -275,6 +299,100 @@ export async function POST(req: Request) {
     );
   } catch (error) {
     console.error("POST /api/interviews ERROR:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        message: error instanceof Error ? error.message : "Lỗi máy chủ",
+      },
+      { status: 500 },
+    );
+  }
+}
+
+/**
+ * PATCH /api/interviews?id=...
+ *
+ * Chỉnh sửa thông tin buổi phỏng vấn — CHỈ cho phép khi trạng thái suy luận
+ * hiện tại là SCHEDULED (chưa tới giờ, chưa bắt đầu, chưa huỷ/kết thúc).
+ *
+ * Body: bất kỳ tập con nào của các field trong UpdateInterviewInput
+ * (title, description, roomPassword, allowGuest, maxParticipants,
+ *  maxInterviewers, durationMinutes, enableRecording, scheduledAt).
+ * Gửi roomPassword: null để xoá mật khẩu phòng.
+ */
+export async function PATCH(req: Request) {
+  try {
+    const auth = getAuthUserFromRequest(req);
+    if (!auth) return unauthorized();
+    if (auth.role !== "RECRUITER") {
+      return forbidden(
+        "Chỉ tài khoản Recruiter mới chỉnh sửa được buổi phỏng vấn",
+      );
+    }
+
+    const url = new URL(req.url);
+    const id = url.searchParams.get("id");
+    if (!id) {
+      return NextResponse.json(
+        { success: false, message: "Thiếu tham số id" },
+        { status: 400 },
+      );
+    }
+
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      return NextResponse.json(
+        { success: false, message: "id không hợp lệ" },
+        { status: 400 },
+      );
+    }
+
+    const raw = await req.json().catch(() => null);
+    if (raw === null) {
+      return NextResponse.json(
+        { success: false, message: "Body phải là JSON hợp lệ" },
+        { status: 400 },
+      );
+    }
+
+    let input;
+    try {
+      input = validateUpdateInterviewPayload(raw);
+    } catch (e) {
+      if (e instanceof ValidationError) {
+        return NextResponse.json(
+          { success: false, message: e.message, field: e.field },
+          { status: 400 },
+        );
+      }
+      throw e;
+    }
+
+    try {
+      const interview = await updateInterviewForRecruiter(auth.id, id, input);
+      return NextResponse.json({
+        success: true,
+        message: "Cập nhật buổi phỏng vấn thành công",
+        interview,
+      });
+    } catch (e) {
+      if (e instanceof InterviewNotFoundError) {
+        return NextResponse.json(
+          { success: false, message: e.message },
+          { status: 404 },
+        );
+      }
+      if (e instanceof InterviewNotEditableError) {
+        return NextResponse.json(
+          { success: false, message: e.message },
+          { status: 409 },
+        );
+      }
+      throw e;
+    }
+  } catch (error) {
+    console.error("PATCH /api/interviews ERROR:", error);
     return NextResponse.json(
       {
         success: false,

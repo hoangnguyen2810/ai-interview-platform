@@ -10,10 +10,18 @@ interface Props {
    * `create` (mặc định): form tạo + success screen sau khi tạo xong.
    * `detail`: chỉ hiện success screen với interview có sẵn (readonly).
    *            Dùng cho nút "Chi tiết" ở UpcomingInterviews khi SCHEDULED.
+   * `edit`: form chỉnh sửa, prefill từ `editInterview`, submit gọi PATCH.
+   *         Chỉ hợp lệ khi buổi đang ở trạng thái SCHEDULED (server sẽ tự
+   *         chặn nếu không, nhưng nút mở modal ở trang danh sách cũng nên
+   *         disable trước để tránh mở form vô ích).
    */
-  mode?: "create" | "detail";
+  mode?: "create" | "detail" | "edit";
   /** Chỉ dùng ở mode='detail': interview cần hiển thị chi tiết. */
   detailInterview?: CreatedInterview | null;
+  /** Chỉ dùng ở mode='edit': interview cần chỉnh sửa (prefill form). */
+  editInterview?: EditableInterview | null;
+  /** Chỉ dùng ở mode='edit': callback sau khi PATCH thành công. */
+  onUpdated?: (interview: EditableInterview) => void;
 }
 
 export interface CreatedInterview {
@@ -31,6 +39,23 @@ export interface CreatedInterview {
   scheduledAt: string;
   createdAt: string;
   avatarUrl: string | null;
+}
+
+/** Dữ liệu tối thiểu cần để prefill form edit — khớp với item trả về từ
+ * GET /api/interviews (trang Quản lý phỏng vấn). Không có roomPassword vì
+ * server không bao giờ trả plaintext/hash về client. */
+export interface EditableInterview {
+  id: string;
+  title: string;
+  description: string | null;
+  code: string;
+  status: "SCHEDULED" | "ONGOING" | "FINISHED" | "CANCELLED";
+  duration: 30 | 60 | 90 | 120;
+  interviewers: 2 | 3;
+  maxParticipants: number;
+  allowGuest: boolean;
+  enableRecording: boolean;
+  scheduledAt: string;
 }
 
 interface FormState {
@@ -82,12 +107,38 @@ function localToIso(local: string): string | null {
   return d.toISOString();
 }
 
+/** ISO string -> "YYYY-MM-DDTHH:mm" theo giờ local, để prefill
+ * input[type=datetime-local] khi mở form edit. */
+function isoToLocalInputValue(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours(),
+  )}:${pad(d.getMinutes())}`;
+}
+
+function formStateFromEditable(interview: EditableInterview): FormState {
+  return {
+    title: interview.title,
+    description: interview.description ?? "",
+    scheduledAt: isoToLocalInputValue(interview.scheduledAt),
+    roomPassword: "",
+    durationMinutes: interview.duration,
+    maxInterviewers: interview.interviewers,
+    allowGuest: interview.allowGuest,
+    enableRecording: interview.enableRecording,
+  };
+}
+
 export function CreateInterviewModal({
   open,
   onClose,
   onCreated,
   mode = "create",
   detailInterview = null,
+  editInterview = null,
+  onUpdated,
 }: Props) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
@@ -95,21 +146,30 @@ export function CreateInterviewModal({
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreatedInterview | null>(null);
   const [copied, setCopied] = useState(false);
+  // edit mode: mặc định KHÔNG đổi mật khẩu phòng, trừ khi tick vào đây.
+  // Lý do: server không trả plaintext/hash cũ, nên input roomPassword luôn
+  // trống lúc mở form — nếu không có cờ riêng, để trống dễ bị hiểu nhầm là
+  // "xoá mật khẩu" thay vì "giữ nguyên".
+  const [changePassword, setChangePassword] = useState(false);
 
   useEffect(() => {
     if (open) {
       setError(null);
       setFieldError(null);
       setCopied(false);
-      // mode=detail: hiển thị thẳng success screen, không cần reset form.
+      setChangePassword(false);
+
       if (mode === "detail" && detailInterview) {
         setCreated(detailInterview);
+      } else if (mode === "edit" && editInterview) {
+        setForm(formStateFromEditable(editInterview));
+        setCreated(null);
       } else {
         setForm(EMPTY_FORM);
         setCreated(null);
       }
     }
-  }, [open, mode, detailInterview]);
+  }, [open, mode, detailInterview, editInterview]);
 
   if (!open) return null;
 
@@ -142,9 +202,134 @@ export function CreateInterviewModal({
     if (!iso) return "Ngày giờ không hợp lệ";
     if (new Date(iso).getTime() <= Date.now())
       return "Ngày giờ phỏng vấn phải ở trong tương lai";
-    if (form.roomPassword && form.roomPassword.length > 100)
+    if (mode !== "edit" && form.roomPassword && form.roomPassword.length > 100)
+      return "Mật khẩu phòng tối đa 100 ký tự";
+    if (mode === "edit" && changePassword && form.roomPassword.length > 100)
       return "Mật khẩu phòng tối đa 100 ký tự";
     return null;
+  };
+
+  const handleCreateSubmit = async (scheduledAtIso: string) => {
+    const payload = {
+      title: form.title.trim(),
+      description:
+        form.description.trim() === "" ? null : form.description.trim(),
+      roomPassword:
+        form.roomPassword.trim() === "" ? null : form.roomPassword.trim(),
+      allowGuest: form.allowGuest,
+      maxParticipants: 10,
+      maxInterviewers: form.maxInterviewers,
+      durationMinutes: form.durationMinutes,
+      enableRecording: form.enableRecording,
+      scheduledAt: scheduledAtIso,
+    };
+
+    const token = getToken();
+    const headers = new Headers();
+    headers.set("Content-Type", "application/json");
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+
+    const res = await fetch("/api/interviews", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const message =
+        (json && typeof json.message === "string" && json.message) ||
+        `Tạo phòng thất bại (${res.status})`;
+      setError(message);
+      if (json && typeof json.field === "string") setFieldError(json.field);
+      return;
+    }
+
+    const interview = json.interview as CreatedInterview;
+    const avatarUrl = await fetchRecruiterAvatar();
+    setCreated({ ...interview, avatarUrl });
+    onCreated?.({ ...interview, avatarUrl });
+  };
+
+  const handleEditSubmit = async (scheduledAtIso: string) => {
+    if (!editInterview) return;
+
+    // Chỉ gửi roomPassword khi user chủ động muốn đổi (tick changePassword).
+    // Không tick + để trống -> KHÔNG gửi field này -> mật khẩu cũ giữ nguyên.
+    // Tick + để trống -> gửi null -> server xoá mật khẩu phòng.
+    // Tick + nhập giá trị -> gửi giá trị mới -> server hash lại.
+    const payload: Record<string, unknown> = {
+      title: form.title.trim(),
+      description:
+        form.description.trim() === "" ? null : form.description.trim(),
+      allowGuest: form.allowGuest,
+      maxInterviewers: form.maxInterviewers,
+      durationMinutes: form.durationMinutes,
+      enableRecording: form.enableRecording,
+      scheduledAt: scheduledAtIso,
+    };
+    if (changePassword) {
+      payload.roomPassword =
+        form.roomPassword.trim() === "" ? null : form.roomPassword.trim();
+    }
+
+    const token = getToken();
+    const headers = new Headers();
+    headers.set("Content-Type", "application/json");
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+
+    const res = await fetch(
+      `/api/interviews?id=${encodeURIComponent(editInterview.id)}`,
+      {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(payload),
+      },
+    );
+    const json = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const message =
+        (json && typeof json.message === "string" && json.message) ||
+        `Cập nhật thất bại (${res.status})`;
+      setError(message);
+      if (json && typeof json.field === "string") setFieldError(json.field);
+      return;
+    }
+
+    const updated = json.interview as {
+      id: string;
+      title: string;
+      description: string | null;
+      meetingCode: string;
+      allowGuest: boolean;
+      maxParticipants: number;
+      maxInterviewers: 2 | 3;
+      durationMinutes: 30 | 60 | 90 | 120;
+      status: "SCHEDULED" | "ONGOING" | "FINISHED" | "CANCELLED";
+      enableRecording: boolean;
+      scheduledAt: string;
+    };
+
+    const mapped: EditableInterview = {
+      id: updated.id,
+      title: updated.title,
+      description: updated.description,
+      code: updated.meetingCode,
+      status: updated.status,
+      duration: updated.durationMinutes,
+      interviewers: updated.maxInterviewers,
+      maxParticipants: updated.maxParticipants,
+      allowGuest: updated.allowGuest,
+      enableRecording: updated.enableRecording,
+      scheduledAt: updated.scheduledAt,
+    };
+
+    // Khác với create (cần hiện meeting code để copy), edit không có gì
+    // cần giữ lại trên màn hình — lưu xong đóng modal luôn, list ở trang
+    // cha sẽ tự refresh qua onUpdated.
+    onUpdated?.(mapped);
+    onClose();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -164,49 +349,21 @@ export function CreateInterviewModal({
       return;
     }
 
-    const payload = {
-      title: form.title.trim(),
-      description:
-        form.description.trim() === "" ? null : form.description.trim(),
-      roomPassword:
-        form.roomPassword.trim() === "" ? null : form.roomPassword.trim(),
-      allowGuest: form.allowGuest,
-      maxParticipants: 10,
-      maxInterviewers: form.maxInterviewers,
-      durationMinutes: form.durationMinutes,
-      enableRecording: form.enableRecording,
-      scheduledAt: scheduledAtIso,
-    };
-
     setSubmitting(true);
     try {
-      const token = getToken();
-      const headers = new Headers();
-      headers.set("Content-Type", "application/json");
-      if (token) headers.set("Authorization", `Bearer ${token}`);
-
-      const res = await fetch("/api/interviews", {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload),
-      });
-      const json = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        const message =
-          (json && typeof json.message === "string" && json.message) ||
-          `Tạo phòng thất bại (${res.status})`;
-        setError(message);
-        if (json && typeof json.field === "string") setFieldError(json.field);
-        return;
+      if (mode === "edit") {
+        await handleEditSubmit(scheduledAtIso);
+      } else {
+        await handleCreateSubmit(scheduledAtIso);
       }
-
-      const interview = json.interview as CreatedInterview;
-      const avatarUrl = await fetchRecruiterAvatar();
-      setCreated({ ...interview, avatarUrl });
-      onCreated?.({ ...interview, avatarUrl });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Không thể tạo phòng");
+      setError(
+        err instanceof Error
+          ? err.message
+          : mode === "edit"
+            ? "Không thể cập nhật buổi phỏng vấn"
+            : "Không thể tạo phòng",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -323,7 +480,7 @@ export function CreateInterviewModal({
   }
 
   // ---------- Màn hình thành công (sau khi tạo) ----------
-  if (created) {
+  if (mode === "create" && created) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
         <div className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0B1120] p-8 shadow-2xl">
@@ -401,12 +558,16 @@ export function CreateInterviewModal({
     );
   }
 
-  // ---------- Form ----------
+  // ---------- Form (dùng chung cho create + edit) ----------
+  const isEdit = mode === "edit";
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#0B1120] p-8 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold">Tạo buổi phỏng vấn</h2>
+          <h2 className="text-2xl font-bold">
+            {isEdit ? "Chỉnh sửa buổi phỏng vấn" : "Tạo buổi phỏng vấn"}
+          </h2>
           <button
             type="button"
             onClick={handleClose}
@@ -416,6 +577,15 @@ export function CreateInterviewModal({
             close
           </button>
         </div>
+
+        {isEdit && editInterview && (
+          <div className="mb-5 rounded-xl border border-white/10 bg-white/5 px-4 py-3 flex items-center justify-between">
+            <span className="text-sm text-gray-400">Mã phòng</span>
+            <code className="text-cyan-300 font-mono font-semibold">
+              {editInterview.code}
+            </code>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
@@ -462,15 +632,42 @@ export function CreateInterviewModal({
 
             <div>
               <label className="block mb-2 font-medium">Mật khẩu phòng</label>
-              <input
-                name="roomPassword"
-                type="text"
-                value={form.roomPassword}
-                onChange={handleChange}
-                maxLength={100}
-                className="w-full rounded-xl border border-outline-variant bg-surface-container px-4 py-3"
-                placeholder="123456"
-              />
+              {isEdit ? (
+                <div className="space-y-2">
+                  <input
+                    name="roomPassword"
+                    type="text"
+                    value={form.roomPassword}
+                    onChange={handleChange}
+                    disabled={!changePassword}
+                    maxLength={100}
+                    className="w-full rounded-xl border border-outline-variant bg-surface-container px-4 py-3 disabled:opacity-40"
+                    placeholder={
+                      changePassword
+                        ? "Để trống để xoá mật khẩu"
+                        : "Giữ nguyên mật khẩu hiện tại"
+                    }
+                  />
+                  <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={changePassword}
+                      onChange={(e) => setChangePassword(e.target.checked)}
+                    />
+                    Đổi mật khẩu phòng
+                  </label>
+                </div>
+              ) : (
+                <input
+                  name="roomPassword"
+                  type="text"
+                  value={form.roomPassword}
+                  onChange={handleChange}
+                  maxLength={100}
+                  className="w-full rounded-xl border border-outline-variant bg-surface-container px-4 py-3"
+                  placeholder="123456"
+                />
+              )}
             </div>
           </div>
 
@@ -569,7 +766,13 @@ export function CreateInterviewModal({
               disabled={submitting}
               className="px-6 py-3 rounded-xl bg-cyan-500 font-semibold hover:bg-cyan-400 disabled:opacity-50"
             >
-              {submitting ? "Đang tạo..." : "Tạo phòng"}
+              {submitting
+                ? isEdit
+                  ? "Đang lưu..."
+                  : "Đang tạo..."
+                : isEdit
+                  ? "Lưu thay đổi"
+                  : "Tạo phòng"}
             </button>
           </div>
         </form>

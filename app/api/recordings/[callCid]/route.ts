@@ -1,29 +1,4 @@
 // GET /api/recordings/:callCid
-//
-// Flow:
-//   1. Verify user đăng nhập + có quyền truy cập (HOST/INTERVIEWER/CANDIDATE).
-//   2. Gọi streamRecordingService.getCallRecordings(callCid) để fetch từ
-//      GetStream API.
-//   3. Với mỗi recording, INSERT vào bảng `recordings` với ON CONFLICT
-//      (url) DO NOTHING — idempotent, không insert trùng nếu gọi lại.
-//
-// Response:
-//   {
-//     success: true,
-//     callCid: "default:NC-23G6KRA3",
-//     total: 2,            // số recordings lấy được từ GetStream
-//     inserted: 1,         // số row MỚI được insert vào DB
-//     skipped: 1,          // số row đã có sẵn trong DB (no-op)
-//     recordings: [...]    // chi tiết từng recording đã ghi nhận
-//   }
-//
-// Auth:
-//   - CANDIDATE: chỉ được sync recordings của interview mà mình tham gia.
-//   - RECRUITER: chỉ được sync recordings của interview mà mình là
-//                HOST/INTERVIEWER (KHÔNG được sync/xem interview của
-//                recruiter khác).
-//   - ADMIN: được sync cho mọi interview.
-//   - Guest (chưa login): 401.
 
 import { NextResponse } from "next/server";
 import { pool } from "@/lib/db";
@@ -58,7 +33,7 @@ interface RecordingRow {
  * Verify user hiện tại có quyền truy cập callCid. Cho phép:
  *   - ADMIN: mọi callCid.
  *   - RECRUITER: chỉ callCid của interview mà user là HOST/INTERVIEWER.
- *   - CANDIDATE: chỉ callCid của interview mà user là participant (mọi role).
+ *
  *
  * LƯU Ý: trước đây RECRUITER được return true ngay (mọi callCid) — dẫn
  * đến recruiter A có thể sync/xem recording của interview do recruiter B

@@ -664,7 +664,7 @@ export default function RecordingsPage() {
             {isLoading ? (
               <div className="p-10 flex items-center justify-center gap-3 text-slate-400">
                 <Loader2 className="animate-spin" size={20} />
-                <span>Đang tải recordings...</span>
+                <span>Đang tải bản ghi hình...</span>
               </div>
             ) : error ? (
               <div className="p-10 flex items-center justify-center gap-3 text-red-300">
@@ -674,8 +674,8 @@ export default function RecordingsPage() {
             ) : filtered.length === 0 ? (
               <div className="p-10 text-center text-slate-400">
                 {recordings.length === 0
-                  ? "Chưa có recording nào. Nhập callCid ở trên để đồng bộ từ GetStream."
-                  : "Không tìm thấy recording phù hợp với bộ lọc."}
+                  ? "Chưa có bản ghi hình nào. Vui lòng đồng bộ"
+                  : "Không tìm thấy bản ghi hình phù hợp với bộ lọc."}
               </div>
             ) : (
               <table className="w-full table-fixed min-w-[900px]">

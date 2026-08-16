@@ -1,16 +1,5 @@
 // streamRecordingService
 // ----------------------
-// Service chịu trách nhiệm giao tiếp với GetStream Video API phía server,
-// cụ thể là lấy danh sách recordings của 1 call.
-//
-// Tách thành service riêng (không gộp vào route handler) để:
-//   1. Dễ test — service là pure function (input/output), không phụ thuộc
-//      vào HTTP.
-//   2. Dễ tái sử dụng — nếu sau này có cron / admin tool muốn fetch
-//      recordings, chỉ cần import hàm này.
-//   3. Dễ đổi SDK — chỉ sửa 1 chỗ.
-//
-// KHÔNG import file này từ client code.
 
 import { listCallRecordings as listCallRecordingsRaw } from "@/lib/stream-server";
 
