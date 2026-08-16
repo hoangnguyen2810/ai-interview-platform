@@ -69,7 +69,7 @@ export default function AdminQuestionsPage() {
   const [search, setSearch] = useState("");
   const [difficulty, setDifficulty] = useState("");
   const [page, setPage] = useState(1);
-  const [limit] = useState(20);
+  const [limit] = useState(10);
   const [rows, setRows] = useState<QuestionRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
