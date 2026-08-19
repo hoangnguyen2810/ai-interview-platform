@@ -5,7 +5,7 @@ import {
   hasAudio,
   hasVideo,
 } from "@stream-io/video-react-sdk";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type RemoteLike = {
   sessionId?: string;
@@ -49,10 +49,14 @@ type ApiResponse = {
 };
 
 const ROLE_LABEL_VI: Record<"HOST" | "INTERVIEWER" | "CANDIDATE", string> = {
-  HOST: "Host",
-  INTERVIEWER: "Interviewer",
-  CANDIDATE: "Candidate",
+  HOST: "Chủ phòng ",
+  INTERVIEWER: "Nhà tuyển dụng",
+  CANDIDATE: "Ứng viên",
 };
+
+// ── UI: kích thước panel nổi ──
+const PANEL_WIDTH = 380;
+const PANEL_HEIGHT = 560;
 
 export default function ParticipantsDrawer({
   open,
@@ -72,17 +76,115 @@ export default function ParticipantsDrawer({
   const [apiLoaded, setApiLoaded] = useState(false);
 
   // Cờ đang mute/cam cho từng remote sessionId
-  const [mutingBySession, setMutingBySession] = useState<Record<string, boolean>>({});
+  const [mutingBySession, setMutingBySession] = useState<
+    Record<string, boolean>
+  >({});
   const [togglingCamBySession, setTogglingCamBySession] = useState<
     Record<string, boolean>
   >({});
 
-  // Lưu role theo sessionId (xác định từ GetStream customData)
-  // Có thể có 2 recruiter trong phòng — không thể phân biệt chỉ bằng userId
-  // nếu user ẩn metadata. Vì vậy map theo `userId` từ customData.
   const [roleByUserId, setRoleByUserId] = useState<
     Record<string, "HOST" | "INTERVIEWER" | "CANDIDATE">
   >({});
+
+  // ── UI: vị trí kéo-thả của panel nổi ──
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const dragRef = useRef<{
+    dragging: boolean;
+    startMouseX: number;
+    startMouseY: number;
+    startPosX: number;
+    startPosY: number;
+  }>({
+    dragging: false,
+    startMouseX: 0,
+    startMouseY: 0,
+    startPosX: 0,
+    startPosY: 0,
+  });
+
+  // ── UI: đặt vị trí mặc định (góc trên-trái) khi mở lần đầu ──
+  useEffect(() => {
+    if (!open) return;
+    setPos((prev) => {
+      if (prev) return prev;
+      return { x: 24, y: 80 };
+    });
+  }, [open]);
+
+  // ── UI: giới hạn panel trong viewport ──
+  const clamp = useCallback((x: number, y: number) => {
+    const maxX = window.innerWidth - PANEL_WIDTH - 8;
+    const maxY = window.innerHeight - 48;
+    return {
+      x: Math.min(Math.max(8, x), Math.max(8, maxX)),
+      y: Math.min(Math.max(8, y), Math.max(8, maxY)),
+    };
+  }, []);
+
+  // ── UI: xử lý kéo ──
+  const handlePointerMove = useCallback(
+    (clientX: number, clientY: number) => {
+      if (!dragRef.current.dragging) return;
+      const dx = clientX - dragRef.current.startMouseX;
+      const dy = clientY - dragRef.current.startMouseY;
+      const next = clamp(
+        dragRef.current.startPosX + dx,
+        dragRef.current.startPosY + dy,
+      );
+      setPos(next);
+    },
+    [clamp],
+  );
+
+  const stopDragging = useCallback(() => {
+    dragRef.current.dragging = false;
+    document.body.style.userSelect = "";
+  }, []);
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) =>
+      handlePointerMove(e.clientX, e.clientY);
+    const onMouseUp = () => stopDragging();
+    const onTouchMove = (e: TouchEvent) => {
+      if (!dragRef.current.dragging) return;
+      const t = e.touches[0];
+      if (t) handlePointerMove(t.clientX, t.clientY);
+    };
+    const onTouchEnd = () => stopDragging();
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", onTouchEnd);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [handlePointerMove, stopDragging]);
+
+  const startDrag = (clientX: number, clientY: number) => {
+    if (!pos) return;
+    dragRef.current = {
+      dragging: true,
+      startMouseX: clientX,
+      startMouseY: clientY,
+      startPosX: pos.x,
+      startPosY: pos.y,
+    };
+    document.body.style.userSelect = "none";
+  };
+
+  const onHeaderMouseDown = (e: React.MouseEvent) => {
+    startDrag(e.clientX, e.clientY);
+  };
+
+  const onHeaderTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    if (t) startDrag(t.clientX, t.clientY);
+  };
 
   // Fetch participants từ DB khi mở drawer
   useEffect(() => {
@@ -127,7 +229,9 @@ export default function ParticipantsDrawer({
           | "CANDIDATE";
       }
     };
-    readFrom(localParticipant as unknown as { userId?: string; customData?: unknown });
+    readFrom(
+      localParticipant as unknown as { userId?: string; customData?: unknown },
+    );
     for (const r of remoteParticipants ?? []) {
       readFrom(r as unknown as { userId?: string; customData?: unknown });
     }
@@ -145,9 +249,7 @@ export default function ParticipantsDrawer({
    *     thì dùng participant_role từ DB để phân biệt.
    */
   const resolveRole = useCallback(
-    (
-      remote: RemoteLike,
-    ): "HOST" | "INTERVIEWER" | "CANDIDATE" => {
+    (remote: RemoteLike): "HOST" | "INTERVIEWER" | "CANDIDATE" => {
       // 1) Từ customData (nhanh nhất)
       const streamUserId = remote.userId;
       if (streamUserId && roleByUserId[streamUserId]) {
@@ -200,8 +302,7 @@ export default function ParticipantsDrawer({
       if (!remote.sessionId) continue;
       list.push({
         sessionId: remote.sessionId,
-        dbUserId:
-          (remote as unknown as { userId?: string }).userId ?? null,
+        dbUserId: (remote as unknown as { userId?: string }).userId ?? null,
         name: resolveName(remote),
         roleLabel: resolveRole(remote),
         micOn: hasAudio(remote),
@@ -236,11 +337,12 @@ export default function ParticipantsDrawer({
   const hasControllableRemote = participants.some(
     (p) =>
       !p.isYou &&
-      ((participantRole === "HOST") ||
+      (participantRole === "HOST" ||
         (participantRole === "INTERVIEWER" && p.roleLabel === "CANDIDATE")),
   );
 
-  const isHost = participantRole === "HOST" || participantRole === "INTERVIEWER";
+  const isHost =
+    participantRole === "HOST" || participantRole === "INTERVIEWER";
 
   async function handleToggleMic(
     sessionId: string,
@@ -302,197 +404,211 @@ export default function ParticipantsDrawer({
     }
   }
 
-  return (
-    <>
-      {/* Overlay */}
-      <div
-        onClick={onClose}
-        className={`fixed inset-0 bg-black/40 backdrop-blur-sm z-40 transition-opacity duration-300 ${
-          open ? "opacity-100" : "opacity-0 pointer-events-none"
-        }`}
-      />
+  // ── UI: không render khi đóng hoặc chưa có vị trí ──
+  if (!open || !pos) return null;
 
-      {/* Drawer */}
+  return (
+    <div
+      style={{
+        position: "fixed",
+        left: pos.x,
+        top: pos.y,
+        width: PANEL_WIDTH,
+        maxHeight: `min(${PANEL_HEIGHT}px, calc(100vh - 32px))`,
+        zIndex: 50,
+      }}
+      className="flex flex-col bg-[#0f1724] border border-white/10 rounded-xl shadow-2xl shadow-black/40 overflow-hidden"
+    >
+      {/* Header — kéo để di chuyển */}
       <div
-        className={`fixed top-0 right-0 h-screen w-[380px] bg-[#0f1724]
-        border-l border-white/10 z-50
-        transition-transform duration-300 ease-in-out
-        ${open ? "translate-x-0" : "translate-x-full"}`}
+        onMouseDown={onHeaderMouseDown}
+        onTouchStart={onHeaderTouchStart}
+        className="px-5 py-3 border-b border-white/10 flex items-center justify-between cursor-move select-none shrink-0"
       >
-        {/* Header */}
-        <div className="h-16 px-5 border-b border-white/10 flex items-center justify-between">
-          <div>
-            <h2 className="text-white font-medium text-lg">Người tham gia</h2>
-            <p className="text-xs text-gray-400">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="material-symbols-outlined text-gray-400 text-base flex-shrink-0">
+            drag_indicator
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-white font-medium text-sm truncate">
+              Người tham gia
+            </h2>
+            <p className="text-xs text-gray-400 truncate">
               {apiLoaded
-                ? `${totalCount} người · ${interviewerCount} interviewer · ${candidateCount} candidate`
+                ? `${totalCount} người · ${interviewerCount} Nhà tuyển dụng · ${candidateCount} Ứng viên`
                 : "Đang tải..."}
             </p>
           </div>
-
-          <button
-            onClick={onClose}
-            className="w-10 h-10 rounded-full flex items-center justify-center
-            hover:bg-white/10 text-gray-300 transition"
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
         </div>
 
-        {/* Participants */}
-        <div className="overflow-y-auto h-[calc(100vh-64px)]">
-          {participants.map((user) => {
-            const canControl =
-              isHost &&
-              !user.isYou &&
-              (participantRole === "HOST" ||
-                user.roleLabel === "CANDIDATE");
-            return (
-              <div
-                key={user.sessionId}
-                className="flex items-center justify-between px-5 py-4
-                hover:bg-white/5 transition"
-              >
-                {/* LEFT */}
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <div
-                    className={`w-11 h-11 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0 ${
-                      user.roleLabel === "HOST"
-                        ? "bg-amber-600"
-                        : user.roleLabel === "INTERVIEWER"
+        <button
+          onClick={onClose}
+          onMouseDown={(e) => e.stopPropagation()}
+          className="w-9 h-9 rounded-full flex items-center justify-center
+          hover:bg-white/10 text-gray-300 transition flex-shrink-0"
+        >
+          <span className="material-symbols-outlined text-lg">close</span>
+        </button>
+      </div>
+
+      {/* Participants */}
+      <div className="overflow-y-auto custom-scrollbar">
+        {participants.map((user) => {
+          const canControl =
+            isHost &&
+            !user.isYou &&
+            (participantRole === "HOST" || user.roleLabel === "CANDIDATE");
+          return (
+            <div
+              key={user.sessionId}
+              className="flex items-center justify-between px-5 py-4
+              hover:bg-white/5 transition"
+            >
+              {/* LEFT */}
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div
+                  className={`w-11 h-11 rounded-full flex items-center justify-center text-white font-semibold flex-shrink-0 ${
+                    user.roleLabel === "HOST"
+                      ? "bg-amber-600"
+                      : user.roleLabel === "INTERVIEWER"
                         ? "bg-cyan-600"
                         : "bg-violet-600"
-                    }`}
-                  >
-                    {user.name.charAt(0).toUpperCase()}
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-white text-sm truncate">
-                        {user.name}
-                      </span>
-                      {user.isYou && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 flex-shrink-0">
-                          You
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs text-gray-400">
-                        {ROLE_LABEL_VI[user.roleLabel]}
-                      </p>
-                      <span className="text-xs text-gray-600">•</span>
-                      <p className="text-xs text-gray-400">
-                        {user.isYou ? "This device" : "Connected"}
-                      </p>
-                    </div>
-                  </div>
+                  }`}
+                >
+                  {user.name.charAt(0).toUpperCase()}
                 </div>
 
-                {/* RIGHT */}
-                <div className="flex gap-2 flex-shrink-0 ml-2">
-                  {user.isYou ? (
-                    <>
-                      <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          user.micOn ? "bg-white/10" : "bg-red-500/20"
-                        }`}
-                      >
-                        <span className="material-symbols-outlined text-sm text-white">
-                          {user.micOn ? "mic" : "mic_off"}
-                        </span>
-                      </div>
-                      <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          user.cameraOn ? "bg-white/10" : "bg-red-500/20"
-                        }`}
-                      >
-                        <span className="material-symbols-outlined text-sm text-white">
-                          {user.cameraOn ? "videocam" : "videocam_off"}
-                        </span>
-                      </div>
-                    </>
-                  ) : canControl ? (
-                    <>
-                      <button
-                        onClick={() => handleToggleMic(user.sessionId, user.dbUserId, user.micOn)}
-                        disabled={mutingBySession[user.sessionId]}
-                        className={`w-8 h-8 rounded-full flex items-center justify-center transition ${
-                          user.micOn
-                            ? "bg-white/10 hover:bg-red-500/30"
-                            : "bg-green-500/30 hover:bg-green-500/50"
-                        }`}
-                      >
-                        <span className="material-symbols-outlined text-sm text-white">
-                          {user.micOn ? "mic" : "mic_off"}
-                        </span>
-                      </button>
-                      <button
-                        onClick={() =>
-                          handleToggleCamera(
-                            user.sessionId,
-                            user.dbUserId,
-                            user.cameraOn,
-                          )
-                        }
-                        disabled={togglingCamBySession[user.sessionId]}
-                        className={`w-8 h-8 rounded-full flex items-center justify-center transition ${
-                          user.cameraOn
-                            ? "bg-white/10 hover:bg-red-500/30"
-                            : "bg-green-500/30 hover:bg-green-500/50"
-                        }`}
-                      >
-                        <span className="material-symbols-outlined text-sm text-white">
-                          {user.cameraOn ? "videocam" : "videocam_off"}
-                        </span>
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          user.micOn ? "bg-white/10" : "bg-red-500/20"
-                        }`}
-                      >
-                        <span className="material-symbols-outlined text-sm text-white">
-                          {user.micOn ? "mic" : "mic_off"}
-                        </span>
-                      </div>
-                      <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          user.cameraOn ? "bg-white/10" : "bg-red-500/20"
-                        }`}
-                      >
-                        <span className="material-symbols-outlined text-sm text-white">
-                          {user.cameraOn ? "videocam" : "videocam_off"}
-                        </span>
-                      </div>
-                    </>
-                  )}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-white text-sm truncate">
+                      {user.name}
+                    </span>
+                    {user.isYou && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 flex-shrink-0">
+                        You
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-gray-400">
+                      {ROLE_LABEL_VI[user.roleLabel]}
+                    </p>
+                    <span className="text-xs text-gray-600">•</span>
+                    <p className="text-xs text-gray-400">
+                      {user.isYou ? "Thiết bị này" : "Kết nối"}
+                    </p>
+                  </div>
                 </div>
               </div>
-            );
-          })}
 
-          {apiLoaded && totalCount === 0 && (
-            <div className="px-5 py-6 text-center text-sm text-gray-500">
-              Chưa có ai trong phòng
+              {/* RIGHT */}
+              <div className="flex gap-2 flex-shrink-0 ml-2">
+                {user.isYou ? (
+                  <>
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                        user.micOn ? "bg-white/10" : "bg-red-500/20"
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-sm text-white">
+                        {user.micOn ? "mic" : "mic_off"}
+                      </span>
+                    </div>
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                        user.cameraOn ? "bg-white/10" : "bg-red-500/20"
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-sm text-white">
+                        {user.cameraOn ? "videocam" : "videocam_off"}
+                      </span>
+                    </div>
+                  </>
+                ) : canControl ? (
+                  <>
+                    <button
+                      onClick={() =>
+                        handleToggleMic(
+                          user.sessionId,
+                          user.dbUserId,
+                          user.micOn,
+                        )
+                      }
+                      disabled={mutingBySession[user.sessionId]}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center transition ${
+                        user.micOn
+                          ? "bg-white/10 hover:bg-red-500/30"
+                          : "bg-green-500/30 hover:bg-green-500/50"
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-sm text-white">
+                        {user.micOn ? "mic" : "mic_off"}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() =>
+                        handleToggleCamera(
+                          user.sessionId,
+                          user.dbUserId,
+                          user.cameraOn,
+                        )
+                      }
+                      disabled={togglingCamBySession[user.sessionId]}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center transition ${
+                        user.cameraOn
+                          ? "bg-white/10 hover:bg-red-500/30"
+                          : "bg-green-500/30 hover:bg-green-500/50"
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-sm text-white">
+                        {user.cameraOn ? "videocam" : "videocam_off"}
+                      </span>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                        user.micOn ? "bg-white/10" : "bg-red-500/20"
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-sm text-white">
+                        {user.micOn ? "mic" : "mic_off"}
+                      </span>
+                    </div>
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                        user.cameraOn ? "bg-white/10" : "bg-red-500/20"
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-sm text-white">
+                        {user.cameraOn ? "videocam" : "videocam_off"}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-          )}
+          );
+        })}
 
-          {isHost && hasControllableRemote && (
-            <div className="px-5 py-3">
-              <p className="text-[11px] text-gray-500 text-center">
-                {participantRole === "HOST"
-                  ? "Host có thể tắt mic / cam của mọi người trong phòng"
-                  : "Interviewer có thể tắt mic / cam của ứng viên"}
-              </p>
-            </div>
-          )}
-        </div>
+        {apiLoaded && totalCount === 0 && (
+          <div className="px-5 py-6 text-center text-sm text-gray-500">
+            Chưa có ai trong phòng
+          </div>
+        )}
+
+        {isHost && hasControllableRemote && (
+          <div className="px-5 py-3">
+            <p className="text-[11px] text-gray-500 text-center">
+              {participantRole === "HOST"
+                ? "Host có thể tắt mic / cam của mọi người trong phòng"
+                : "Interviewer có thể tắt mic / cam của ứng viên"}
+            </p>
+          </div>
+        )}
       </div>
-    </>
+    </div>
   );
 }

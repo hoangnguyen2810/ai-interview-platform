@@ -217,9 +217,9 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
             check_circle
           </span>
           <div>
-            <p className="font-semibold text-sm">Đã submit code thành công</p>
+            <p className="font-semibold text-sm">Đã nộp code thành công</p>
             <p className="text-xs text-green-300/70">
-              Recruiter đã nhận được bài làm của bạn.
+              Nhà tuyển dụng đã nhận được bài làm của bạn.
             </p>
           </div>
         </div>
@@ -303,10 +303,10 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
                 {isRunning ? (
                   <>
                     <span className="animate-spin">⚙</span>
-                    Running...
+                    Đang chạy...
                   </>
                 ) : (
-                  "Run"
+                  "Chạy"
                 )}
               </button>
 
@@ -318,15 +318,15 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
                 {isSubmitting ? (
                   <>
                     <span className="animate-spin">⚙</span>
-                    Submitting...
+                    Đang nộp...
                   </>
                 ) : submitted ? (
                   <>
                     <span>✓</span>
-                    Submitted
+                    Đã nộp
                   </>
                 ) : (
-                  "Submit"
+                  "Nộp"
                 )}
               </button>
             </div>

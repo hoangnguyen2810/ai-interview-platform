@@ -1,5 +1,5 @@
 import { useRecording, type RecordingStatus } from "./RecordingContext";
-
+import Image from "next/image";
 interface HeaderProps {
   title?: string;
   meetingCode?: string;
@@ -19,20 +19,16 @@ export default function Header({
     <header className="w-full flex items-center justify-between z-10">
       {/* Logo */}
       <div className="flex items-center space-x-3">
-        <div className="w-8 h-8 bg-cyan-400 rounded-[8px] flex items-center justify-center">
-          <svg
-            className="h-5 w-5 text-[#051424]"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              d="M13 10V3L4 14h7v7l9-11h-7z"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+        <div className="flex items-center space-x-3">
+          <div className="w-8 h-8 rounded-[8px] overflow-hidden">
+            <Image
+              src="/favicon.ico"
+              alt="Logo"
+              width={32}
+              height={32}
+              className="object-contain"
             />
-          </svg>
+          </div>
         </div>
 
         <span className="font-bold text-xl tracking-tight">

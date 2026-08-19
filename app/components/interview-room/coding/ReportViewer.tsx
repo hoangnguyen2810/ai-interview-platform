@@ -29,6 +29,41 @@ function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, "");
 }
 
+// FIX (mất dữ liệu khi lưu): AI đôi khi trả về 1 field dưới dạng mảng
+// (ví dụ strengths: ["a", "b"]) thay vì string, dù type ReportContent khai
+// là string — TypeScript không enforce việc này ở runtime, và cột `content`
+// trong DB là jsonb nên lưu kiểu gì cũng được.
+//
+// Trước đây, khi bắt đầu edit, `draft` được gán trực tiếp bằng
+// `{...report.content}` nên field dạng mảng đó vẫn giữ nguyên là mảng bên
+// trong state. Nếu recruiter không tự tay sửa field đó rồi bấm Lưu, backend
+// (sanitizeContent) sẽ thấy field không phải string và ÂM THẦM reset nó về
+// "" — dữ liệu AI sinh ra bị mất.
+//
+// Hàm này ép MỌI giá trị (string/mảng/object/number/...) thành text có thể
+// edit ngay từ lúc vào edit mode, để (1) không còn field nào là non-string
+// bị đẩy lên backend, và (2) recruiter vẫn nhìn thấy & chỉnh sửa được nội
+// dung đó dưới dạng gạch đầu dòng thay vì bị ẩn hoàn toàn.
+function toEditableText(val: unknown): string {
+  if (val == null) return "";
+  if (typeof val === "string") return val.trim();
+  if (Array.isArray(val)) {
+    return val
+      .map((item) => (typeof item === "string" ? item.trim() : safeStr(item)))
+      .filter(Boolean)
+      .map((item) => `- ${item}`)
+      .join("\n");
+  }
+  if (typeof val === "object") {
+    try {
+      return JSON.stringify(val, null, 2);
+    } catch {
+      return "";
+    }
+  }
+  return String(val).trim();
+}
+
 interface ReportPayload {
   id: string;
   content: ReportContent;
@@ -95,6 +130,53 @@ const SECTIONS: Array<{
   },
 ];
 
+// UI: bảng màu accent cho từng mục trong chế độ xem, giúp phân biệt
+// nhanh và làm nổi bật nội dung thay vì dùng chung 1 màu xanh cho tất cả.
+const SECTION_STYLES = {
+  info: {
+    icon: "badge",
+    label: "text-cyan-400",
+    border: "border-l-cyan-500",
+    ring: "border-cyan-500/20",
+    bg: "bg-cyan-500/[0.05]",
+  },
+  summary: {
+    icon: "summarize",
+    label: "text-indigo-400",
+    border: "border-l-indigo-500",
+    ring: "border-indigo-500/20",
+    bg: "bg-indigo-500/[0.05]",
+  },
+  skill: {
+    icon: "psychology",
+    label: "text-amber-400",
+    border: "border-l-amber-500",
+    ring: "border-amber-500/20",
+    bg: "bg-amber-500/[0.05]",
+  },
+  strengths: {
+    icon: "thumb_up",
+    label: "text-emerald-400",
+    border: "border-l-emerald-500",
+    ring: "border-emerald-500/20",
+    bg: "bg-emerald-500/[0.05]",
+  },
+  improve: {
+    icon: "trending_up",
+    label: "text-orange-400",
+    border: "border-l-orange-500",
+    ring: "border-orange-500/20",
+    bg: "bg-orange-500/[0.05]",
+  },
+  conclusion: {
+    icon: "gavel",
+    label: "text-fuchsia-400",
+    border: "border-l-fuchsia-500",
+    ring: "border-fuchsia-500/20",
+    bg: "bg-fuchsia-500/[0.05]",
+  },
+} as const;
+
 function getAuthHeaders(): HeadersInit {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -155,9 +237,9 @@ function statusLabel(status: string): string {
 }
 
 // ── Resizable modal constants ─────────────────────────────────────────────
-const MIN_MODAL_WIDTH = 640;
+const MIN_MODAL_WIDTH = 760;
 const MIN_MODAL_HEIGHT = 420;
-const DEFAULT_MODAL_WIDTH = 1024; // ~ max-w-5xl
+const DEFAULT_MODAL_WIDTH = 1320; // ~ max-w-[1400px], rộng hơn để đọc báo cáo thoải mái
 const DEFAULT_MODAL_HEIGHT_RATIO = 0.94; // ~ h-[94vh]
 
 type ResizeDirection = "e" | "s" | "se" | "w" | "sw";
@@ -358,6 +440,16 @@ export default function ReportViewer({
     setDragOffset({ x: 0, y: 0 });
   }, []);
 
+  // UI: đóng bằng phím Esc — thay thế cho click-ra-ngoài đã bị bỏ, để vẫn
+  // có cách đóng nhanh nhưng không dễ đóng nhầm khi đang thao tác.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   const report = useMemo(
     () => reports.find((r) => r.id === selectedId) ?? null,
     [reports, selectedId],
@@ -489,7 +581,22 @@ export default function ReportViewer({
 
   const handleStartEdit = () => {
     if (!report) return;
-    setDraft({ ...report.content });
+    // FIX (mất dữ liệu khi lưu): dùng toEditableText cho từng field thay vì
+    // spread trực tiếp {...report.content}. Đảm bảo mọi giá trị đưa vào
+    // draft (và sau này gửi lên PATCH) luôn là string — không còn field nào
+    // "vô hình" bị backend xoá do sai kiểu (mảng/object) nữa.
+    const raw = report.content as unknown as Record<string, unknown>;
+    const safeContent: ReportContent = {
+      candidate_name: toEditableText(raw.candidate_name),
+      position: toEditableText(raw.position),
+      summary: toEditableText(raw.summary),
+      strengths: toEditableText(raw.strengths),
+      weaknesses: toEditableText(raw.weaknesses),
+      skill_evaluation: toEditableText(raw.skill_evaluation),
+      improvement_suggestions: toEditableText(raw.improvement_suggestions),
+      hiring_conclusion: toEditableText(raw.hiring_conclusion),
+    };
+    setDraft(safeContent);
     setDraftScore(
       report.ai_overall_score !== null && report.ai_overall_score !== undefined
         ? String(report.ai_overall_score)
@@ -590,14 +697,14 @@ export default function ReportViewer({
     modalSize !== null || dragOffset.x !== 0 || dragOffset.y !== 0;
 
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
-      onClick={onClose}
-    >
+    // UI: bỏ onClick={onClose} ở overlay — trước đây lỡ click/kéo chuột ra
+    // ngoài modal (kể cả khi đang bôi đen văn bản) sẽ đóng và mất thao tác
+    // đang làm. Giờ chỉ đóng qua nút X hoặc phím Esc.
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
       <div
         ref={modalRef}
         className={`relative bg-[#18181B] border border-cyan-500/30 rounded-xl flex shadow-2xl ${
-          effectiveSize ? "" : "w-full max-w-5xl h-[94vh]"
+          effectiveSize ? "" : "w-full max-w-[1400px] h-[94vh]"
         }`}
         style={{
           ...(effectiveSize
@@ -613,10 +720,9 @@ export default function ReportViewer({
               ? `translate(${dragOffset.x}px, ${dragOffset.y}px)`
               : undefined,
         }}
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Sidebar — list of reports */}
-        <div className="w-64 shrink-0 border-r border-[#313131] bg-[#161618] rounded-l-xl flex flex-col">
+        <div className="w-72 shrink-0 border-r border-[#313131] bg-[#161618] rounded-l-xl flex flex-col">
           <div className="px-3 py-3 border-b border-[#313131] flex items-center justify-between">
             <div className="min-w-0">
               <h4 className="text-white font-semibold text-xs uppercase tracking-wide">
@@ -900,54 +1006,64 @@ export default function ReportViewer({
                   </div>
                 </div>
 
-                {/* ── View mode: unified report format ────────────────────── */}
+                {/* ── View mode: mỗi mục là 1 card riêng, có màu accent
+                    khác nhau để dễ phân biệt và làm nổi bật nội dung ──── */}
                 {!editing && (
-                  <div className="space-y-0 rounded-xl border border-[#323438] bg-[#1f2023] overflow-hidden">
+                  <div className="space-y-3">
                     {/* THÔNG TIN ỨNG VIÊN */}
-                    <div className="p-4 border-b border-[#313131]">
-                      <div className="text-[#3b82f6] font-semibold text-xs mb-1 uppercase tracking-wide">
-                        THÔNG TIN ỨNG VIÊN
+                    <div
+                      className={`rounded-xl border ${SECTION_STYLES.info.ring} ${SECTION_STYLES.info.bg} border-l-4 ${SECTION_STYLES.info.border} p-4`}
+                    >
+                      <div
+                        className={`${SECTION_STYLES.info.label} font-semibold text-xs mb-3 uppercase tracking-wide flex items-center gap-1.5`}
+                      >
+                        <span className="material-symbols-outlined text-sm">
+                          {SECTION_STYLES.info.icon}
+                        </span>
+                        Thông tin ứng viên
                       </div>
-                      <div className="h-px bg-[#313338] my-3">
-                        ────────────────────────
-                      </div>
-                      <div className="space-y-0.5 text-sm text-white/85">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm text-white/85">
                         <div>
-                          <span className="text-white/50">Tên ứng viên: </span>
-                          <span className="text-white">
+                          <div className="text-white/40 text-[11px] uppercase tracking-wide mb-0.5">
+                            Tên ứng viên
+                          </div>
+                          <div className="text-white font-medium">
                             {safeStr(report.content?.candidate_name) || "—"}
-                          </span>
+                          </div>
                         </div>
                         <div>
-                          <span className="text-white/50">
-                            Vị trí ứng tuyển:{" "}
-                          </span>
-                          <span className="text-white">
+                          <div className="text-white/40 text-[11px] uppercase tracking-wide mb-0.5">
+                            Vị trí ứng tuyển
+                          </div>
+                          <div className="text-white font-medium">
                             {safeStr(report.content?.position) || "—"}
-                          </span>
+                          </div>
                         </div>
                         <div>
-                          <span className="text-white/50">Điểm tổng: </span>
-                          <span className="text-[#60a5fa] font-semibold">
+                          <div className="text-white/40 text-[11px] uppercase tracking-wide mb-0.5">
+                            Điểm tổng
+                          </div>
+                          <div className="text-cyan-300 font-bold">
                             {report.ai_overall_score != null
                               ? `${report.ai_overall_score.toFixed(1)} / 10`
                               : "—"}
-                          </span>
+                          </div>
                         </div>
-                      </div>
-                      <div className="h-px bg-[#313338] my-3">
-                        ────────────────────────
                       </div>
                     </div>
 
                     {/* TÓM TẮT */}
                     {safeStr(report.content?.summary) && (
-                      <div className="p-5 border-b border-[#2f3135]">
-                        <div className="text-[#3b82f6] font-semibold text-xs mb-1 uppercase tracking-wide">
-                          TÓM TẮT
-                        </div>
-                        <div className="h-px bg-[#313338] my-3">
-                          ────────────────────────
+                      <div
+                        className={`rounded-xl border ${SECTION_STYLES.summary.ring} ${SECTION_STYLES.summary.bg} border-l-4 ${SECTION_STYLES.summary.border} p-4`}
+                      >
+                        <div
+                          className={`${SECTION_STYLES.summary.label} font-semibold text-xs mb-2 uppercase tracking-wide flex items-center gap-1.5`}
+                        >
+                          <span className="material-symbols-outlined text-sm">
+                            {SECTION_STYLES.summary.icon}
+                          </span>
+                          Tóm tắt
                         </div>
                         <div className="text-white/85 text-sm whitespace-pre-wrap leading-relaxed">
                           {stripHtml(safeStr(report.content?.summary))}
@@ -957,12 +1073,16 @@ export default function ReportViewer({
 
                     {/* ĐÁNH GIÁ KỸ NĂNG */}
                     {safeStr(report.content?.skill_evaluation) && (
-                      <div className="p-5 border-b border-[#2f3135]">
-                        <div className="text-[#3b82f6] font-semibold text-xs mb-1 uppercase tracking-wide">
-                          ĐÁNH GIÁ KỸ NĂNG
-                        </div>
-                        <div className="h-px bg-[#313338] my-3">
-                          ────────────────────────
+                      <div
+                        className={`rounded-xl border ${SECTION_STYLES.skill.ring} ${SECTION_STYLES.skill.bg} border-l-4 ${SECTION_STYLES.skill.border} p-4`}
+                      >
+                        <div
+                          className={`${SECTION_STYLES.skill.label} font-semibold text-xs mb-2 uppercase tracking-wide flex items-center gap-1.5`}
+                        >
+                          <span className="material-symbols-outlined text-sm">
+                            {SECTION_STYLES.skill.icon}
+                          </span>
+                          Đánh giá kỹ năng
                         </div>
                         <div className="text-white/85 text-sm whitespace-pre-wrap leading-relaxed">
                           {stripHtml(safeStr(report.content?.skill_evaluation))}
@@ -972,12 +1092,16 @@ export default function ReportViewer({
 
                     {/* ĐIỂM MẠNH */}
                     {safeStr(report.content?.strengths) && (
-                      <div className="p-5 border-b border-[#2f3135]">
-                        <div className="text-[#3b82f6] font-semibold text-xs mb-1 uppercase tracking-wide">
-                          ĐIỂM MẠNH
-                        </div>
-                        <div className="h-px bg-[#313338] my-3">
-                          ────────────────────────
+                      <div
+                        className={`rounded-xl border ${SECTION_STYLES.strengths.ring} ${SECTION_STYLES.strengths.bg} border-l-4 ${SECTION_STYLES.strengths.border} p-4`}
+                      >
+                        <div
+                          className={`${SECTION_STYLES.strengths.label} font-semibold text-xs mb-2 uppercase tracking-wide flex items-center gap-1.5`}
+                        >
+                          <span className="material-symbols-outlined text-sm">
+                            {SECTION_STYLES.strengths.icon}
+                          </span>
+                          Điểm mạnh
                         </div>
                         <div className="text-white/85 text-sm whitespace-pre-wrap leading-relaxed">
                           {stripHtml(safeStr(report.content?.strengths))}
@@ -988,12 +1112,16 @@ export default function ReportViewer({
                     {/* ĐIỂM CẦN CẢI THIỆN */}
                     {safeStr(report.content?.weaknesses) ||
                     safeStr(report.content?.improvement_suggestions) ? (
-                      <div className="p-5 border-b border-[#2f3135]">
-                        <div className="text-[#3b82f6] font-semibold text-xs mb-1 uppercase tracking-wide">
-                          ĐIỂM CẦN CẢI THIỆN
-                        </div>
-                        <div className="h-px bg-[#313338] my-3">
-                          ────────────────────────
+                      <div
+                        className={`rounded-xl border ${SECTION_STYLES.improve.ring} ${SECTION_STYLES.improve.bg} border-l-4 ${SECTION_STYLES.improve.border} p-4`}
+                      >
+                        <div
+                          className={`${SECTION_STYLES.improve.label} font-semibold text-xs mb-2 uppercase tracking-wide flex items-center gap-1.5`}
+                        >
+                          <span className="material-symbols-outlined text-sm">
+                            {SECTION_STYLES.improve.icon}
+                          </span>
+                          Điểm cần cải thiện
                         </div>
                         <div className="text-white/85 text-sm whitespace-pre-wrap leading-relaxed">
                           {[
@@ -1010,16 +1138,20 @@ export default function ReportViewer({
                       </div>
                     ) : null}
 
-                    {/* KẾT LUẬN */}
+                    {/* KẾT LUẬN — nhấn mạnh nhất, viền dày + nền đậm hơn 1 chút */}
                     {safeStr(report.content?.hiring_conclusion) && (
-                      <div className="p-4">
-                        <div className="text-[#3b82f6] font-semibold text-xs mb-1 uppercase tracking-wide">
-                          KẾT LUẬN
+                      <div
+                        className={`rounded-xl border-2 ${SECTION_STYLES.conclusion.ring} bg-fuchsia-500/[0.08] border-l-4 ${SECTION_STYLES.conclusion.border} p-4`}
+                      >
+                        <div
+                          className={`${SECTION_STYLES.conclusion.label} font-semibold text-xs mb-2 uppercase tracking-wide flex items-center gap-1.5`}
+                        >
+                          <span className="material-symbols-outlined text-sm">
+                            {SECTION_STYLES.conclusion.icon}
+                          </span>
+                          Kết luận
                         </div>
-                        <div className="h-px bg-[#313338] my-3">
-                          ────────────────────────
-                        </div>
-                        <div className="text-white/85 text-sm whitespace-pre-wrap leading-relaxed">
+                        <div className="text-white text-sm whitespace-pre-wrap leading-relaxed font-medium">
                           {stripHtml(
                             safeStr(report.content?.hiring_conclusion),
                           )}

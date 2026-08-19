@@ -279,9 +279,8 @@ export async function POST(req: Request, ctx: Params) {
       .filter((v): v is number => typeof v === "number");
     if (scored.length) {
       aiOverall =
-        Math.round(
-          (scored.reduce((a, b) => a + b, 0) / scored.length) * 100,
-        ) / 100;
+        Math.round((scored.reduce((a, b) => a + b, 0) / scored.length) * 100) /
+        100;
     }
 
     // Always INSERT a new row. Each AI generation becomes its own report
@@ -322,12 +321,8 @@ export async function POST(req: Request, ctx: Params) {
     );
   } catch (error) {
     console.error("POST /report ERROR:", error);
-    const message =
-      error instanceof Error ? error.message : "Lỗi máy chủ";
-    return NextResponse.json(
-      { success: false, message },
-      { status: 500 },
-    );
+    const message = error instanceof Error ? error.message : "Lỗi máy chủ";
+    return NextResponse.json({ success: false, message }, { status: 500 });
   }
 }
 
@@ -339,14 +334,43 @@ function isStringRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
+// FIX: helper mới — chuyển ĐỔI bất kỳ kiểu dữ liệu nào (string/array/object/
+// number/...) về text thay vì loại bỏ nó. Trước đây `sanitizeContent` chỉ
+// nhận giá trị khi `typeof v === "string"`; nếu AI trả về field dạng mảng
+// (ví dụ strengths: ["a", "b"]) thì field đó bị âm thầm reset về "" mỗi lần
+// recruiter PATCH (kể cả khi họ không đụng vào field đó) — đây chính là bug
+// "mất dữ liệu AI đã cho khi chỉnh sửa xong lưu".
+function stringifyContentValue(v: unknown): string {
+  if (v == null) return "";
+  if (typeof v === "string") return v;
+  if (Array.isArray(v)) {
+    return v
+      .map((item) =>
+        typeof item === "string" ? item.trim() : stringifyContentValue(item),
+      )
+      .filter(Boolean)
+      .map((item) => `- ${item}`)
+      .join("\n");
+  }
+  if (typeof v === "object") {
+    try {
+      return JSON.stringify(v);
+    } catch {
+      return "";
+    }
+  }
+  return String(v);
+}
+
 function sanitizeContent(raw: unknown): ReportContent {
   const out: ReportContent = { ...EMPTY_CONTENT };
   if (!isStringRecord(raw)) return out;
   for (const key of Object.keys(EMPTY_CONTENT) as Array<keyof ReportContent>) {
-    const v = raw[key];
-    if (typeof v === "string") {
-      // hard cap each section to 5000 chars to avoid runaway payloads.
-      out[key] = v.slice(0, 5000);
+    // FIX: chỉ giữ default "" khi key HOÀN TOÀN không có trong payload gửi
+    // lên. Nếu key có mặt (dù kiểu gì) thì convert bằng stringifyContentValue
+    // thay vì âm thầm loại bỏ như trước — không còn mất dữ liệu AI nữa.
+    if (key in raw) {
+      out[key] = stringifyContentValue(raw[key]).slice(0, 5000);
     }
   }
   return out;

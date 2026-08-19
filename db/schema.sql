@@ -222,6 +222,7 @@ CREATE TABLE IF NOT EXISTS public.interviews
     deleted_at timestamp without time zone,
     active_question_id uuid,
     enable_recording boolean NOT NULL DEFAULT false,
+    updated_at timestamp with time zone,
     CONSTRAINT interviews_pkey PRIMARY KEY (id),
     CONSTRAINT interviews_meeting_code_key UNIQUE (meeting_code)
 );

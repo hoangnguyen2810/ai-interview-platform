@@ -108,7 +108,7 @@ function CodeViewerModal({
                 Source code đã nộp
               </h3>
               <p className="text-white/40 text-[11px] truncate">
-                Submission #{submission.submissionId.slice(0, 8)} •{" "}
+                Bài nộp {submission.submissionId.slice(0, 8)} •{" "}
                 {formatLanguage(submission.language)} •{" "}
                 {formatTime(submission.createdAt)}
                 {submission.candidateName &&
@@ -184,9 +184,7 @@ function SubmissionBlock({
   return (
     <div className="bg-[#0a1929] border border-cyan-500/20 rounded-lg p-4 font-mono text-xs text-white/80 whitespace-pre-wrap leading-relaxed">
       <div className="flex items-center justify-between mb-1">
-        <div className="text-cyan-400 font-bold text-sm">
-          Submission #{index}
-        </div>
+        <div className="text-cyan-400 font-bold text-sm">Bài nộp {index}</div>
         <button
           type="button"
           onClick={() => onViewCode(submission)}
