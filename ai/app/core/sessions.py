@@ -8,7 +8,7 @@ import uuid
 from typing import TypedDict
 
 
-MAX_HISTORY = 10  # keep last 10 messages per session
+MAX_HISTORY = 30  # keep last 20 messages per session
 
 
 class SessionData(TypedDict, total=False):

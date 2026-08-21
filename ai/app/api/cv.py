@@ -5,6 +5,7 @@ import ollama
 import pymupdf4llm
 
 from app.core.prompts import CV_PROMPT
+from app.core.text_utils import clean_response
 from app.core import sessions as session_store
 
 router = APIRouter()
@@ -78,7 +79,8 @@ async def upload_cv(
             keep_alive="30m"
         )
 
-        analysis_text = response["message"]["content"]
+        raw_analysis = response["message"]["content"]
+        analysis_text = clean_response(raw_analysis)  # chuẩn hóa định dạng trước khi lưu
 
         # Store CV + analysis in session memory
         session_store.set_cv(

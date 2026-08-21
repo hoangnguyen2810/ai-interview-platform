@@ -42,10 +42,7 @@ interface ExecuteRequest {
 function mapSandboxStatus(result: SandboxResult): string {
   if (result.error?.includes("TIMEOUT")) return "TIMEOUT";
   if (result.exitCode === 0 && !result.stderr) return "SUCCESS";
-  if (
-    result.stderr?.includes("Error") ||
-    result.stderr?.includes("error")
-  ) {
+  if (result.stderr?.includes("Error") || result.stderr?.includes("error")) {
     if (
       result.error?.includes("Compilation") ||
       result.stderr?.includes("compilation")
@@ -119,7 +116,10 @@ export async function POST(req: Request, ctx: Params) {
     );
     if (candRes.rows.length === 0) {
       return NextResponse.json(
-        { success: false, message: "Bạn không phải candidate của phỏng vấn này" },
+        {
+          success: false,
+          message: "Bạn không phải candidate của phỏng vấn này",
+        },
         { status: 403 },
       );
     }
@@ -155,7 +155,7 @@ export async function POST(req: Request, ctx: Params) {
     );
     const executionId: string = execRes.rows[0].id;
 
-const subRes = await pool.query(
+    const subRes = await pool.query(
       `INSERT INTO code_submissions
         (interview_id, interview_candidate_id, question_id, language, source_code, status, execution_id, candidate_name)
       VALUES ($1, $2, $3, $4, $5, 'PENDING', $6,
@@ -305,10 +305,9 @@ const subRes = await pool.query(
     // 7. Fetch candidate name (best-effort)
     let candidateName: string | null = null;
     try {
-      const u = await pool.query(
-        `SELECT full_name FROM users WHERE id = $1`,
-        [auth.id],
-      );
+      const u = await pool.query(`SELECT full_name FROM users WHERE id = $1`, [
+        auth.id,
+      ]);
       candidateName = u.rows[0]?.full_name ?? null;
     } catch {
       /* ignore */
@@ -353,14 +352,12 @@ const subRes = await pool.query(
         },
         body: JSON.stringify({ submissionId }),
       },
-    ).catch((err) =>
-      console.warn("[code-review] Auto-trigger failed:", err),
-    );
+    ).catch((err) => console.warn("[code-review] Auto-trigger failed:", err));
 
     return NextResponse.json(
       {
         success: true,
-        message: "Đã submit code",
+        message: "Đã nộp code",
         submission: submissionPayload,
       },
       { status: 201 },

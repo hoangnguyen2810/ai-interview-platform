@@ -51,23 +51,19 @@ def get_cv_context(session_id: str):
         return {"prompt": ""}
 
     # Lightweight extraction: collect lines containing technical keywords.
-    # In a production system you would use an LLM or structured CV parsing here.
-    lines = cv_text.splitlines()
+    # Dừng sớm khi đủ MAX_KEYWORDS, bỏ qua dòng rỗng và dòng quá dài/ngắn.
+    MAX_KEYWORDS = 25
     keywords: list[str] = []
-    for line in lines:
+    for line in cv_text.splitlines():
+        if len(keywords) >= MAX_KEYWORDS:
+            break
         stripped = line.strip()
         if not stripped:
             continue
-        # Keep short-to-medium lines that look like skills, tech stacks, roles.
-        # Skip very long paragraphs (likely descriptions).
-        if 3 <= len(stripped) <= 120:
-            keywords.append(stripped)
-        elif len(keywords) < 30 and 120 < len(stripped) <= 300:
-            # Accept medium-length lines too, up to 30 of them
+        if 3 <= len(stripped) <= 300:
             keywords.append(stripped)
 
-    # Join into a single context string (max ~2000 chars to keep prompt manageable)
-    combined = " | ".join(keywords[:25])
+    combined = " | ".join(keywords)
     if len(combined) > 2000:
         combined = combined[:2000]
 

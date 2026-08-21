@@ -3,6 +3,7 @@ from pydantic import BaseModel
 import ollama
 
 from app.core.prompts import CHAT_PROMPT
+from app.core.text_utils import clean_response
 from app.core import sessions as session_store
 
 router = APIRouter()
@@ -49,11 +50,16 @@ def chat(req: ChatRequest):
     res = ollama.chat(
         model="qwen2.5:3b-instruct",
         messages=ollama_messages,
+        options={
+            "temperature": 0.3,
+        },
     )
 
-    reply = res["message"]["content"]
+    raw_reply = res["message"]["content"]
+    reply = clean_response(raw_reply)  # chuẩn hóa định dạng trước khi lưu/trả về
 
-    # Persist this turn into session history
+    # Persist this turn into session history (lưu bản đã clean để history
+    # dùng làm context cho các lượt sau cũng luôn sạch định dạng)
     session_store.append_history(req.session_id, "user", req.message)
     session_store.append_history(req.session_id, "ai", reply)
 
