@@ -374,6 +374,65 @@ export default function AIDrawer({ open, onClose, meetingCode }: Props) {
   const [cvDragging, setCvDragging] = useState(false);
   const [cvFilename, setCvFilename] = useState<string | null>(null);
   const [cvContext, setCvContext] = useState<string>("");
+  // Đặt gần đầu file, cạnh các Icon component
+  const markdownComponents = {
+    h1: ({ children }: any) => (
+      <h1 className="text-[15px] font-semibold mt-2 mb-1 first:mt-0">
+        {children}
+      </h1>
+    ),
+    h2: ({ children }: any) => (
+      <h2 className="text-[14px] font-semibold mt-2 mb-1 first:mt-0">
+        {children}
+      </h2>
+    ),
+    h3: ({ children }: any) => (
+      <h3 className="text-[13.5px] font-semibold mt-2 mb-1 first:mt-0">
+        {children}
+      </h3>
+    ),
+    h4: ({ children }: any) => (
+      <h4 className="text-[13px] font-semibold mt-1.5 mb-0.5 first:mt-0">
+        {children}
+      </h4>
+    ),
+    p: ({ children }: any) => (
+      <p className="my-1 first:mt-0 last:mb-0">{children}</p>
+    ),
+    ul: ({ children }: any) => (
+      <ul className="my-1 pl-4 list-disc space-y-0.5">{children}</ul>
+    ),
+    ol: ({ children }: any) => (
+      <ol className="my-1 pl-4 list-decimal space-y-0.5">{children}</ol>
+    ),
+    li: ({ children }: any) => <li className="leading-snug">{children}</li>,
+    code: ({ inline, children, ...props }: any) =>
+      inline ? (
+        <code
+          className="px-1 py-0.5 rounded bg-[#2a2a2a] text-[12px]"
+          {...props}
+        >
+          {children}
+        </code>
+      ) : (
+        <code className="block" {...props}>
+          {children}
+        </code>
+      ),
+    pre: ({ children }: any) => (
+      <pre className="my-1.5 p-2 rounded bg-[#111] overflow-x-auto text-[12px]">
+        {children}
+      </pre>
+    ),
+    strong: ({ children }: any) => (
+      <strong className="font-semibold">{children}</strong>
+    ),
+    blockquote: ({ children }: any) => (
+      <blockquote className="my-1 pl-2 border-l-2 border-[#3b82f6]/50 italic">
+        {children}
+      </blockquote>
+    ),
+  };
 
   // Voice input: feed partial transcripts directly into the input textarea
   const {
@@ -822,20 +881,26 @@ export default function AIDrawer({ open, onClose, meetingCode }: Props) {
                 className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
               >
                 {m.role === "user" ? (
-                  <div className="max-w-[85%] px-3 py-2 rounded-md text-[13px] leading-relaxed whitespace-pre-wrap break-words bg-[#2a2d3a] text-[#e4e4e4] border border-[#343850]">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  <div className="max-w-[85%] px-3 py-2 rounded-md text-[13px] leading-relaxed break-words bg-[#2a2d3a] text-[#e4e4e4] border border-[#343850]">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={markdownComponents}
+                    >
                       {m.content}
                     </ReactMarkdown>
                   </div>
                 ) : (
                   <div
-                    className={`max-w-[88%] px-3 py-2 rounded-md text-[13px] leading-relaxed whitespace-pre-wrap break-words border-l-2 ${
+                    className={`max-w-[88%] px-3 py-2 rounded-md text-[13px] leading-relaxed break-words border-l-2 ${
                       m.isCVAnalysis
                         ? "bg-[#221c12] border-[#b8860b] text-[#e4e4e4]"
                         : "bg-[#1f1f1f] border-[#3b82f6] text-[#dcdcdc]"
                     }`}
                   >
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={markdownComponents}
+                    >
                       {m.content}
                     </ReactMarkdown>
                   </div>

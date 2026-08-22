@@ -21,7 +21,6 @@ def chat(req: ChatRequest):
 
     sess = session_store.get_session(req.session_id)
 
-    # Build CV context block
     cv_block_parts: list[str] = []
     if sess.get("cv_filename"):
         cv_block_parts.append(f"Tên file CV: {sess['cv_filename']}")
@@ -39,7 +38,6 @@ def chat(req: ChatRequest):
             f"kỹ năng, hoặc các câu hỏi liên quan đến CV."
         )
 
-    # Build message list: recent history (last 10) + current user message
     history = session_store.get_recent_history(req.session_id)
     ollama_messages = [
         {"role": "system", "content": system_content},
@@ -51,15 +49,17 @@ def chat(req: ChatRequest):
         model="qwen2.5:3b-instruct",
         messages=ollama_messages,
         options={
-            "temperature": 0.3,
+            "temperature": 0.4,
+            "top_p": 0.9,
+            "repeat_penalty": 1.3,
+            "repeat_last_n": 128,
+            "num_predict": 700,
         },
     )
 
     raw_reply = res["message"]["content"]
-    reply = clean_response(raw_reply)  # chuẩn hóa định dạng trước khi lưu/trả về
+    reply = clean_response(raw_reply)
 
-    # Persist this turn into session history (lưu bản đã clean để history
-    # dùng làm context cho các lượt sau cũng luôn sạch định dạng)
     session_store.append_history(req.session_id, "user", req.message)
     session_store.append_history(req.session_id, "ai", reply)
 

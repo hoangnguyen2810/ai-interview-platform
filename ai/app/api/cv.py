@@ -23,66 +23,43 @@ async def upload_cv(
 ):
 
     if not file.filename:
-        raise HTTPException(
-            status_code=400,
-            detail="Không tìm thấy file."
-        )
+        raise HTTPException(status_code=400, detail="Không tìm thấy file.")
 
     if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(
-            status_code=400,
-            detail="Chỉ hỗ trợ file PDF."
-        )
+        raise HTTPException(status_code=400, detail="Chỉ hỗ trợ file PDF.")
 
     if not session_store.has_session(session_id):
-        raise HTTPException(
-            status_code=404,
-            detail="session not found"
-        )
+        raise HTTPException(status_code=404, detail="session not found")
 
-    save_path = os.path.join(
-        UPLOAD_FOLDER,
-        file.filename
-    )
+    save_path = os.path.join(UPLOAD_FOLDER, file.filename)
 
     try:
-
-        # Lưu file
         with open(save_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # PDF -> Markdown
         markdown = pymupdf4llm.to_markdown(save_path)
-
-        # Giới hạn độ dài để AI xử lý nhanh hơn
         markdown = markdown[:MAX_MARKDOWN_LENGTH]
 
-        # Gọi Ollama
         response = ollama.chat(
             model="qwen2.5:3b-instruct",
             messages=[
-                {
-                    "role": "system",
-                    "content": CV_PROMPT
-                },
-                {
-                    "role": "user",
-                    "content": markdown
-                }
+                {"role": "system", "content": CV_PROMPT},
+                {"role": "user", "content": markdown},
             ],
             options={
-                "temperature": 0.2,
+                "temperature": 0.4,       # tăng nhẹ để tránh vòng lặp xác suất cao nhất
                 "top_p": 0.9,
+                "repeat_penalty": 1.3,    # phạt việc lặp lại token/cụm đã sinh
+                "repeat_last_n": 128,     # xét 128 token gần nhất khi tính repeat penalty
                 "num_ctx": 4096,
-                "num_predict": 500
+                "num_predict": 350,       # giảm để hạn chế thiệt hại nếu model lặp
             },
-            keep_alive="30m"
+            keep_alive="30m",
         )
 
         raw_analysis = response["message"]["content"]
-        analysis_text = clean_response(raw_analysis)  # chuẩn hóa định dạng trước khi lưu
+        analysis_text = clean_response(raw_analysis)
 
-        # Store CV + analysis in session memory
         session_store.set_cv(
             session_id=session_id,
             filename=file.filename,
@@ -94,18 +71,14 @@ async def upload_cv(
             "success": True,
             "session_id": session_id,
             "filename": file.filename,
-            "analysis": analysis_text
+            "analysis": analysis_text,
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=500, detail=str(e))
 
     finally:
-        # Xóa file sau khi xử lý
         if os.path.exists(save_path):
             os.remove(save_path)
