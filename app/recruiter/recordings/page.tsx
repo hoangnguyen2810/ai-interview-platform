@@ -747,7 +747,7 @@ export default function RecordingsPage() {
                             </button>
 
                             <a
-                              href={item.url}
+                              href={`/api/recordings/download/${item.id}`}
                               download={item.filename ?? undefined}
                               target="_blank"
                               rel="noreferrer"
@@ -799,7 +799,7 @@ export default function RecordingsPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-4 border-b border-white/10">
-              <h3 className="font-semibold">Xem recording</h3>
+              <h3 className="font-semibold">Xem bản ghi</h3>
               <button
                 type="button"
                 onClick={() => setPreviewUrl(null)}

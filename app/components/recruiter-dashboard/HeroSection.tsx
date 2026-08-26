@@ -44,7 +44,7 @@ function getGreeting(date: Date): string {
   if (vnHour >= 11 && vnHour < 13) return "Chào buổi trưa";
   if (vnHour >= 13 && vnHour < 18) return "Chào buổi chiều";
   if (vnHour >= 18 && vnHour < 22) return "Chào buổi tối";
-  return "Chúc bạn ngủ ngon";
+  return "Chào";
 }
 
 /**
@@ -63,7 +63,10 @@ function getFirstName(fullName: string): string {
  * - 1 buổi  → "Hôm nay có 1 buổi phỏng vấn đang chờ…"
  * - N buổi  → "Hôm nay có N buổi phỏng vấn đang chờ…"
  */
-function buildSubtitle(todayCount: number | null, fullName: string | null): string {
+function buildSubtitle(
+  todayCount: number | null,
+  fullName: string | null,
+): string {
   const tail = "Chúc bạn một ngày làm việc hiệu quả!";
   if (todayCount === null) {
     return "Hệ thống AI của bạn đã sẵn sàng cho hôm nay. " + tail;
@@ -77,8 +80,11 @@ function buildSubtitle(todayCount: number | null, fullName: string | null): stri
 
 export function HeroSection() {
   const [open, setOpen] = useState(false);
-  const { notifyInterviewCreated, subscribeInterviewCreated, subscribeInterviewFinished } =
-    useRecruiterDashboard();
+  const {
+    notifyInterviewCreated,
+    subscribeInterviewCreated,
+    subscribeInterviewFinished,
+  } = useRecruiterDashboard();
 
   const [fullName, setFullName] = useState<string | null>(null);
   const [todayCount, setTodayCount] = useState<number | null>(null);
