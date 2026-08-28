@@ -118,7 +118,7 @@ export function RecentInterviews() {
         <button
           type="button"
           onClick={() => router.push("/recruiter/interviews")}
-          className="text-sm font-medium text-primary-fixed hover:opacity-80 transition"
+          className="text-sm font-medium text-primary-fixed hover:opacity-80 transition cursor-pointer"
         >
           Xem tất cả
         </button>

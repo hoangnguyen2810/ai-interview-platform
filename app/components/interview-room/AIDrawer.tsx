@@ -864,203 +864,224 @@ export default function AIDrawer({ open, onClose, meetingCode }: Props) {
         </button>
       </div>
 
-      {/* Body */}
-      {tab === "chat" ? (
-        <>
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto custom-scrollbar px-3 py-3 space-y-3 bg-[#181818]">
-            {messagesList.length === 0 && (
-              <div className="text-center text-[12.5px] text-[#6e6e6e] mt-16 px-4">
-                <p className="mb-1.5 text-[#9a9a9a]">Xin chào</p>
-                <p>Tải lên CV hoặc hỏi bất kỳ câu hỏi nào về phỏng vấn IT.</p>
-              </div>
-            )}
-            {messagesList.map((m, i) => (
-              <div
-                key={i}
-                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-              >
-                {m.role === "user" ? (
-                  <div className="max-w-[85%] px-3 py-2 rounded-md text-[13px] leading-relaxed break-words bg-[#2a2d3a] text-[#e4e4e4] border border-[#343850]">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={markdownComponents}
-                    >
-                      {m.content}
-                    </ReactMarkdown>
-                  </div>
-                ) : (
-                  <div
-                    className={`max-w-[88%] px-3 py-2 rounded-md text-[13px] leading-relaxed break-words border-l-2 ${
-                      m.isCVAnalysis
-                        ? "bg-[#221c12] border-[#b8860b] text-[#e4e4e4]"
-                        : "bg-[#1f1f1f] border-[#3b82f6] text-[#dcdcdc]"
-                    }`}
-                  >
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={markdownComponents}
-                    >
-                      {m.content}
-                    </ReactMarkdown>
-                  </div>
-                )}
-              </div>
-            ))}
-            {loading && (
-              <div className="flex justify-start">
-                <div className="bg-[#1f1f1f] border-l-2 border-[#3b82f6] px-3 py-2 rounded-md text-[13px] text-[#8a8a8a]">
-                  <span className="inline-flex gap-1 items-center">
-                    <span className="h-1 w-1 rounded-full bg-[#8a8a8a] animate-bounce [animation-delay:-0.3s]" />
-                    <span className="h-1 w-1 rounded-full bg-[#8a8a8a] animate-bounce [animation-delay:-0.15s]" />
-                    <span className="h-1 w-1 rounded-full bg-[#8a8a8a] animate-bounce" />
-                  </span>
-                </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
+      {/*
+        Body — QUAN TRỌNG: cả 2 tab luôn được render trong DOM cùng lúc,
+        chỉ ẩn/hiện bằng class "hidden". Trước đây dùng ternary (chat ? ... : review ? ... : ...)
+        khiến AIReviewList bị UNMOUNT hoàn toàn mỗi khi chuyển sang tab Chat —
+        làm mất toàn bộ state (triggering, reviewData...) của quá trình đánh giá
+        code đang chạy dở, gây cảm giác "bị hủy/mất kết quả" khi chuyển tab.
+        Giữ cả 2 nhánh luôn mounted để AIReviewList không bị hủy giữa chừng.
+      */}
 
-          {/* Voice error */}
-          {voiceError && (
-            <div className="mx-3 mb-2 px-3 py-2 rounded bg-red-900/40 border border-red-800 text-[11px] text-red-300">
-              {voiceError}
-              <button
-                className="ml-2 underline"
-                onClick={() => setVoiceError(null)}
-              >
-                Đóng
-              </button>
+      {/* Tab: Chat */}
+      <div
+        className={tab === "chat" ? "flex flex-col flex-1 min-h-0" : "hidden"}
+      >
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar px-3 py-3 space-y-3 bg-[#181818]">
+          {messagesList.length === 0 && (
+            <div className="text-center text-[12.5px] text-[#6e6e6e] mt-16 px-4">
+              <p className="mb-1.5 text-[#9a9a9a]">Xin chào</p>
+              <p>Tải lên CV hoặc hỏi bất kỳ câu hỏi nào về phỏng vấn IT.</p>
             </div>
           )}
-
-          {/* Composer */}
-          <div className="px-3 pb-3 pt-2 border-t border-[#2a2a2a] bg-[#181818] shrink-0">
+          {messagesList.map((m, i) => (
             <div
-              className={`rounded-lg border transition-colors ${
-                cvDragging
-                  ? "border-[#3b82f6] bg-[#1a2030]"
-                  : "border-[#2f2f2f] bg-[#1f1f1f] focus-within:border-[#3f3f3f]"
-              }`}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
+              key={i}
+              className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
             >
-              {/* Transcription status banner */}
-              {voiceState === "recording" && (
-                <div className="flex items-center gap-1.5 px-3 pt-2 text-[11px] text-red-400">
-                  <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse" />
-                  Ghi âm...
-                </div>
-              )}
-              {voiceState === "transcribing" && (
-                <div className="flex items-center gap-1.5 px-3 pt-2 text-[11px] text-yellow-400">
-                  <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
-                  Đang biên dịch...
-                </div>
-              )}
-
-              <textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                  }
-                }}
-                placeholder={
-                  cvDragging ? "Thả file PDF vào đây..." : "Hỏi gì đó..."
-                }
-                disabled={loading}
-                rows={2}
-                className="w-full resize-none bg-transparent px-3 pt-2.5 pb-1 text-[13px] text-[#e4e4e4] placeholder-[#6e6e6e] focus:outline-none disabled:opacity-50"
-              />
-              <div className="flex items-center justify-between px-2 pb-2 pt-1">
-                <div className="flex items-center gap-1">
-                  {/* Upload CV */}
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={cvUploading}
-                    title="Tải CV (PDF)"
-                    className="flex items-center gap-1 text-[11.5px] px-2 py-1 rounded text-[#9a9a9a] hover:bg-[#2a2a2a] hover:text-[#e4e4e4] disabled:opacity-50 transition-colors"
+              {m.role === "user" ? (
+                <div className="max-w-[85%] px-3 py-2 rounded-md text-[13px] leading-relaxed break-words bg-[#2a2d3a] text-[#e4e4e4] border border-[#343850]">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={markdownComponents}
                   >
-                    {cvUploading ? (
-                      <>
-                        <span className="h-1.5 w-1.5 rounded-full bg-[#b8860b] animate-pulse" />
-                        Đang tải...
-                      </>
-                    ) : (
-                      <>
-                        <IconPaperclip />
-                        CV.pdf
-                      </>
-                    )}
-                  </button>
-
-                  {/* Voice input */}
-                  <button
-                    onClick={handleVoiceClick}
-                    disabled={voiceState === "transcribing"}
-                    title={
-                      voiceState === "recording"
-                        ? "Dừng ghi âm"
-                        : voiceState === "transcribing"
-                          ? "Đang nhận dạng..."
-                          : "Ghi âm bằng giọng nói"
-                    }
-                    className={`flex items-center gap-1 text-[11.5px] px-2 py-1 rounded transition-colors disabled:cursor-not-allowed ${
-                      voiceState === "recording"
-                        ? "text-red-400 bg-red-900/30 hover:bg-red-900/50"
-                        : "text-[#9a9a9a] hover:bg-[#2a2a2a] hover:text-[#e4e4e4] disabled:opacity-40"
-                    }`}
-                  >
-                    {voiceState === "recording" ? (
-                      <>
-                        <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse" />
-                        Stop
-                      </>
-                    ) : voiceState === "transcribing" ? (
-                      <>
-                        <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
-                        ...
-                      </>
-                    ) : (
-                      <>
-                        <IconMic />
-                        Mic
-                      </>
-                    )}
-                  </button>
+                    {m.content}
+                  </ReactMarkdown>
                 </div>
-
-                <button
-                  onClick={sendMessage}
-                  disabled={loading || !input.trim()}
-                  title="Gửi"
-                  className="flex items-center justify-center h-6 w-6 rounded-md bg-[#3b82f6] text-white disabled:bg-[#2a2a2a] disabled:text-[#5a5a5a] hover:bg-[#2f6fe0] disabled:cursor-not-allowed transition-colors"
+              ) : (
+                <div
+                  className={`max-w-[88%] px-3 py-2 rounded-md text-[13px] leading-relaxed break-words border-l-2 ${
+                    m.isCVAnalysis
+                      ? "bg-[#221c12] border-[#b8860b] text-[#e4e4e4]"
+                      : "bg-[#1f1f1f] border-[#3b82f6] text-[#dcdcdc]"
+                  }`}
                 >
-                  <IconSend />
-                </button>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={markdownComponents}
+                  >
+                    {m.content}
+                  </ReactMarkdown>
+                </div>
+              )}
+            </div>
+          ))}
+          {loading && (
+            <div className="flex justify-start">
+              <div className="bg-[#1f1f1f] border-l-2 border-[#3b82f6] px-3 py-2 rounded-md text-[13px] text-[#8a8a8a]">
+                <span className="inline-flex gap-1 items-center">
+                  <span className="h-1 w-1 rounded-full bg-[#8a8a8a] animate-bounce [animation-delay:-0.3s]" />
+                  <span className="h-1 w-1 rounded-full bg-[#8a8a8a] animate-bounce [animation-delay:-0.15s]" />
+                  <span className="h-1 w-1 rounded-full bg-[#8a8a8a] animate-bounce" />
+                </span>
               </div>
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf"
-              onChange={handleFileChange}
-              className="hidden"
-            />
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Voice error */}
+        {voiceError && (
+          <div className="mx-3 mb-2 px-3 py-2 rounded bg-red-900/40 border border-red-800 text-[11px] text-red-300">
+            {voiceError}
+            <button
+              className="ml-2 underline"
+              onClick={() => setVoiceError(null)}
+            >
+              Đóng
+            </button>
           </div>
-        </>
-      ) : meetingCode ? (
-        <div className="flex-1 min-h-0 bg-[#181818]" key={reviewReloadKey}>
+        )}
+
+        {/* Composer */}
+        <div className="px-3 pb-3 pt-2 border-t border-[#2a2a2a] bg-[#181818] shrink-0">
+          <div
+            className={`rounded-lg border transition-colors ${
+              cvDragging
+                ? "border-[#3b82f6] bg-[#1a2030]"
+                : "border-[#2f2f2f] bg-[#1f1f1f] focus-within:border-[#3f3f3f]"
+            }`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            {/* Transcription status banner */}
+            {voiceState === "recording" && (
+              <div className="flex items-center gap-1.5 px-3 pt-2 text-[11px] text-red-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse" />
+                Ghi âm...
+              </div>
+            )}
+            {voiceState === "transcribing" && (
+              <div className="flex items-center gap-1.5 px-3 pt-2 text-[11px] text-yellow-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
+                Đang biên dịch...
+              </div>
+            )}
+
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  sendMessage();
+                }
+              }}
+              placeholder={
+                cvDragging ? "Thả file PDF vào đây..." : "Hỏi gì đó..."
+              }
+              disabled={loading}
+              rows={2}
+              className="w-full resize-none bg-transparent px-3 pt-2.5 pb-1 text-[13px] text-[#e4e4e4] placeholder-[#6e6e6e] focus:outline-none disabled:opacity-50"
+            />
+            <div className="flex items-center justify-between px-2 pb-2 pt-1">
+              <div className="flex items-center gap-1">
+                {/* Upload CV */}
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={cvUploading}
+                  title="Tải CV (PDF)"
+                  className="flex items-center gap-1 text-[11.5px] px-2 py-1 rounded text-[#9a9a9a] hover:bg-[#2a2a2a] hover:text-[#e4e4e4] disabled:opacity-50 transition-colors"
+                >
+                  {cvUploading ? (
+                    <>
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#b8860b] animate-pulse" />
+                      Đang tải...
+                    </>
+                  ) : (
+                    <>
+                      <IconPaperclip />
+                      CV.pdf
+                    </>
+                  )}
+                </button>
+
+                {/* Voice input */}
+                <button
+                  onClick={handleVoiceClick}
+                  disabled={voiceState === "transcribing"}
+                  title={
+                    voiceState === "recording"
+                      ? "Dừng ghi âm"
+                      : voiceState === "transcribing"
+                        ? "Đang nhận dạng..."
+                        : "Ghi âm bằng giọng nói"
+                  }
+                  className={`flex items-center gap-1 text-[11.5px] px-2 py-1 rounded transition-colors disabled:cursor-not-allowed ${
+                    voiceState === "recording"
+                      ? "text-red-400 bg-red-900/30 hover:bg-red-900/50"
+                      : "text-[#9a9a9a] hover:bg-[#2a2a2a] hover:text-[#e4e4e4] disabled:opacity-40"
+                  }`}
+                >
+                  {voiceState === "recording" ? (
+                    <>
+                      <span className="h-1.5 w-1.5 rounded-full bg-red-400 animate-pulse" />
+                      Stop
+                    </>
+                  ) : voiceState === "transcribing" ? (
+                    <>
+                      <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 animate-pulse" />
+                      ...
+                    </>
+                  ) : (
+                    <>
+                      <IconMic />
+                      Mic
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <button
+                onClick={sendMessage}
+                disabled={loading || !input.trim()}
+                title="Gửi"
+                className="flex items-center justify-center h-6 w-6 rounded-md bg-[#3b82f6] text-white disabled:bg-[#2a2a2a] disabled:text-[#5a5a5a] hover:bg-[#2f6fe0] disabled:cursor-not-allowed transition-colors"
+              >
+                <IconSend />
+              </button>
+            </div>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+        </div>
+      </div>
+
+      {/* Tab: Đánh giá Code — luôn mounted (khi có meetingCode), chỉ ẩn bằng class */}
+      {meetingCode ? (
+        <div
+          className={
+            tab === "review"
+              ? "flex-1 min-h-0 bg-[#181818] flex flex-col"
+              : "hidden"
+          }
+          key={reviewReloadKey}
+        >
           <AIReviewList meetingCode={meetingCode} />
         </div>
       ) : (
-        <div className="flex-1 flex items-center justify-center text-[11.5px] text-[#6e6e6e] p-4 text-center">
-          Không tìm thấy meetingCode.
-        </div>
+        tab === "review" && (
+          <div className="flex-1 flex items-center justify-center text-[11.5px] text-[#6e6e6e] p-4 text-center">
+            Không tìm thấy meetingCode.
+          </div>
+        )
       )}
 
       {/* Report viewer modal — rendered inside the guard so button is accessible */}

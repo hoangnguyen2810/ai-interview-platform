@@ -194,9 +194,14 @@ export default function AIReviewList({ meetingCode }: Props) {
         message?: string;
       }>(res, { success: false, submissions: [] });
       if (data.success) {
-        const list = data.submissions ?? [];
-        setSubmissions(list);
-        setSelectedId((cur) => cur ?? list[0]?.submissionId ?? null);
+        const sortedList = (data.submissions ?? []).sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        );
+
+        setSubmissions(sortedList);
+
+        setSelectedId((cur) => cur ?? sortedList[0]?.submissionId ?? null);
       } else {
         console.warn(
           "[AIReviewList] submissions load non-ok:",

@@ -59,7 +59,11 @@ Schema JSON bắt buộc:
   "reason": "string",
   "entryPoint": "string",
   "usesHardcodedValues": boolean
-}`;
+}
+  
+QUAN TRỌNG: Nội dung text bên trong "reason" và "entryPoint" PHẢI viết bằng
+TIẾNG VIỆT, kể cả khi code/đề bài đầu vào là tiếng Anh. Chỉ tên hàm, tên biến,
+từ khóa kỹ thuật (input(), stdin, Scanner...) được giữ nguyên tiếng Anh.`;
 
 function extractJsonObject(text: string): unknown | null {
   const cleaned = text
@@ -86,7 +90,10 @@ interface OllamaChatOptions {
   user: string;
 }
 
-async function ollamaChat({ system, user }: OllamaChatOptions): Promise<string> {
+async function ollamaChat({
+  system,
+  user,
+}: OllamaChatOptions): Promise<string> {
   const res = await ollama.chat({
     model: MODEL,
     messages: [
@@ -155,13 +162,16 @@ Hãy phân tích và trả về JSON.`;
     };
   }
 
-  const parsed = extractJsonObject(raw) as Partial<ExecutionModeAnalysis> | null;
+  const parsed = extractJsonObject(
+    raw,
+  ) as Partial<ExecutionModeAnalysis> | null;
 
   if (!parsed || typeof parsed !== "object") {
     return {
       executionMode: "unknown",
       confidence: 0,
-      reason: "AI analyzer không trả về JSON hợp lệ. Cần recruiter tự đánh giá.",
+      reason:
+        "AI analyzer không trả về JSON hợp lệ. Cần recruiter tự đánh giá.",
       entryPoint: "",
       usesHardcodedValues: false,
     };

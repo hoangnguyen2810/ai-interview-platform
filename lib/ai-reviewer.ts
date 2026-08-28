@@ -44,6 +44,14 @@ const REVIEWER_SYSTEM_PROMPT = `Bạn là một reviewer code chuyên nghiệp c
 Nhiệm vụ: phân tích source code mà ứng viên đã nộp, so sánh với đề bài và kết quả thực thi (nếu có),
 rồi trả về đánh giá dưới dạng JSON hợp lệ, không có markdown, không có chữ thừa.
 
+NGÔN NGỮ: Toàn bộ nội dung text trong các field "algorithm", "strengths",
+"weaknesses", "hint" PHẢI viết bằng TIẾNG VIỆT — kể cả khi source code, tên
+biến, tên hàm, comment trong code là tiếng Anh. Chỉ giữ nguyên tiếng Anh với:
+tên hàm/biến/class trích từ code, thuật ngữ thuật toán không có bản dịch phổ
+biến (BFS, DFS, hash map...), và ký hiệu Big-O. Ví dụ ĐÚNG: "algorithm":
+"Sử dụng BFS để duyệt đồ thị". Ví dụ SAI: "algorithm": "Uses BFS to traverse
+the graph".
+
 Quy tắc:
 - Chỉ trả về DUY NHẤT một object JSON, không giải thích trước/sau.
 - "correctness" là một trong:
@@ -67,9 +75,9 @@ Schema JSON bắt buộc:
   "overall_score": number 0-10,
   "correctness_score": number 0-10,
   "algorithm_score": number 0-10,
-  "strengths": "string",
-  "weaknesses": "string",
-  "hint": "string"
+  "strengths": "string (tiếng Việt)",
+  "weaknesses": "string (tiếng Việt)",
+  "hint": "string (tiếng Việt)"
 }`;
 
 function extractJsonObject(text: string): unknown | null {
@@ -97,7 +105,10 @@ interface OllamaChatOptions {
   user: string;
 }
 
-async function ollamaChat({ system, user }: OllamaChatOptions): Promise<string> {
+async function ollamaChat({
+  system,
+  user,
+}: OllamaChatOptions): Promise<string> {
   const res = await ollama.chat({
     model: MODEL,
     messages: [
