@@ -261,6 +261,7 @@ export default function ReportViewer({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<ReportContent | null>(null);
@@ -543,15 +544,12 @@ export default function ReportViewer({
 
   const handleDelete = async () => {
     if (!report) return;
-    if (typeof window !== "undefined") {
-      const ok = window.confirm(
-        "Xoá báo cáo này? Hành động không thể hoàn tác.",
-      );
-      if (!ok) return;
-    }
+
     try {
       setDeleting(true);
       setError(null);
+      setSuccess(null);
+
       const res = await fetch(
         `/api/interviews/${encodeURIComponent(
           meetingCode,
@@ -562,16 +560,24 @@ export default function ReportViewer({
           credentials: "include",
         },
       );
+
       const data = await res.json().catch(() => ({}));
+
       if (!res.ok || !data.success) {
         throw new Error(data.message || "Không xoá được báo cáo");
       }
+
       const remaining = reports.filter((r) => r.id !== report.id);
+
       setReports(remaining);
+
       const nextSelected = remaining[0]?.id ?? null;
       setSelectedId(nextSelected);
+
       setSuccess("Đã xoá báo cáo");
       onReportChanged?.(remaining[0] ?? null);
+
+      setShowDeleteModal(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Lỗi xoá báo cáo");
     } finally {
@@ -971,7 +977,7 @@ export default function ReportViewer({
                         )}
                         <button
                           type="button"
-                          onClick={handleDelete}
+                          onClick={() => setShowDeleteModal(true)}
                           disabled={deleting}
                           title="Xoá báo cáo này"
                           className="px-3 py-1.5 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/30 text-xs font-semibold transition-colors flex items-center gap-1 disabled:opacity-50"
@@ -1266,6 +1272,83 @@ export default function ReportViewer({
           style={{ transform: "translate(-25%, 25%)" }}
         />
       </div>
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
+          <div
+            className="w-full max-w-sm rounded-xl border border-red-500/20 bg-[#18181B] shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-[#313131]">
+              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-red-500/10">
+                <span className="material-symbols-outlined text-red-400 text-lg">
+                  delete
+                </span>
+              </div>
+
+              <h3 className="text-white font-semibold text-sm">Xoá báo cáo?</h3>
+            </div>
+
+            {/* Content */}
+            <div className="px-4 py-4">
+              <p className="text-white/70 text-sm">
+                Bạn có chắc chắn muốn xoá báo cáo này không?
+              </p>
+
+              <p className="text-red-300/70 text-xs mt-1.5">
+                Hành động này không thể hoàn tác.
+              </p>
+
+              {report && (
+                <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+                  <div className="text-white text-xs font-medium truncate">
+                    {safeStr(report.content?.candidate_name) || "Chưa đặt tên"}
+                  </div>
+
+                  {safeStr(report.content?.position) && (
+                    <div className="text-white/40 text-[11px] mt-0.5 truncate">
+                      {safeStr(report.content?.position)}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end gap-2 px-4 py-3 border-t border-[#313131]">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleting}
+                className="px-3 py-1.5 rounded-md bg-white/5 hover:bg-white/10 text-white/70 border border-white/10 text-xs font-semibold"
+              >
+                Hủy
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="px-3 py-1.5 rounded-md bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {deleting ? (
+                  <>
+                    <span className="inline-block w-3 h-3 border-2 border-red-300/30 border-t-red-300 rounded-full animate-spin" />
+                    Đang xoá...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-sm">
+                      delete
+                    </span>
+                    Xác nhận xoá
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

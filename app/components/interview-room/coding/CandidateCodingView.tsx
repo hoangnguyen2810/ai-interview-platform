@@ -4,6 +4,14 @@ import { useRef, useState, useCallback, useEffect } from "react";
 import Editor, { OnMount } from "@monaco-editor/react";
 import { useQuestions } from "../QuestionContext";
 import { CodeProvider, useCode } from "../CodeContext";
+import CodeTerminal from "./CodeTerminal";
+
+interface TerminalSession {
+  sessionId: string;
+  wsUrl: string;
+  code: string;
+  language: string;
+}
 
 interface ExecutionResult {
   executionId: string;
@@ -64,6 +72,13 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const submitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [terminalSession, setTerminalSession] =
+    useState<TerminalSession | null>(null);
+  const [terminalStats, setTerminalStats] = useState<{
+    exitCode: number | null;
+    runtimeMs: number | null;
+    memoryKb: number | null;
+  } | null>(null);
 
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const [outputHeight, setOutputHeight] = useState(224); // ~ h-56
@@ -114,9 +129,10 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
 
     setIsRunning(true);
     setResult(null);
+    setTerminalSession(null);
 
     try {
-      const response = await fetch("/api/sandbox/execute", {
+      const response = await fetch("/api/sandbox/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -132,17 +148,22 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
 
       if (!response.ok) {
         setResult({
-          executionId: data.executionId || "",
+          executionId: "",
           status: "SYSTEM_ERROR",
           stdout: "",
-          stderr: data.error || "Execution failed",
+          stderr: data.error || "Không tạo được phiên sandbox",
           runtimeMs: 0,
           exitCode: -1,
           success: false,
-          error: data.details,
         });
       } else {
-        setResult(data);
+        setTerminalStats(null);
+        setTerminalSession({
+          sessionId: data.sessionId,
+          wsUrl: data.wsUrl,
+          code,
+          language,
+        });
       }
     } catch (error) {
       setResult({
@@ -335,10 +356,50 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
           {/* min-h-0 là mấu chốt: cho phép vùng này thực sự co lại và tự
               cuộn (overflow-y-auto) thay vì bị nội dung đẩy giãn to ra */}
           <div className="p-4 flex-1 min-h-0 min-w-0 overflow-y-auto custom-scrollbar">
-            {isRunning ? (
+            {terminalSession ? (
+              <div className="w-full h-full flex flex-col gap-2">
+                {terminalStats && (
+                  <div className="flex items-center gap-3 text-xs shrink-0 flex-wrap">
+                    <StatusBadge
+                      status={
+                        terminalStats.exitCode === 0
+                          ? "SUCCESS"
+                          : terminalStats.exitCode === null
+                            ? "SYSTEM_ERROR"
+                            : "RUNTIME_ERROR"
+                      }
+                    />
+                    <span className="text-white/40">
+                      {terminalStats.exitCode !== null && (
+                        <span className="text-white/40">
+                          Exit code: {terminalStats.exitCode}
+                        </span>
+                      )}{" "}
+                      {terminalStats.runtimeMs !== null && (
+                        <span className="text-white/40">
+                          Runtime: {terminalStats.runtimeMs}ms
+                        </span>
+                      )}
+                      {terminalStats.memoryKb !== null && (
+                        <span className="text-white/40">
+                          Memory: {(terminalStats.memoryKb / 1024).toFixed(1)}MB
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                )}
+                <CodeTerminal
+                  sessionId={terminalSession.sessionId}
+                  wsUrl={terminalSession.wsUrl}
+                  code={terminalSession.code}
+                  language={terminalSession.language}
+                  onExit={(result) => setTerminalStats(result)}
+                />
+              </div>
+            ) : isRunning ? (
               <div className="flex items-center gap-2 text-blue-400">
                 <span className="animate-spin">⚙</span>
-                <span>Thực thi mã trong môi trường (sandbox)...</span>
+                <span>Đang khởi tạo môi trường sandbox...</span>
               </div>
             ) : result ? (
               <>

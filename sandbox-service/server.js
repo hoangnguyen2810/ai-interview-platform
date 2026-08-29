@@ -7,8 +7,8 @@ const url = require("url");
 
 const PORT = process.env.SANDBOX_PORT || 3002;
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:3000";
-
 const ALLOWED_LANGUAGES = ["python", "javascript", "java", "cpp"];
+const { attachWs } = require("./wsServer.js");
 
 // ─── CORS ───────────────────────────────────────────────────────────────────────
 
@@ -46,7 +46,9 @@ async function handleExecute(req, res) {
   }
 
   let body = "";
-  req.on("data", (chunk) => { body += chunk.toString(); });
+  req.on("data", (chunk) => {
+    body += chunk.toString();
+  });
   req.on("end", async () => {
     try {
       const payload = JSON.parse(body);
@@ -59,9 +61,11 @@ async function handleExecute(req, res) {
 
       if (!payload.language || !ALLOWED_LANGUAGES.includes(payload.language)) {
         res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ 
-          error: `Invalid language. Allowed: ${ALLOWED_LANGUAGES.join(", ")}` 
-        }));
+        res.end(
+          JSON.stringify({
+            error: `Invalid language. Allowed: ${ALLOWED_LANGUAGES.join(", ")}`,
+          }),
+        );
         return;
       }
 
@@ -76,10 +80,12 @@ async function handleExecute(req, res) {
     } catch (err) {
       console.error("[Sandbox] Execute error:", err);
       res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ 
-        error: "Execution failed",
-        details: err.message 
-      }));
+      res.end(
+        JSON.stringify({
+          error: "Execution failed",
+          details: err.message,
+        }),
+      );
     }
   });
 }
@@ -110,5 +116,8 @@ server.listen(PORT, () => {
   console.log(`[Sandbox] Service ready on http://localhost:${PORT}`);
   console.log(`[Sandbox] Allowed languages: ${ALLOWED_LANGUAGES.join(", ")}`);
 });
+
+attachWs(server);
+console.log(`[Sandbox] WebSocket ready on ws://localhost:${PORT}/ws/execute`);
 
 module.exports = { server };

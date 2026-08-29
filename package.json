@@ -12,6 +12,8 @@
     "@monaco-editor/react": "^4.7.0",
     "@stream-io/node-sdk": "^0.7.59",
     "@stream-io/video-react-sdk": "^1.38.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "bcryptjs": "^3.0.3",
     "google-auth-library": "^10.7.0",
     "google-one-tap": "^1.0.6",
