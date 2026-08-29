@@ -419,7 +419,7 @@ export default function AIReviewList({ meetingCode }: Props) {
   return (
     <div className="flex h-full">
       {/* Left: submission list */}
-      <div className="w-1/3 border-r border-[#2a2a2a] flex flex-col shrink-0">
+      <div className="w-1/3 border-r border-[#2a2a2a] flex flex-col shrink-0 ">
         <div className="px-3 py-2 border-b border-[#2a2a2a] flex items-center justify-between">
           <span className="text-[11px] text-[#9a9a9a] uppercase tracking-wider">
             Bài đã nộp ({submissions.length})
@@ -432,7 +432,7 @@ export default function AIReviewList({ meetingCode }: Props) {
             ↻
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto custom-srollbar">
           {loading ? (
             <p className="text-center text-[11px] text-[#6e6e6e] py-4">
               Đang tải…

@@ -79,6 +79,7 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
     runtimeMs: number | null;
     memoryKb: number | null;
   } | null>(null);
+  const [lastRunStdin, setLastRunStdin] = useState<string>("");
 
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const [outputHeight, setOutputHeight] = useState(224); // ~ h-56
@@ -195,7 +196,7 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
           body: JSON.stringify({
             code,
             language,
-            stdin: "",
+            stdin: lastRunStdin,
             questionId: activeQuestion?.id,
           }),
         },
@@ -219,7 +220,14 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
     } finally {
       setIsSubmitting(false);
     }
-  }, [code, language, meetingCode, activeQuestion?.id, isSubmitting]);
+  }, [
+    code,
+    language,
+    meetingCode,
+    activeQuestion?.id,
+    isSubmitting,
+    lastRunStdin,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -333,7 +341,12 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
 
               <button
                 onClick={handleSubmit}
-                disabled={isSubmitting || !code.trim() || submitted}
+                disabled={
+                  isSubmitting ||
+                  !code.trim() ||
+                  submitted ||
+                  (terminalSession !== null && terminalStats === null)
+                }
                 className="px-4 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-[#051424] font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isSubmitting ? (
@@ -346,6 +359,8 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
                     <span>✓</span>
                     Đã nộp
                   </>
+                ) : terminalSession !== null && terminalStats === null ? (
+                  <>Nộp</>
                 ) : (
                   "Nộp"
                 )}
@@ -393,7 +408,10 @@ function CandidateCodingEditor({ meetingCode }: { meetingCode: string }) {
                   wsUrl={terminalSession.wsUrl}
                   code={terminalSession.code}
                   language={terminalSession.language}
-                  onExit={(result) => setTerminalStats(result)}
+                  onExit={(result) => {
+                    setTerminalStats(result);
+                    setLastRunStdin(result.stdin);
+                  }}
                 />
               </div>
             ) : isRunning ? (

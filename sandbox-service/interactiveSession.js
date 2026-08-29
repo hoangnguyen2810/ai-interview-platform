@@ -113,6 +113,7 @@ async function createSession({ sessionId, code, language }) {
     execStartedAt: null,
     peakMemoryBytes: 0,
     statsPollTimer: null,
+    stdinRawLog: "",
   };
   entry.idleTimer = setTimeout(() => killSession(sessionId), IDLE_MS);
   entry.hardTimer = setTimeout(() => killSession(sessionId), HARD_MS);
@@ -141,6 +142,7 @@ function writeToSession(sessionId, data) {
   const entry = sessions.get(sessionId);
   if (!entry) return false;
   touchActivity(sessionId);
+  entry.stdinRawLog += data;
   entry.stream.write(data);
   return true;
 }
@@ -171,7 +173,29 @@ function getExecStats(sessionId) {
   return {
     execStartedAt: entry.execStartedAt,
     peakMemoryBytes: entry.peakMemoryBytes,
+    stdin: canonicalizeStdin(entry.stdinRawLog),
   };
+}
+
+// Tái tạo lại nội dung "sạch" của input từ raw keystrokes: áp dụng hiệu ứng
+// Backspace, loại bỏ escape sequence của phím mũi tên/Home/End..., để ra
+// đúng chuỗi input như thể được gõ trong 1 tệp stdin thông thường (không tty).
+function canonicalizeStdin(raw) {
+  // Loại các CSI escape sequence: ESC [ ... <letter> (mũi tên, Home, End, Delete...)
+  const withoutAnsi = raw.replace(/\x1b\[[0-9;]*[a-zA-Z~]/g, "");
+
+  const buffer = [];
+  for (const ch of withoutAnsi) {
+    if (ch === "\x7f" || ch === "\b") {
+      buffer.pop(); // Backspace: xoá ký tự trước đó
+    } else if (ch === "\x03") {
+      // Ctrl+C — bỏ qua, không đưa vào input
+    } else {
+      buffer.push(ch);
+    }
+  }
+
+  return buffer.join("").replace(/\r\n?/g, "\n");
 }
 
 async function killSession(sessionId) {
@@ -209,5 +233,6 @@ module.exports = {
   killSession,
   stopStatsPolling,
   getExecStats,
+  canonicalizeStdin,
   sessions,
 };

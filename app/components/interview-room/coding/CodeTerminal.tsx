@@ -9,6 +9,7 @@ interface ExecResult {
   exitCode: number | null;
   runtimeMs: number | null;
   memoryKb: number | null;
+  stdin: string;
 }
 
 interface CodeTerminalProps {
@@ -51,10 +52,9 @@ export default function CodeTerminal({
       `${wsUrl}?sessionId=${encodeURIComponent(sessionId)}`,
     );
     wsRef.current = ws;
-    ws.binaryType = "arraybuffer"; // bắt buộc — mặc định "blob", xterm.write() không đọc được Blob
+    ws.binaryType = "arraybuffer";
 
     ws.onopen = () => {
-      // Gửi code + language qua message đầu tiên, không nhét vào query string
       ws.send(JSON.stringify({ type: "init", code, language }));
       ws.send(
         JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }),
@@ -63,25 +63,29 @@ export default function CodeTerminal({
 
     ws.onmessage = (event) => {
       if (typeof event.data === "string") {
-        // Text frame = message điều khiển dạng JSON, KHÔNG phải output terminal
         try {
           const msg = JSON.parse(event.data);
+          console.log("[CodeTerminal] control message:", msg);
           if (msg.type === "exit") {
             onExit?.({
               exitCode: msg.code,
               runtimeMs: msg.runtimeMs ?? null,
               memoryKb: msg.memoryKb ?? null,
+              stdin: msg.stdin ?? "",
             });
           } else if (msg.type === "error") {
             term.write(`\r\n\x1b[31m[Lỗi sandbox: ${msg.message}]\x1b[0m\r\n`);
-            onExit?.({ exitCode: null, runtimeMs: null, memoryKb: null });
+            onExit?.({
+              exitCode: null,
+              runtimeMs: null,
+              memoryKb: null,
+              stdin: "",
+            });
           }
         } catch {
-          // fallback phòng server cũ gửi plain string
           term.write(event.data);
         }
       } else {
-        // Binary frame = output thật của chương trình
         term.write(new Uint8Array(event.data));
       }
     };
@@ -112,7 +116,7 @@ export default function CodeTerminal({
       term.dispose();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, wsUrl]); // chỉ remount khi có session mới, không remount theo mỗi keystroke của code
+  }, [sessionId, wsUrl]);
 
   return <div ref={containerRef} className="w-full h-full" />;
 }
