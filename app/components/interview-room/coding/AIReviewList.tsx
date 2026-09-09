@@ -840,25 +840,24 @@ function ReviewContent({
                       Show I/O
                     </summary>
                     <div className="mt-1 space-y-1 font-mono">
-                      <p>
+                      <div>
                         <span className="opacity-60">Input:</span>
                         <pre className="bg-black/30 rounded p-1.5 mt-0.5 overflow-x-auto whitespace-pre-wrap">
-                          {/* AITestCase doesn't carry input in this list; we render Expected/Actual only. */}
                           {"(xem editor)"}
                         </pre>
-                      </p>
-                      <p>
+                      </div>
+                      <div>
                         <span className="opacity-60">Expected:</span>
                         <pre className="bg-black/30 rounded p-1.5 mt-0.5 overflow-x-auto whitespace-pre-wrap">
                           {t.expectedOutput || "(empty)"}
                         </pre>
-                      </p>
-                      <p>
+                      </div>
+                      <div>
                         <span className="opacity-60">Actual:</span>
                         <pre className="bg-black/30 rounded p-1.5 mt-0.5 overflow-x-auto whitespace-pre-wrap">
                           {t.actualOutput || "(empty)"}
                         </pre>
-                      </p>
+                      </div>
                     </div>
                   </details>
                 </div>

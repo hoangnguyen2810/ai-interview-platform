@@ -65,7 +65,7 @@ export default function RecruiterProfilePage() {
       <SideNavBar />
       <TopNavBar />
 
-      <main className="pt-16 ml-sidebar-width h-screen overflow-y-auto p-8">
+      <main className="pt-16 ml-sidebar-width h-screen overflow-y-auto custom-scrollbar p-8">
         <div className="max-w-6xl mx-auto space-y-8 pb-20">
           {error && (
             <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">

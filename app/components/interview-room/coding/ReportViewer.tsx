@@ -703,13 +703,13 @@ export default function ReportViewer({
     modalSize !== null || dragOffset.x !== 0 || dragOffset.y !== 0;
 
   return (
-    // UI: bỏ onClick={onClose} ở overlay — trước đây lỡ click/kéo chuột ra
-    // ngoài modal (kể cả khi đang bôi đen văn bản) sẽ đóng và mất thao tác
-    // đang làm. Giờ chỉ đóng qua nút X hoặc phím Esc.
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
+    // UI: bỏ nền đen/blur để không che, làm tối AIDrawer và các phần khác
+    // phía sau. pointer-events-none ở overlay để không chặn thao tác với
+    // nền, pointer-events-auto ở modal để bản thân modal vẫn dùng được bình thường.
+    <div className="fixed inset-0 z-[70] flex items-center justify-center px-4 pointer-events-none">
       <div
         ref={modalRef}
-        className={`relative bg-[#18181B] border border-cyan-500/30 rounded-xl flex shadow-2xl ${
+        className={`relative bg-[#18181B] border border-cyan-500/30 rounded-xl flex shadow-2xl pointer-events-auto ${
           effectiveSize ? "" : "w-full max-w-[1400px] h-[94vh]"
         }`}
         style={{
@@ -1273,7 +1273,7 @@ export default function ReportViewer({
         />
       </div>
       {showDeleteModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 pointer-events-auto">
           <div
             className="w-full max-w-sm rounded-xl border border-red-500/20 bg-[#18181B] shadow-2xl"
             onClick={(e) => e.stopPropagation()}

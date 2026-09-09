@@ -31,11 +31,14 @@ router = APIRouter()
 
 REPORT_MODEL = "qwen2.5:3b-instruct"
 
+# Text used whenever we genuinely have nothing to base a section on.
+NO_DATA_TEXT = "Không có dữ liệu để kiểm chứng"
+
 REPORT_SYSTEM_PROMPT = """Bạn là AI HR chuyên tổng hợp báo cáo phỏng vấn lập trình viên.
 
 Dựa trên:
-- Thông tin ứng viên (CV đã upload và phân tích CV trước đó)
-- Phân tích kỹ thuật (coding analysis từ AI code review)
+- Thông tin ứng viên (CV đã upload và phân tích CV trước đó) — nếu có
+- Phân tích kỹ thuật (coding analysis từ AI code review) — nếu có
 
 Hãy tạo báo cáo bằng tiếng Việt theo ĐÚNG cấu trúc JSON sau (không markdown, không giải thích thêm):
 
@@ -52,8 +55,14 @@ Hãy tạo báo cáo bằng tiếng Việt theo ĐÚNG cấu trúc JSON sau (kh�
 
 QUY TẮC:
 - Chỉ trả về DUY NHẤT một JSON object hợp lệ, không có markdown, không có giải thích trước/sau.
-- Chỉ sử dụng thông tin được cung cấp, không tự suy diễn.
-- Nếu thiếu thông tin cho section nào, ghi "Không đề cập".
+- Chỉ sử dụng thông tin được cung cấp, không tự suy diễn, không bịa thông tin.
+- Nếu KHÔNG có phân tích CV và KHÔNG có phân tích coding nào được cung cấp, hãy điền
+  đúng chuỗi "Không có dữ liệu để kiểm chứng" cho các mục: summary, strengths, weaknesses,
+  skill_evaluation, improvement_suggestions, hiring_conclusion.
+- Nếu chỉ thiếu MỘT phần dữ liệu (ví dụ chỉ có CV, không có coding analysis), hãy đánh giá
+  dựa trên phần dữ liệu có sẵn, và với các mục không thể đánh giá do thiếu dữ liệu tương ứng
+  (ví dụ skill_evaluation khi không có coding analysis) thì điền "Không có dữ liệu để kiểm chứng".
+- Nếu thiếu tên ứng viên hoặc vị trí ứng tuyển, ghi "Không đề cập" cho các mục đó.
 """
 
 
@@ -199,6 +208,34 @@ def _try_repair_truncated_json(raw: str) -> dict | None:
 
 @router.post("/report/generate")
 def generate_report(req: ReportRequest):
+    has_cv_analysis = bool(req.cv_analysis)
+    has_coding_analysis = bool(req.coding_analysis)
+
+    content_defaults = {
+        "summary": NO_DATA_TEXT,
+        "strengths": NO_DATA_TEXT,
+        "weaknesses": NO_DATA_TEXT,
+        "skill_evaluation": NO_DATA_TEXT,
+        "improvement_suggestions": NO_DATA_TEXT,
+        "hiring_conclusion": NO_DATA_TEXT,
+    }
+
+    # Short-circuit: no CV analysis and no coding analysis at all means there
+    # is nothing for the model to evaluate. Skip the (slow) Ollama call
+    # entirely and return the "no data" report directly.
+    if not has_cv_analysis and not has_coding_analysis:
+        parsed = {
+            "candidate_name": req.candidate_name or "Không đề cập",
+            "position": req.position or "Không đề cập",
+            **content_defaults,
+        }
+        return {
+            "success": True,
+            "model": None,
+            "report": parsed,
+            "raw": None,
+        }
+
     user_message_parts = []
 
     if req.candidate_name:
@@ -207,19 +244,23 @@ def generate_report(req: ReportRequest):
         user_message_parts.append(f"Vị trí ứng tuyển: {req.position}")
     if req.cv_filename:
         user_message_parts.append(f"Tên file CV: {req.cv_filename}")
-    if req.cv_analysis:
+
+    if has_cv_analysis:
         user_message_parts.append(
             f"Phân tích CV (từ AI trước đó):\n{req.cv_analysis}"
         )
-    if req.coding_analysis:
+    else:
+        user_message_parts.append(
+            "Phân tích CV: KHÔNG CÓ — không có dữ liệu phân tích CV nào được cung cấp."
+        )
+
+    if has_coding_analysis:
         user_message_parts.append(
             f"Phân tích coding (tổng hợp từ các bài submit):\n{req.coding_analysis}"
         )
-
-    if not user_message_parts:
-        raise HTTPException(
-            status_code=400,
-            detail="Không có dữ liệu đầu vào (CV hoặc coding analysis) để sinh báo cáo.",
+    else:
+        user_message_parts.append(
+            "Phân tích coding: KHÔNG CÓ — không có dữ liệu coding analysis nào được cung cấp."
         )
 
     user_message = "\n\n---\n\n".join(user_message_parts)
@@ -253,19 +294,37 @@ def generate_report(req: ReportRequest):
         )
 
     # Ensure all 8 keys exist (fill with default text if missing).
-    defaults = {
+    # candidate_name / position: fall back to "Không đề cập" (identity fields).
+    # All other sections: fall back to NO_DATA_TEXT, since a missing section
+    # there means there was nothing to verify it against.
+    name_position_defaults = {
         "candidate_name": "Không đề cập",
         "position": "Không đề cập",
-        "summary": "Không đề cập",
-        "strengths": "Không đề cập",
-        "weaknesses": "Không đề cập",
-        "skill_evaluation": "Không đề cập",
-        "improvement_suggestions": "Không đề cập",
-        "hiring_conclusion": "Không đề cập",
     }
-    for key, default in defaults.items():
+    content_defaults = {
+        "summary": NO_DATA_TEXT,
+        "strengths": NO_DATA_TEXT,
+        "weaknesses": NO_DATA_TEXT,
+        "skill_evaluation": NO_DATA_TEXT,
+        "improvement_suggestions": NO_DATA_TEXT,
+        "hiring_conclusion": NO_DATA_TEXT,
+    }
+
+    for key, default in name_position_defaults.items():
         if not parsed.get(key):
             parsed[key] = default
+
+    for key, default in content_defaults.items():
+        if not parsed.get(key):
+            parsed[key] = default
+
+    # Extra safety net: if neither cv_analysis nor coding_analysis was ever
+    # provided, force the content sections to NO_DATA_TEXT regardless of what
+    # the model produced, so we never end up shipping a hallucinated report
+    # for a candidate with literally zero underlying data.
+    if not has_cv_analysis and not has_coding_analysis:
+        for key in content_defaults:
+            parsed[key] = NO_DATA_TEXT
 
     return {
         "success": True,
